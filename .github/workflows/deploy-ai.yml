@@ -1,0 +1,33 @@
+name: Deploy Spark2Scale AI
+on:
+  push:
+    branches:
+      - Merging # Triggers when you push to the sarah branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout Github Action'
+        uses: actions/checkout@v4
+
+      - name: 'Set up Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' # Matches the project requirements
+
+      - name: 'Install dependencies'
+        run: |
+          python -m pip install --upgrade pip
+          # Installs the large library list from your specific AI subfolder
+          pip install -r salmasherif7070/spark2scale-ai/Spark2Scale-AI-Merging/requirements.txt
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v2
+        with:
+          # Use the unique name you chose in the Azure Portal
+          app-name: 'spark2scale-ai-service' 
+          publish-profile: ${{ secrets.AZURE_AI_PUBLISH_PROFILE }}
+          # Deploys only the contents of the AI merging folder
+          package: ./salmasherif7070/spark2scale-ai/Spark2Scale-AI-Merging
