@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 # from app.api.routes import workflow
 import uvicorn
+from app.api.main import app
 
 
 from app.core.logger import get_logger # Fixed import path
