@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.graph.market_research_agent.workflow import market_research_app
 from app.api.schemas import ResearchRequest, ResearchResponse
 from app.core.logger import get_logger
+import json
+import os
 
 router = APIRouter()
 logger = get_logger("MarketResearchAPI")
@@ -28,11 +30,20 @@ async def research_idea(request: ResearchRequest):
         json_path = result.get("json_path")
         message = result.get("market_research", "Research completed successfully.")
         
+        # Read the JSON data from the file if it exists
+        research_data = {"status": "completed"}
+        if json_path and os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    research_data = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to read JSON output: {e}")
+        
         return ResearchResponse(
             message=message,
             pdf_path=pdf_path,
             json_path=json_path,
-            data={"status": "completed"}
+            data=research_data
         )
         
     except Exception as e:
