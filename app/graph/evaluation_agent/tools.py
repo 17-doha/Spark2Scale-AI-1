@@ -23,56 +23,24 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 # Relative Imports
 from .prompts import (
     BUSINESS_MODEL_JUDGE_PROMPT,
-    CONTRADICTION_MARKET_PROMPT_TEMPLATE,
-    CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE,
-    CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT,
-    CONTRADICTION_PRODUCT_PROMPT_TEMPLATE,
-    CONTRADICTION_SEED_BIZ_MODEL_PROMPT,
-    CONTRADICTION_TEAM_PROMPT_TEMPLATE,
-    CONTRADICTION_VISION_PROMPT_TEMPLATE,
     ECONOMIC_JUDGEMENT_PROMPT,
     OPERATIONS_SCORING_AGENT_PROMPT,
-    RISK_BIZ_MODEL_PRE_SEED_PROMPT,
-    RISK_BIZ_MODEL_SEED_PROMPT,
     VALUATION_RISK_MARKET_PROMPT_TEMPLATE,
-    VALUATION_RISK_OPS_PRE_SEED_PROMPT,
-    VALUATION_RISK_OPS_SEED_PROMPT, 
-    VALUATION_RISK_PROBLEM_PROMPT_TEMPLATE,
-    VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE, 
-    VALUATION_RISK_TEAM_PROMPT_TEMPLATE, 
     TEAM_SCORING_AGENT_PROMPT, 
-    CONTRADICTION_PROBLEM_PROMPT_TEMPLATE, 
     PROBLEM_SCORING_AGENT_PROMPT,
     VISION_SCORING_AGENT_PROMPT,
     VISUAL_VERIFICATION_PROMPT,
     PRODUCT_SCORING_AGENT_PROMPT,
     MARKET_SCORING_AGENT_PROMPT,
-    CONTRADICTION_PRE_SEED_TRACTION_AGENT_PROMPT,
-    CONTRADICTION_SEED_TRACTION_AGENT_PROMPT,
-    VALUATION_RISK_TRACTION_PRE_SEED_PROMPT,
-    VALUATION_RISK_TRACTION_SEED_PROMPT,
     TRACTION_SCORING_PRE_SEED_PROMPT,
     TRACTION_SCORING_SEED_PROMPT,
-    CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT,
-    CONTRADICTION_SEED_GTM_AGENT_PROMPT,
-    VALUATION_RISK_GTM_PRE_SEED_PROMPT,
-    VALUATION_RISK_GTM_SEED_PROMPT,
     SCORING_GTM_PRE_SEED_PROMPT,
     SCORING_GTM_SEED_PROMPT,
     SCORING_BIZ_PRE_SEED_PROMPT,
     SCORING_BIZ_SEED_PROMPT,
     CATEGORY_FUTURE_PROMPT,
-    MARKET_LOCAL_DEPENDENCY_PROMPT,
-    VALUATION_RISK_VISION_PRE_SEED_PROMPT,
-    VALUATION_RISK_VISION_SEED_PROMPT
 )
 from .helpers import (
-    extract_business_pre_seed, extract_business_seed,
-    extract_gtm_pre_seed, extract_gtm_seed,
-    extract_operations_data, extract_problem_data, 
-    extract_team_data, extract_traction_data, 
-    extract_product_data, extract_market_data, 
-    extract_vision_data, # Added
     capture_screenshot, check_missing_fields,
     get_market_signals_serper, get_market_signals_duckduckgo,
     parse_and_repair_json, safe_score_numeric
@@ -81,7 +49,6 @@ from app.core.llm import get_llm
 from app.core.logger import get_logger
 from app.core.limiter import concurrency_limiter
 # Load Environment Variables
-load_dotenv()
 
 # --- INITIALIZE LOGGER ---
 logger = get_logger(__name__)

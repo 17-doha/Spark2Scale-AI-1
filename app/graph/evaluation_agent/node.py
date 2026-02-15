@@ -81,6 +81,7 @@ from .schema import Plan
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 from app.core.logger import get_logger
+from app.core.llm import get_llm
 logger = get_logger(__name__)
 
 async def planner_node(state: AgentState):
@@ -89,11 +90,7 @@ async def planner_node(state: AgentState):
     """
     user_data = state.get("user_data", {})
     
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
-        temperature=0, 
-        google_api_key=os.environ.get("GEMINI_API_KEY")
-    )
+    llm = get_llm(temperature=0, provider="groq")
     
     # Structured output binding
     structured_llm = llm.with_structured_output(Plan)

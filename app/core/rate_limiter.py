@@ -3,7 +3,7 @@ import asyncio
 import random
 from app.core.config import Config
 from app.core.llm import get_llm
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 
 logger = get_logger("RateLimiter")
 

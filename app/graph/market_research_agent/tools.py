@@ -4,13 +4,13 @@ import http.client
 import pandas as pd
 import platform
 import glob
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 from app.graph.market_research_agent.research_config import ResearchConfig
 
 # Helper Imports - UPDATED to use improved versions
 from .helpers import research_utils, market_utils, finance_utils, pdf_utils
-# Import improved validator utils
 from .helpers import validator_utils  # This will be the improved version
+from .helpers.market_sizing_validator import RealisticMarketSizer  # NEW
 
 logger = get_logger("MarketResearchTools")
 
@@ -159,19 +159,38 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
     logger.warning("⚠️ No trend data available.")
     return None, None
 
+# ==========================================
+# 5b. Market Sizing (FIXED WITH REALISTIC TAM/SAM/SOM)
+# ==========================================
 def calculate_market_size(idea, location="Global", plan=None):
-    logger.info(f"\n📐 [Tool 11] Calculating TAM, SAM, SOM & Scalability...")
+    """
+    FIXED VERSION: Calculate TAM/SAM/SOM with realistic validation and correction
+    """
+    logger.info(f"\n📐 [Tool 11] Calculating REALISTIC TAM/SAM/SOM with Validation...")
     
+    # Get industry and location from plan
     industry = "Unknown"
+    competitor_count = 5  # Default
+    
     if plan and "market_identity" in plan:
         industry = plan["market_identity"].get("industry", "Business")
         location = plan["market_identity"].get("target_country", location)
     else:
         industry = market_utils.identify_industry(idea)
     
-    logger.info(f"   🌍 Searching for '{industry}' market data in {location}...")
+    # Get actual competitor count from earlier analysis
+    competitors_file = glob.glob(f"data_output/{idea.replace(' ', '_')}_competitors.csv")
+    if competitors_file:
+        try:
+            df = pd.read_csv(competitors_file[0])
+            competitor_count = len(df)
+            logger.info(f"   🏢 Found {competitor_count} competitors")
+        except:
+            competitor_count = 5
     
-    # Use configured limit instead of just 1 query
+    logger.info(f"   🌍 Analyzing '{industry}' market in {location}...")
+    
+    # Use configured limit for searches
     max_queries = ResearchConfig.MAX_MARKET_SIZE_QUERIES
     
     queries = [
@@ -185,12 +204,80 @@ def calculate_market_size(idea, location="Global", plan=None):
         logger.info(f"   🔍 Query: {q}")
         market_data += market_utils.search_market_reports(q) + "\n"
 
+    # Get LLM analysis (might have unrealistic numbers)
     result = market_utils.analyze_market_size(idea, industry, location, market_data)
 
     if not result:
         logger.warning("⚠️ Market sizing analysis failed.")
         return None
 
+    # ========================================
+    # APPLY REALISTIC CORRECTIONS (NEW!)
+    # ========================================
+    
+    # Extract raw LLM values
+    raw_tam = result.get('tam_value', 'Unknown')
+    raw_sam = result.get('sam_value', 'Unknown')
+    raw_som = result.get('som_value', 'Unknown')
+    
+    logger.info(f"   📊 LLM Raw Output:")
+    logger.info(f"      TAM: {raw_tam}")
+    logger.info(f"      SAM: {raw_sam}")
+    logger.info(f"      SOM: {raw_som}")
+    
+    # Step 1: Validate and correct TAM
+    tam_millions, tam_correction = RealisticMarketSizer.validate_and_correct_tam(
+        raw_tam, industry, location
+    )
+    
+    if tam_correction:
+        logger.warning(f"   ⚠️ TAM CORRECTED: {tam_correction}")
+    
+    # Step 2: Calculate realistic SAM based on geography
+    sam_millions, sam_reasoning = RealisticMarketSizer.calculate_realistic_sam(
+        tam_millions, location
+    )
+    
+    # Step 3: Determine market structure from competitor count
+    market_structure = RealisticMarketSizer.determine_market_structure(competitor_count)
+    logger.info(f"   🏗️  Market Structure: {market_structure} ({competitor_count} competitors)")
+    
+    # Step 4: Calculate realistic SOM based on competition
+    som_millions, som_reasoning = RealisticMarketSizer.calculate_realistic_som(
+        sam_millions, market_structure, has_funding=False
+    )
+    
+    # Step 5: Format corrected values
+    corrected_tam = RealisticMarketSizer.format_value(tam_millions)
+    corrected_sam = RealisticMarketSizer.format_value(sam_millions)
+    corrected_som = RealisticMarketSizer.format_value(som_millions)
+    
+    logger.info(f"   ✅ CORRECTED Output:")
+    logger.info(f"      TAM: {corrected_tam}")
+    logger.info(f"      SAM: {corrected_sam}")
+    logger.info(f"      SOM: {corrected_som}")
+    
+    # Step 6: Update result with corrected values
+    result['tam_value'] = corrected_tam
+    result['sam_value'] = corrected_sam
+    result['som_value'] = corrected_som
+    
+    # Update descriptions with corrections
+    if tam_correction:
+        result['tam_description'] = result.get('tam_description', '') + f" [CORRECTED: {tam_correction}]"
+    
+    result['sam_description'] = sam_reasoning
+    result['som_description'] = som_reasoning
+    result['market_structure'] = market_structure
+    result['corrections_applied'] = [tam_correction] if tam_correction else []
+    
+    # Add raw values for transparency
+    result['raw_values'] = {
+        "raw_tam": raw_tam,
+        "raw_sam": raw_sam,
+        "raw_som": raw_som
+    }
+    
     # Generate Visual
     market_utils.plot_market_funnel(result, industry)
     
@@ -198,13 +285,12 @@ def calculate_market_size(idea, location="Global", plan=None):
     with open("data_output/market_sizing.json", "w") as f:
         json.dump(result, f, indent=4)
     
-    # Log data quality
-    data_quality = result.get('data_quality', 'Unknown')
+    # Final logging
     logger.info(f"   📊 Market Type: {result.get('market_type')}")
-    logger.info(f"   ✅ Data Quality: {data_quality}")
+    logger.info(f"   ✅ Data Quality: {result.get('data_quality')}")
     
-    if data_quality == "Low":
-        logger.warning("   ⚠️ Market sizing based on limited data. Results may be unreliable.")
+    if result.get('corrections_applied'):
+        logger.warning(f"   ⚠️ Corrections were applied to ensure realistic numbers")
     
     return "data_output/market_sizing.json"
 
@@ -245,287 +331,13 @@ def generate_report(file_path, query, trend_file=None, finance_file=None):
     return pdf_utils.generate_report(file_path, query, trend_file, finance_file)
 
 # ==========================================
-# 8. PDF Compiler
+# 8. PDF Compiler (Unchanged - uses files generated above)
 # ==========================================
 def compile_final_pdf(idea_name):
-    logger.info(f"\n📄 [Tool 9] Compiling Professional PDF Report...")
-    
-    pdf = pdf_utils.PDFReport()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    
-    # --- CROSS-PLATFORM FONT LOADING ---
-    system_name = platform.system()
-    font_path = None
-    if system_name == "Windows":
-        font_path = r"C:\Windows\Fonts\arial.ttf"
-    elif system_name == "Darwin": # Mac
-        font_path = "/Library/Fonts/Arial.ttf"
-    elif system_name == "Linux":
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-
-    try:
-        if font_path and os.path.exists(font_path):
-            pdf.add_font("ArialUnicode", style="", fname=font_path)
-            pdf.add_font("ArialUnicode", style="B", fname=font_path)
-            logger.info(f"   ✅ Loaded System Font: {font_path}")
-        else:
-            logger.warning("   ⚠️ Custom font not found. Arabic may not render correctly.")
-    except Exception as e:
-        logger.error(f"   ⚠️ Font Error: {e}")
-
-    # --- PAGE 1: TITLE & EXECUTIVE SUMMARY ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Title & Executive Summary")
-    
-    # Title Styling
-    pdf.set_font_for_content('B', 14)
-    pdf.set_text_color(*pdf_utils.PDFReport.COLOR_MOSS)
-    pdf.cell(0, 10, "MARKET RESEARCH REPORT", 0, 1, 'C')
-    
-    pdf.ln(5)
-    
-    # Idea Name
-    pdf.set_font_for_content('B', 20)
-    pdf.multi_cell(0, 10, pdf_utils.fix_arabic(idea_name.upper()), 0, 'C')
-    
-    pdf.ln(5)
-    
-    # Subtitle
-    pdf.set_font_for_content('', 12)
-    pdf.set_text_color(*pdf_utils.PDFReport.COLOR_MOSS)
-    try:
-        pdf.set_font("Helvetica", 'I', 14)
-    except:
-        pdf.set_font("Arial", 'I', 14)
-    pdf.cell(0, 10, "Comprehensive Market Analysis", 0, 1, 'C')
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(10)
-    
-    # Read Report
-    report_text = "No report text found. Please check generation logs."
-    report_path = "data_output/FINAL_MARKET_REPORT.md"
-    if os.path.exists(report_path):
-        try:
-            with open(report_path, "r", encoding="utf-8") as f:
-                raw_text = f.read()
-                if not raw_text.strip():
-                    logger.warning("   ⚠️ Report file exists but is empty.")
-                else:
-                    report_text = raw_text
-        except Exception as e:
-            logger.error(f"   ⚠️ Error reading report: {e}")
-            report_text = f"Error reading executive summary: {e}"
-    else:
-        logger.warning(f"   ⚠️ Report file not found at {report_path}")
-
-    pdf.chapter_title("Executive Summary")
-    pdf.chapter_body(report_text[:2500] + "...")
-    
-    # --- PAGE 2: OPPORTUNITY SCORE BREAKDOWN ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Opportunity Score Analysis")
-    pdf.chapter_title("Opportunity Score Breakdown")
-    
-    # Load opportunity analysis
-    if os.path.exists("data_output/opportunity_analysis.json"):
-        try:
-            with open("data_output/opportunity_analysis.json", "r") as f:
-                opp_data = json.load(f)
-            
-            score = opp_data.get('opportunity_score', 0)
-            grade = opp_data.get('grade', 'Unknown')
-            confidence = opp_data.get('confidence', 'Unknown')
-            breakdown = opp_data.get('breakdown', {})
-            
-            # Main Score Display
-            pdf.set_font_for_content('B', 16)
-            
-            # Color based on grade
-            if 'A' in grade:
-                color = (0, 150, 0)  # Green
-            elif 'B' in grade:
-                color = (50, 100, 200)  # Blue
-            elif 'C' in grade:
-                color = (200, 150, 0)  # Orange
-            else:
-                color = (200, 50, 50)  # Red
-            
-            pdf.set_text_color(*color)
-            pdf.cell(0, 10, f"Overall Score: {score}/100 - {grade}", 0, 1, 'C')
-            pdf.set_text_color(0, 0, 0)
-            
-            pdf.set_font_for_content('', 11)
-            pdf.cell(0, 8, f"Confidence Level: {confidence}", 0, 1, 'C')
-            pdf.ln(5)
-            
-            # Component Scores
-            pdf.set_font_for_content('B', 12)
-            pdf.set_text_color(*pdf_utils.PDFReport.COLOR_MOSS)
-            pdf.cell(0, 8, "Score Components:", 0, 1, 'L')
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font_for_content('', 10)
-            
-            pdf.multi_cell(0, 6, f"Pain Score: {breakdown.get('pain_score_adjusted', 0):.1f}/100 (Evidence: {breakdown.get('evidence_count', 0)} sources)")
-            pdf.multi_cell(0, 6, f"Market Growth: {breakdown.get('growth_score', 0):.1f}/100 (YoY: {breakdown.get('growth_pct', 0):.1f}%)")
-            pdf.multi_cell(0, 6, f"Competition: {breakdown.get('competition_score', 0):.1f}/100 ({breakdown.get('competition_level', 'Unknown')}, {breakdown.get('competitor_count', 0)} found)")
-            
-            pdf.ln(5)
-            
-            # Warnings
-            warnings = opp_data.get('warnings', [])
-            if warnings:
-                pdf.set_font_for_content('B', 11)
-                pdf.set_text_color(200, 50, 50)
-                pdf.cell(0, 8, "⚠ Warnings:", 0, 1, 'L')
-                pdf.set_text_color(0, 0, 0)
-                pdf.set_font_for_content('', 9)
-                
-                for warning in warnings:
-                    pdf.multi_cell(0, 5, f"• {warning}")
-            
-        except Exception as e:
-            logger.error(f"   ⚠️ Error loading opportunity analysis: {e}")
-    
-    # --- PAGE 3: MARKET VALIDATION ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Market Validation")
-    pdf.chapter_title("Market Validation & Evidence")
-    
-    val_file = f"data_output/{idea_name.replace(' ', '_')}_validation.json"
-    if os.path.exists(val_file):
-        try:
-            with open(val_file, 'r') as f:
-                val_data = json.load(f)
-            
-            pain_score = val_data.get('pain_score', 0)
-            pdf.draw_score_bar("Pain Score (Problem Severity)", pain_score)
-            
-            # Evidence quality
-            evidence_qual = val_data.get('evidence_quality', {})
-            pdf.set_font_for_content('B', 11)
-            pdf.cell(0, 8, f"Evidence Quality: {evidence_qual.get('quality_level', 'Unknown').title()}", 0, 1, 'L')
-            pdf.set_font_for_content('', 10)
-            pdf.multi_cell(0, 6, f"Sources analyzed: {evidence_qual.get('total_count', 0)} across {evidence_qual.get('source_diversity', 0)} platforms")
-            pdf.multi_cell(0, 6, f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0")
-            
-        except Exception as e:
-            logger.error(f"   ⚠️ Error reading validation data: {e}")
-    
-    if os.path.exists("data_output/market_demand_chart.png"):
-        pdf.ln(10)
-        pdf.add_image_centered("data_output/market_demand_chart.png")
-        pdf.ln(5)
-        
-        # Read Dynamic Analysis
-        trend_text = "The chart above illustrates market demand trends."
-        if os.path.exists("data_output/trend_analysis.txt"):
-            with open("data_output/trend_analysis.txt", "r") as f:
-                trend_text = f.read().strip()
-                
-        pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, pdf_utils.fix_arabic(trend_text))
-    
-    # --- PAGE 4: FINANCIALS ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Financials")
-    pdf.chapter_title("Financial Feasibility")
-    
-    if os.path.exists("data_output/finance_summary.csv"):
-        pdf.cell(0, 10, "1. Startup Cost Estimates", 0, 1, 'L')
-        pdf.add_image_centered("data_output/finance_startup_pie.png")
-        pdf.ln(2)
-        
-        fin_text = "Breakdown of estimated initial capital requirements."
-        if os.path.exists("data_output/financial_analysis.txt"):
-            with open("data_output/financial_analysis.txt", "r") as f:
-                fin_text = f.read().strip()
-                
-        pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, pdf_utils.fix_arabic(fin_text))
-        
-        pdf.add_page()
-        pdf.chapter_title("Profitability Projections")
-        pdf.cell(0, 10, "2. Break-Even Analysis", 0, 1, 'L')
-        pdf.add_image_centered("data_output/finance_breakeven_line.png")
-    else:
-        pdf.set_text_color(255, 0, 0)
-        pdf.cell(0, 10, "Financial data unavailable.", 0, 1, 'L')
-        pdf.set_text_color(0, 0, 0)
-
-    # --- PAGE 5: MARKET SIZING ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Market Sizing")
-    pdf.chapter_title("Market Opportunity & Sizing")
-    
-    if os.path.exists("data_output/market_sizing.json"):
-        with open("data_output/market_sizing.json", "r") as f:
-            size_data = json.load(f)
-        
-        ocean = size_data.get("market_type", "Unknown")
-        color = (200, 50, 50) if "Red" in ocean else pdf_utils.PDFReport.COLOR_MOSS
-        
-        pdf.set_font_for_content('B', 14)
-        pdf.set_text_color(*color)
-        pdf.cell(0, 10, f"Market Type: {ocean}", 0, 1, 'C')
-        pdf.set_text_color(0, 0, 0)
-        pdf.ln(5)
-
-        pdf.add_image_centered("data_output/market_sizing_funnel.png")
-        
-        pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, f"TAM: {size_data.get('tam_description', 'N/A')}")
-        pdf.ln(2)
-        pdf.multi_cell(0, 6, f"SAM: {size_data.get('sam_description', 'N/A')}")
-        pdf.ln(2)
-        pdf.multi_cell(0, 6, f"SOM: {size_data.get('som_description', 'N/A')}")
-        pdf.ln(5)
-        
-        pdf.chapter_title("Scalability Analysis")
-        pdf.set_font_for_content('B', 12)
-        pdf.cell(0, 10, f"Scalability: {size_data.get('scalability_score', 'N/A')}", 0, 1)
-        pdf.set_font_for_content('', 11)
-        pdf.multi_cell(0, 6, size_data.get('scalability_reasoning', 'N/A'))
-    
-    # --- PAGE 6: COMPETITORS ---
-    pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Competitors")
-    pdf.chapter_title("Competitor Analysis")
-    
-    comp_files = glob.glob(f"data_output/{idea_name.replace(' ', '_')}_competitors.csv")
-    if comp_files:
-        try:
-            df = pd.read_csv(comp_files[0])
-            
-            pdf.set_font_for_content('B', 10)
-            pdf.set_fill_color(*pdf_utils.PDFReport.COLOR_MOSS)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(50, 10, 'Competitor', 1, 0, 'C', True)
-            pdf.cell(140, 10, 'Key Features', 1, 1, 'C', True)
-            pdf.set_text_color(0, 0, 0)
-            
-            pdf.set_font_for_content('', 9)
-            for _, row in df.head(8).iterrows():
-                name = pdf_utils.fix_arabic(row.get('Name', 'N/A'))[:25]
-                features = pdf_utils.fix_arabic(row.get('Features', 'N/A'))[:110]
-                
-                pdf.cell(50, 10, name, 1)
-                pdf.cell(140, 10, features, 1)
-                pdf.ln()
-        except Exception as e:
-            logger.error(f"   ⚠️ Error adding competitors: {e}")
-    
-    # --- OUTPUT ---
-    clean_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
-    output_filename = f"data_output/{clean_name}_Market_Report.pdf"
-    
-    try:
-        pdf.output(output_filename)
-        logger.info(f"✅ PDF GENERATED: {output_filename}")
-        return output_filename
-    except Exception as e:
-        logger.error(f"❌ PDF Save Failed: {e}")
-        return None
+    """
+    Delegate PDF generation to the full implementation in pdf_utils
+    """
+    return pdf_utils.compile_final_pdf_report(idea_name)
 
 def compile_final_json(idea_name):
     logger.info(f"\n💾 [Tool 10] Compiling JSON Data Output...")
@@ -546,12 +358,12 @@ def compile_final_json(idea_name):
         with open("data_output/FINAL_MARKET_REPORT.md", "r", encoding="utf-8") as f:
             json_data["executive_summary"] = f.read()
 
-    # Opportunity Analysis (NEW)
+    # Opportunity Analysis
     if os.path.exists("data_output/opportunity_analysis.json"):
         with open("data_output/opportunity_analysis.json", "r") as f:
             json_data["opportunity_analysis"] = json.load(f)
 
-    # Market Sizing
+    # Market Sizing (NOW WITH CORRECTIONS)
     if os.path.exists("data_output/market_sizing.json"):
         with open("data_output/market_sizing.json", "r") as f:
             json_data["market_sizing"] = json.load(f)

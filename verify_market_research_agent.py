@@ -1,5 +1,5 @@
 from app.graph.market_research_agent.workflow import market_research_app
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 import sys
 
 # Force UTF-8 encoding for console output to handle emojis
@@ -11,8 +11,8 @@ if __name__ == "__main__":
     logger.info("🚀 Verifying Granular Market Research Agent...")
     
     initial_state = {
-        "input_idea": "new type of mobile phones",
-        "input_problem": "a person need to reach people all over the world and this doesnt exist"
+        "input_idea": "ai app to help startups",
+        "input_problem": "people with udeas dont know where to validate it and how to organize and gather info they need"
     }
     
     try:

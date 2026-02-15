@@ -149,6 +149,7 @@ activemq-data/
 
 # Environments
 .env
+.env.local
 .envrc
 .venv
 env/
@@ -221,7 +222,7 @@ output/recommendations/*
 ~$*
 =======
 
-
+outputs/*
 /data_output/*
 
 

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from app.core.config import Config, gemini_client
 from app.core.rate_limiter import call_gemini
 from app.graph.market_research_agent import prompts
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 
 logger = get_logger("FinanceUtils")
 

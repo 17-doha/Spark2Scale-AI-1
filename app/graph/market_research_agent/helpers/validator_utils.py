@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from app.core.config import Config, gemini_client
 from app.core.rate_limiter import call_gemini
 from app.graph.market_research_agent import prompts
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 from app.graph.market_research_agent.research_config import ResearchConfig, get_evidence_quality
 
 logger = get_logger("ValidatorUtils")

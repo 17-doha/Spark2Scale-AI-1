@@ -10,7 +10,7 @@ from .tools import (
     calculate_market_size
 )
 import os
-from app.graph.market_research_agent.logger_config import get_logger
+from app.core.logger import get_logger
 
 from app.graph.market_research_agent.helpers.research_utils import generate_research_plan, execute_serper_search, extract_competitors_strict
 
