@@ -6,6 +6,7 @@ app = FastAPI(title="Spark2Scale AI Agent")
 
 # app.include_router(ppt_generation.router, prefix="/api/v1/ppt", tags=["PPT Generation"])
 app.include_router(evaluation.router, prefix="/api/v1/evaluation", tags=["Evaluation"])
+app.include_router(recommendation.router, prefix="/api/v1", tags=["Recommendation"])
 # app.include_router(market_research.router, prefix="/api/v1/market-research", tags=["Market Research"])
 # app.include_router(recommendation.router, prefix="/api/v1/recommendation", tags=["Recommendation"])
 
