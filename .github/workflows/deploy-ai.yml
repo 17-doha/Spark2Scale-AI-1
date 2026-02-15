@@ -2,7 +2,7 @@ name: Deploy Spark2Scale AI
 on:
   push:
     branches:
-      - Merging # Triggers when you push to the sarah branch
+      - Merging
 
 jobs:
   build-and-deploy:
