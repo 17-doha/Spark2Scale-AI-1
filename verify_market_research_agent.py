@@ -11,8 +11,8 @@ if __name__ == "__main__":
     logger.info("🚀 Verifying Granular Market Research Agent...")
     
     initial_state = {
-        "input_idea": "ai gardening app",
-        "input_problem": "People struggle tokeep there plants alive"
+        "input_idea": "new type of mobile phones",
+        "input_problem": "a person need to reach people all over the world and this doesnt exist"
     }
     
     try:

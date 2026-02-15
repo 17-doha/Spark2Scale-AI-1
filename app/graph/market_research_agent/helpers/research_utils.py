@@ -3,6 +3,7 @@ import http.client
 import os
 import pandas as pd
 from app.core.config import Config, gemini_client
+from app.core.rate_limiter import call_gemini
 from app.graph.market_research_agent import prompts
 from app.graph.market_research_agent.logger_config import get_logger
 
@@ -14,7 +15,7 @@ def generate_research_plan(idea, problem):
     logger.info(f"   🧠 Generating Comprehensive Research Plan for: '{idea}'...")
     try:
         prompt = prompts.generate_research_plan_prompt(idea, problem)
-        response = gemini_client.GenerativeModel(Config.GEMINI_MODEL_NAME).generate_content(prompt)
+        response = call_gemini(prompt)
         return json.loads(response.text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
         logger.error(f"Plan generation failed: {e}")
@@ -25,7 +26,7 @@ def generate_smart_queries(business_idea):
     logger.info(f"   🧠 Brainstorming search terms for: '{business_idea}'...")
     try:
         prompt = prompts.generate_smart_queries_prompt(business_idea)
-        response = gemini_client.GenerativeModel(Config.GEMINI_MODEL_NAME).generate_content(prompt)
+        response = call_gemini(prompt)
         return json.loads(response.text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
         logger.warning(f"Smart query generation failed: {e}")
@@ -44,7 +45,7 @@ def extract_competitors_strict(search_data, business_idea):
     prompt = prompts.extract_competitors_prompt(business_idea, raw_text)
     
     try:
-        response = gemini_client.GenerativeModel(Config.GEMINI_MODEL_NAME).generate_content(prompt)
+        response = call_gemini(prompt)
         return json.loads(response.text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
         print(f"   ⚠️ Extraction Failed: {e}")
