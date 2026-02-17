@@ -12,7 +12,6 @@ from .tools import (
     loaded_risk_check_with_search, 
     problem_scoring_agent,
     tech_stack_detective, 
-    analyze_visuals_with_langchain, 
     product_scoring_agent,
     tam_sam_verifier_tool,
     regulation_trend_radar_tool,
@@ -180,14 +179,12 @@ async def product_tools_node(state: AgentState):
     company = user_data.get("startup_evaluation", {}).get("company_snapshot", {}).get("company_name", "Startup")
     
     # Run heavy IO tasks
-    tech_res, visual_res = await asyncio.gather(
-        tech_stack_detective(url),
-        analyze_visuals_with_langchain(company, url, VISUAL_VERIFICATION_PROMPT)
+    tech_res= await asyncio.gather(
+        tech_stack_detective(url)
     )
     
     return {
-        "tech_stack": tech_res, 
-        "visual_analysis": visual_res
+        "tech_stack": tech_res
     }
 
 async def product_contradiction_node(state: AgentState):
@@ -302,12 +299,11 @@ async def product_tools_node(state: AgentState):
     company = user_data.get("startup_evaluation", {}).get("company_snapshot", {}).get("company_name", "Startup")
     product_data = extract_product_data(user_data)
 
-    tech_res, visual_res, contradiction_res = await asyncio.gather(
+    tech_res, contradiction_res = await asyncio.gather(
         tech_stack_detective(url),
-        analyze_visuals_with_langchain(company, url, VISUAL_VERIFICATION_PROMPT),
         contradiction_check(product_data, CONTRADICTION_PRODUCT_PROMPT_TEMPLATE)
     )
-    return {"tech_stack": tech_res, "visual_analysis": visual_res, "product_contradiction": contradiction_res}
+    return {"tech_stack": tech_res, "product_contradiction": contradiction_res}
 
 async def product_scoring_node(state: AgentState):
     """Product Scoring."""
