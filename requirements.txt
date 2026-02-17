@@ -33,3 +33,4 @@ regex==2026.1.15
 typing_extensions==4.15.0
 tavily-python==0.7.21
 python-multipart==0.0.22
+PyPDF2==3.0.1
