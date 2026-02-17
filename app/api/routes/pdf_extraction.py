@@ -33,7 +33,6 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
     return "\n\n".join(pages_text)
 
-
 @router.post("/extract-from-pdf")
 async def extract_from_pdf(file: UploadFile = File(...)):
     """
