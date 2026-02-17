@@ -15,6 +15,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from google.api_core.exceptions import ResourceExhausted
+from groq import APIStatusError as GroqAPIStatusError
 
 # Resilience
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -54,9 +55,9 @@ logger = get_logger(__name__)
 
 # --- CONFIGURATION ---
 RETRY_CONFIG = {
-    "wait": wait_exponential(multiplier=2, min=10, max=120),
+    "wait": wait_exponential(multiplier=2, min=2, max=60),
     "stop": stop_after_attempt(20),
-    "retry": retry_if_exception_type((ResourceExhausted, ChatGoogleGenerativeAIError))
+    "retry": retry_if_exception_type((ResourceExhausted, ChatGoogleGenerativeAIError, GroqAPIStatusError))
 }
 
 # --- TOOLS & AGENTS ---

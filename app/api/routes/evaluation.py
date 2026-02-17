@@ -78,7 +78,9 @@ async def run_evaluation_background(job_id: str, normalized_data: dict):
         save_agent_output(f"JOB_{job_id}", full_report)
         
         duration = time.time() - start_time
-        logger.info(f"✅ Job {job_id}: Finished successfully in {duration:.2f}s")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"✅ Job {job_id}: Evaluation COMPLETED in {duration:.2f}s")
+        logger.info(f"{'='*60}")
         
         # Update Job Status to Completed
         JOBS[job_id] = {
@@ -122,7 +124,7 @@ async def evaluate_all(raw_payload: RawInput, background_tasks: BackgroundTasks)
     # 4. Add to Background Tasks (This prevents blocking/timeout)
     background_tasks.add_task(run_evaluation_background, job_id, normalized_data)
     
-    logger.info(f"Ticket Created: Job {job_id} started in background.")
+
     
     return {
         "message": "Evaluation started", 

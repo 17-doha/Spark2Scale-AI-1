@@ -55,44 +55,40 @@ def create_evaluation_graph():
     workflow.add_node("final_node", final_node)
 
     # =========================================================
-    # 3. DEFINE EDGES (The Sequential Chain)
+    # 3. DEFINE EDGES (Fan-Out / Fan-In Parallel Architecture)
     # =========================================================
 
-    # 1. Start -> Plan
+    # Step 1: Start -> Plan
     workflow.add_edge(START, "planner_node")
     
-    # 2. Plan -> Team
+    # Step 2: Fan-Out — Planner dispatches ALL independent nodes in parallel
     workflow.add_edge("planner_node", "team_node")
-    
-    # 3. Team -> Problem
-    workflow.add_edge("team_node", "problem_node")
-    
-    # 4. Problem -> Vision
-    workflow.add_edge("problem_node", "vision_node")
+    workflow.add_edge("planner_node", "problem_node")
+    workflow.add_edge("planner_node", "vision_node")
+    workflow.add_edge("planner_node", "market_node")
+    workflow.add_edge("planner_node", "traction_node")
+    workflow.add_edge("planner_node", "gtm_node")
+    workflow.add_edge("planner_node", "business_node")
+    workflow.add_edge("planner_node", "operations_node")
+    workflow.add_edge("planner_node", "product_tools_node")
 
-    # 5. Vision -> Market
-    workflow.add_edge("vision_node", "market_node")
-
-    # 6. Market -> Product Chain (Tools -> Contradiction -> Risk -> Score)
-    workflow.add_edge("market_node", "product_tools_node")
+    # Step 3: Product chain stays sequential (each step feeds the next)
     workflow.add_edge("product_tools_node", "product_contradiction_node")
     workflow.add_edge("product_contradiction_node", "product_risk_node")
     workflow.add_edge("product_risk_node", "product_final_scoring_node")
 
-    # 7. Product Score -> Traction
-    workflow.add_edge("product_final_scoring_node", "traction_node")
-
-    # 8. Traction -> GTM
-    workflow.add_edge("traction_node", "gtm_node")
-
-    # 9. GTM -> Business
-    workflow.add_edge("gtm_node", "business_node")
-
-    # 10. Business -> Operations
-    workflow.add_edge("business_node", "operations_node")
-
-    # 11. Operations -> END
+    # Step 4: Fan-In — ALL nodes converge to final_node
+    workflow.add_edge("team_node", "final_node")
+    workflow.add_edge("problem_node", "final_node")
+    workflow.add_edge("vision_node", "final_node")
+    workflow.add_edge("market_node", "final_node")
+    workflow.add_edge("traction_node", "final_node")
+    workflow.add_edge("gtm_node", "final_node")
+    workflow.add_edge("business_node", "final_node")
     workflow.add_edge("operations_node", "final_node")
+    workflow.add_edge("product_final_scoring_node", "final_node")
+
+    # Step 5: Final -> END
     workflow.add_edge("final_node", END)
 
     return workflow.compile()

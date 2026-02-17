@@ -592,7 +592,7 @@ async def final_node(state: AgentState):
             if key in llm_map:
                 complete_dims.append(llm_map[key])
             else:
-                logger.warning(f"Finalizer skipped {key}. Backfilling.")
+                logger.debug(f"Finalizer backfilled {key} from scored report.")
                 raw_report = state.get(f"{key}_report", {})
                 complete_dims.append({
                     "dimension": key.title(),
