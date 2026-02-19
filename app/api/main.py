@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -19,6 +19,8 @@ app.include_router(recommendation.router, prefix="/api/v1", tags=["Recommendatio
 app.include_router(market_research.router, prefix="/api/v1/market-research", tags=["Market Research"])
 
 app.include_router(pdf_extraction.router, prefix="/api/v1/pdf", tags=["PDF Extraction"])
+
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["AI Chat"])
 
 
 @app.get("/")
