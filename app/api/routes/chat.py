@@ -1,9 +1,7 @@
 """
 Spark2Scale — Secure AI Chat Endpoint
 ======================================
-Data-Gathering AI Evaluator with Dual-Provider Strategy:
-1. Primary: Groq (Llama 3 family) with retries.
-2. Fallback: Gemini (Flash/Pro) if Groq fails.
+Data-Gathering AI Evaluator using Gemini via LangChain.
 
 Security & Data Strategy:
   - Input: Blocks prompt injection
@@ -11,46 +9,24 @@ Security & Data Strategy:
   - Output: Python merges deltas into original data to ensure persistence.
 """
 
-import os
 import re
 import json
 import logging
 import copy
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# --- Provider SDKs ---
-try:
-    import google.generativeai as genai
-    from google.generativeai.types import HarmCategory, HarmBlockThreshold
-except ImportError:
-    genai = None
+# Import LangChain message types
+from langchain_core.messages import SystemMessage, HumanMessage
 
-from groq import Groq, APIStatusError, RateLimitError
-from dotenv import load_dotenv
-
-load_dotenv()
+# IMPORTANT: Update this import path to point to wherever your get_llm function is saved!
+# For example: from app.core.llm_factory import get_llm
+from app.core.llm import get_llm 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# ── Global Config ───────────────────────────────────────────────────────
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# Initialize Gemini if key exists
-if GEMINI_API_KEY and genai:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-    except Exception as e:
-        logger.warning(f"Gemini configure warning: {e}")
-
-# Initialize Groq client
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
 
 # ════════════════════════════════════════════════════════════════════════
 #  LAYER 1 — Input Pre-Filter (Prompt-Injection Detection)
@@ -90,29 +66,9 @@ _INJECTION_PATTERNS: list[re.Pattern] = [
     ]
 ]
 
-
 def is_prompt_injection(text: str) -> bool:
     """Return True if the user message matches any known injection pattern."""
     return any(pattern.search(text) for pattern in _INJECTION_PATTERNS)
-
-
-# ════════════════════════════════════════════════════════════════════════
-#  Fallback / Default Response
-# ════════════════════════════════════════════════════════════════════════
-
-_FALLBACK_QUESTION = (
-    "What is the primary problem your startup is solving, "
-    "and who is the target customer?"
-)
-
-
-def get_safe_fallback_response(startup_data: dict) -> dict:
-    """Return a safe, generic business question with unmodified JSON."""
-    return {
-        "ai_reply": _FALLBACK_QUESTION,
-        "updated_startup_data": startup_data,
-    }
-
 
 def deep_merge(target: dict, updates: dict) -> dict:
     """Recursively merge updates into target dictionary."""
@@ -123,12 +79,11 @@ def deep_merge(target: dict, updates: dict) -> dict:
             target[key] = value
     return target
 
-
 # ════════════════════════════════════════════════════════════════════════
-#  LAYER 2 — Strict System Prompt
+#  LAYER 2 — System Prompts
 # ════════════════════════════════════════════════════════════════════════
 
-_SYSTEM_PROMPT = """\
+_EXTRACTION_SYSTEM_PROMPT = """\
 You are a STARTUP DATA EVALUATOR for the Spark2Scale platform.
 
 ABSORB THESE RULES:
@@ -138,14 +93,12 @@ ABSORB THESE RULES:
 4. Output MUST be valid JSON only.
 
 WORKFLOW:
-1. Read the `startup_data` and `user_message`.
-2. Determine if `user_message` contains new info. 
-3. Identify the NEXT missing critical field (Problem -> Solution -> Business Model -> Traction).
-4. Ask ONE concise question to get that field.
+1. Read the `startup_data` and `chat_history`.
+2. Extract ANY new information provided by the user in the history that is missing or different in `startup_data`.
+3. Format the output as a JSON object containing `data_updates`.
 
 OUTPUT FORMAT (JSON ONLY):
 {
-  "ai_reply": "YOUR_SINGLE_QUESTION",
   "data_updates": { "subsection": { "field": "value" } }
 }
 
@@ -155,66 +108,65 @@ IMPORTANT:
 - DO NOT return the full startup_data. Return only the DELTA (changes).
 """
 
+_CHAT_SYSTEM_PROMPT = """\
+You are an AI Consultant for Spark2Scale, helping founders refine their startup ideas.
+
+GOAL:
+Engage the user in a helpful, professional, and Socratic dialogue to explore their startup idea.
+Your goal is to help them clarify their thoughts, not just extract data.
+
+CONTEXT:
+You have access to their current `startup_data` and the `chat_history`.
+Use this context to ask relevant follow-up questions or provide feedback.
+
+GUIDELINES:
+1. Be concise, encouraging, and professional.
+2. Ask ONE thought-provoking question at a time to deepen their thinking.
+3. Do NOT output JSON. Output natural language text.
+4. If they ask for help, provide brief, high-value insights.
+"""
 
 # ════════════════════════════════════════════════════════════════════════
-#  Core Logic: Groq (Primary) & Gemini (Fallback)
+#  Core Logic: Gemini via LangChain
 # ════════════════════════════════════════════════════════════════════════
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((RateLimitError, APIStatusError, TimeoutError)),
-    reraise=True
-)
-def call_groq_primary(user_content: str) -> Dict[str, Any]:
-    """Call Groq API with retries, expecting deltas."""
-    if not groq_client:
-        raise ValueError("GROQ_API_KEY not set")
-
-    completion = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_content}
-        ],
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
+def call_gemini(user_content: str, system_prompt: str, json_mode: bool = True) -> Dict[str, Any]:
+    """Call Gemini API using the centralized LangChain factory."""
     
-    return json.loads(completion.choices[0].message.content)
+    # 1. Instantiate the LLM from your factory
+    # Setting a low temperature (0.1) ensures strict adherence to JSON formatting rules
+    llm = get_llm(temperature=0.1, provider="gemini")
+    
+    # 2. Format the messages for LangChain
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_content)
+    ]
 
+    # 3. Invoke the model
+    response = llm.invoke(messages)
+    text_content = response.content.strip()
 
-def call_gemini_fallback(user_content: str) -> Dict[str, Any]:
-    """Call Gemini API as fallback, expecting deltas."""
-    if not GEMINI_API_KEY or not genai:
-        raise ValueError("GEMINI_API_KEY not set or SDK missing")
+    if json_mode:
+        # LangChain Gemini sometimes wraps JSON outputs in markdown code blocks.
+        # We must clean these tags before trying to parse the JSON.
+        if text_content.startswith("```json"):
+            text_content = text_content[7:]
+        elif text_content.startswith("```"):
+            text_content = text_content[3:]
+            
+        if text_content.endswith("```"):
+            text_content = text_content[:-3]
+            
+        text_content = text_content.strip()
 
-    safety = {
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    }
-
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=_SYSTEM_PROMPT,
-        safety_settings=safety,
-        generation_config=genai.types.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema={
-                "type": "object",
-                "properties": {
-                    "ai_reply": {"type": "string"},
-                    "data_updates": {"type": "object"}
-                },
-                "required": ["ai_reply", "data_updates"],
-            },
-        ),
-    )
-
-    response = model.generate_content(user_content)
-    return json.loads(response.text)
+        try:
+            return json.loads(text_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON Decode Error: {e}\nRaw Output: {text_content}")
+            return {"ai_reply": "Error parsing data.", "data_updates": {}}
+    else:
+        return {"ai_reply": text_content}
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -226,64 +178,59 @@ class ChatRequest(BaseModel):
     chat_history: list
     startup_data: dict
 
+class UpdateDataRequest(BaseModel):
+    chat_history: list
+    startup_data: dict
+
 
 @router.post("/chat")
 async def process_idea_chat(request: ChatRequest):
     """
-    Secure Chat Endpoint (Groq Primary -> Gemini Fallback).
-    Merges LLM-provided deltas into the persistent startup_data.
+    Conversational Endpoint (Read-Only on Data).
+    Returns natural language AI reply.
     """
-
-    # 1. Injection Check
     if is_prompt_injection(request.user_message):
         logger.warning(f"⚠️ Injection Blocked: {request.user_message[:50]}")
-        return get_safe_fallback_response(request.startup_data)
+        return {"ai_reply": "I cannot fulfill that request. How else can I help with your startup?"}
 
-    # 2. Build Context
     user_content = (
         f"DATA:\n{json.dumps(request.startup_data)}\n\n"
         f"HISTORY:\n{json.dumps(request.chat_history)}\n\n"
-        f"USER INPUT:\n{request.user_message}\n\n"
-        f"Task: Update data (deltas only), find gap, ask 1 question."
+        f"USER MESSAGE:\n{request.user_message}\n"
     )
 
-    result = {}
-    
-    # 3. Try Groq (Primary)
     try:
-        logger.info("⚡ Calling Groq...")
-        result = call_groq_primary(user_content)
+        result = call_gemini(user_content, _CHAT_SYSTEM_PROMPT, json_mode=False)
+        return {"ai_reply": result.get("ai_reply", "")}
     except Exception as e:
-        logger.error(f"❌ Groq Failed: {str(e)}. Switching to Gemini...")
-        
-        # 4. Try Gemini (Fallback)
-        try:
-            logger.info("✨ Calling Gemini Stub...")
-            result = call_gemini_fallback(user_content)
-        except Exception as gemini_e:
-            logger.error(f"❌ Gemini Fallback Failed: {str(gemini_e)}")
-            return get_safe_fallback_response(request.startup_data)
+        logger.error(f"❌ Gemini Chat Failed: {str(e)}")
+        return {"ai_reply": "I'm having trouble connecting right now. Please try again."}
 
-    # 5. Merge Validator
-    if "ai_reply" not in result:
-        logger.warning("⚠️ Result missing ai_reply")
-        return get_safe_fallback_response(request.startup_data)
 
-    # Extract updates
-    # Some LLMs return "updated_startup_data" instead of "data_updates" if confused. Handle both.
-    updates = result.get("data_updates") or result.get("updated_startup_data", {})
-    
-    # Deep merge logic
+@router.post("/update-startup-data")
+async def update_startup_data(request: UpdateDataRequest):
+    """
+    Data Update Endpoint (Processes History).
+    Returns structured data updates (deltas).
+    """
+    user_content = (
+        f"CURRENT DATA:\n{json.dumps(request.startup_data)}\n\n"
+        f"CHAT HISTORY:\n{json.dumps(request.chat_history)}\n\n"
+        f"TASK: Extract insights from history to update the data."
+    )
+
     try:
-        # Create a deep copy to strictly avoid reference issues, though Pydantic model gives us a dict
+        result = call_gemini(user_content, _EXTRACTION_SYSTEM_PROMPT, json_mode=True)
+    except Exception as e:
+        logger.error(f"❌ Gemini Extraction Failed: {str(e)}")
+        return {"updated_startup_data": request.startup_data}
+
+    updates = result.get("data_updates", {})
+    
+    try:
         final_data = copy.deepcopy(request.startup_data)
         deep_merge(final_data, updates)
-        
-        return {
-            "ai_reply": result["ai_reply"],
-            "updated_startup_data": final_data
-        }
+        return {"updated_startup_data": final_data}
     except Exception as merge_e:
         logger.error(f"❌ Merge Failed: {str(merge_e)}")
-        return get_safe_fallback_response(request.startup_data)
-
+        return {"updated_startup_data": request.startup_data}
