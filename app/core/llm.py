@@ -1,8 +1,33 @@
 import os
+import itertools
+import threading
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.chat_models import ChatOllama
 from langchain_groq import ChatGroq  
 from app.core.config import Config
+
+# =========================================================
+# GROQ API KEY ROTATION (Round-Robin across multiple keys)
+# =========================================================
+_groq_keys = [
+    os.getenv(f"GROQ_API_KEY_{i}") 
+    for i in range(1, 5) 
+    if os.getenv(f"GROQ_API_KEY_{i}")
+]
+
+# Fallback: use single key if numbered keys aren't set
+if not _groq_keys and Config.GROQ_API_KEY:
+    _groq_keys = [Config.GROQ_API_KEY]
+
+_groq_key_cycle = itertools.cycle(_groq_keys) if _groq_keys else None
+_groq_key_lock = threading.Lock()
+
+def _get_next_groq_key() -> str:
+    """Thread-safe round-robin key selection."""
+    if not _groq_key_cycle:
+        raise ValueError("No GROQ API keys configured. Set GROQ_API_KEY_1 through GROQ_API_KEY_4 in .env")
+    with _groq_key_lock:
+        return next(_groq_key_cycle)
 
 def get_llm(temperature=None, provider="gemini", model_name=None):
     """
@@ -17,19 +42,16 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
 
     # --- OPTION 1: GROQ (Fastest / Recommended for Logic) ---
     if provider == "groq":
-        # Default to a fast, smart model like Llama 3 70B if not specified
         selected_model = model_name if model_name else "llama-3.1-8b-instant"
         
-        api_key = Config.GROQ_API_KEY
-        if not api_key:
-            raise ValueError("GROQ_API_KEY is not set.")
+        # Round-robin key rotation for higher effective RPM
+        api_key = _get_next_groq_key()
 
         return ChatGroq(
             temperature=final_temp,
             model_name=selected_model,
             api_key=api_key,
-            max_retries=2,
-            # Groq is fast, so we can set a short timeout
+            max_retries=6,
             request_timeout=30 
         )
 

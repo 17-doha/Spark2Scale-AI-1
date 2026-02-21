@@ -1,8 +1,6 @@
-accelerate==1.12.0
 aiohttp==3.11.11
 annotated-types==0.7.0
 beautifulsoup4==4.14.3
-bitsandbytes==0.49.1
 builtwith==1.3.4
 fastapi==0.128.1
 huggingface_hub==0.36.1
@@ -13,11 +11,9 @@ langchain-google-community==3.0.5
 langchain-google-genai==4.2.0
 langchain-groq==1.1.2
 langchain-huggingface==1.1.0
-langchain-ollama==1.0.1
 langgraph==1.0.7
 langsmith==0.7.1
 matplotlib==3.10.8
-peft==0.18.1
 pillow==12.1.0
 playwright==1.49.1
 pydantic==2.12.5
@@ -26,13 +22,8 @@ python-pptx==1.0.2
 reportlab==4.4.9
 requests==2.32.5
 seaborn==0.13.2
-selenium==4.40.0
-sentencepiece==0.2.1
 tenacity==9.1.2
-torch==2.10.0
-transformers==4.57.6
 uvicorn==0.40.0
-webdriver-manager==4.0.2
 yfinance==1.1.0
 pytrends==4.9.2
 fpdf==1.7.2
@@ -41,3 +32,5 @@ python-bidi==0.6.7
 regex==2026.1.15
 typing_extensions==4.15.0
 tavily-python==0.7.21
+python-multipart==0.0.22
+PyPDF2==3.0.1

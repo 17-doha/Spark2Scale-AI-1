@@ -615,44 +615,44 @@ def check_missing_fields(data, parent_path=""):
 
     return missing_errors
 
-async def capture_screenshot(url: str):
-    """
-    Visits a URL using Playwright (Async) and returns the screenshot as a Base64 string.
-    """
-    logger.info(f"📸 Visiting {url} for visual check (Async)...")
+# async def capture_screenshot(url: str):
+#     """
+#     Visits a URL using Playwright (Async) and returns the screenshot as a Base64 string.
+#     """
+#     logger.info(f"📸 Visiting {url} for visual check (Async)...")
     
-    if not url:
-        return {"error": "No URL provided."}
+#     if not url:
+#         return {"error": "No URL provided."}
 
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            # Create a context with a known viewport and user agent to mimic a real user
-            context = await browser.new_context(
-                viewport={'width': 1280, 'height': 720},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            page = await context.new_page()
+#     try:
+#         async with async_playwright() as p:
+#             browser = await p.chromium.launch(headless=True)
+#             # Create a context with a known viewport and user agent to mimic a real user
+#             context = await browser.new_context(
+#                 viewport={'width': 1280, 'height': 720},
+#                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+#             )
+#             page = await context.new_page()
             
-            try:
-                # Wait up to 15 seconds for load
-                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+#             try:
+#                 # Wait up to 15 seconds for load
+#                 await page.goto(url, wait_until="domcontentloaded", timeout=15000)
                 
-                # Small delay to ensure any JS rendering stabilizes
-                await asyncio.sleep(3)
+#                 # Small delay to ensure any JS rendering stabilizes
+#                 await asyncio.sleep(3)
                 
-                screenshot_bytes = await page.screenshot(type='png')
-                image_data = base64.b64encode(screenshot_bytes).decode("utf-8")
+#                 screenshot_bytes = await page.screenshot(type='png')
+#                 image_data = base64.b64encode(screenshot_bytes).decode("utf-8")
                 
-                return {"image_b64": image_data, "status": "Success"}
+#                 return {"image_b64": image_data, "status": "Success"}
                 
-            except Exception as e:
-                return {"error": f"Timeout/Access Error: {str(e)}"}
-            finally:
-                await browser.close()
+#             except Exception as e:
+#                 return {"error": f"Timeout/Access Error: {str(e)}"}
+#             finally:
+#                 await browser.close()
             
-    except Exception as e:
-        return {"error": f"Playwright Driver Error: {str(e)}"}
+#     except Exception as e:
+#         return {"error": f"Playwright Driver Error: {str(e)}"}
     
 
 # ==========================================

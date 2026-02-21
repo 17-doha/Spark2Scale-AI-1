@@ -1,5 +1,4 @@
 import asyncio
 
-# Allow only 2 concurrent LLM calls to stay safe under the 10 RPM limit
-# If you upgrade your plan, you can increase this to 5 or 10.
-concurrency_limiter = asyncio.Semaphore(1)
+# Allow 2 concurrent LLM calls — safe with 4 rotating API keys (~120 RPM total)
+concurrency_limiter = asyncio.Semaphore(2)

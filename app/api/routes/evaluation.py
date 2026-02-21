@@ -2,18 +2,17 @@ import json
 import os
 import time
 import asyncio
-from fastapi import APIRouter, HTTPException
+import uuid
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.utils.pdf_generator import generate_founder_report, generate_investor_report
 import zipfile
-import uuid
 from app.graph.evaluation_agent.helpers import normalize_input_data
 
 # --- Import Logger ---
 from app.core.logger import get_logger
-
 
 # --- Import the Main Graph ---
 from app.graph.evaluation_agent import evaluation_graph
@@ -21,12 +20,15 @@ from app.graph.evaluation_agent import evaluation_graph
 router = APIRouter()
 logger = get_logger(__name__)
 
-class EvalInput(BaseModel):
-    startup_evaluation: Dict[str, Any]
-
+# --- In-Memory Job Store ---
+# Stores the status and results of background tasks
+JOBS = {}
 
 class RawInput(BaseModel):
     data: Any
+
+class EvalInput(BaseModel):
+    startup_evaluation: Dict[str, Any]
 
 # --- Helper to Save JSON ---
 def save_agent_output(agent_name: str, data: dict):
@@ -42,23 +44,18 @@ def save_agent_output(agent_name: str, data: dict):
     logger.info(f"💾 Saved {agent_name} output to {filepath}")
 
 
-
 # =========================================================
-# 2. MAIN "RUN ALL" ENDPOINT
+# 1. BACKGROUND TASK LOGIC
 # =========================================================
 
-@router.post("/evaluate/all")
-async def evaluate_all(raw_payload: RawInput):
+async def run_evaluation_background(job_id: str, normalized_data: dict):
+    """
+    This function runs in the background. It performs the heavy
+    AI work and updates the JOBS dictionary when finished.
+    """
     start_time = time.time()
-    
-    # 1. NORMALIZE (The new first step)
-    # Convert input to string if it's a dict to pass to LLM prompt
-    raw_str = json.dumps(raw_payload.data) if isinstance(raw_payload.data, dict) else str(raw_payload.data)
-    
-    normalized_data = await normalize_input_data(raw_str)
-    
-    # 2. RUN PIPELINE (Pass normalized data)
-    logger.info("🚀 Starting FULL Evaluation Pipeline with Normalized Data...")
+    logger.info(f"🚀 Job {job_id}: Starting Background Evaluation...")
+
     try:
         # Run the full LangGraph
         state = await evaluation_graph.ainvoke({"user_data": normalized_data})
@@ -77,16 +74,96 @@ async def evaluate_all(raw_payload: RawInput):
             "final_report": state.get("final_report")
         }
         
-        save_agent_output("FULL_REPORT", full_report)
+        # Save output to disk (optional debugging)
+        save_agent_output(f"JOB_{job_id}", full_report)
         
         duration = time.time() - start_time
-        logger.info(f"✅ FULL Evaluation finished in {duration:.2f}s")
-        return full_report
+        logger.info(f"\n{'='*60}")
+        logger.info(f"✅ Job {job_id}: Evaluation COMPLETED in {duration:.2f}s")
+        logger.info(f"{'='*60}")
         
+        # Update Job Status to Completed
+        JOBS[job_id] = {
+            "status": "completed",
+            "result": full_report
+        }
+
     except Exception as e:
-        logger.error(f"❌ Full Evaluation Failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Job {job_id} Failed: {e}")
+        JOBS[job_id] = {
+            "status": "failed",
+            "error": str(e)
+        }
+
+
+# =========================================================
+# 2. START EVALUATION ENDPOINT
+# =========================================================
+
+@router.post("/evaluate/all")
+async def evaluate_all(raw_payload: RawInput, background_tasks: BackgroundTasks):
+    """
+    Starts the evaluation in the background.
+    Returns a 'job_id' immediately so the connection doesn't timeout.
+    """
+    # 1. Normalize Data (Fast)
+    # Convert input to string if it's a dict
+    raw_str = json.dumps(raw_payload.data) if isinstance(raw_payload.data, dict) else str(raw_payload.data)
     
+    try:
+        normalized_data = await normalize_input_data(raw_str)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Normalization failed: {str(e)}")
+    
+    # 2. Generate Job ID
+    job_id = str(uuid.uuid4())
+    
+    # 3. Set Initial Status
+    JOBS[job_id] = {"status": "running"}
+    
+    # 4. Add to Background Tasks (This prevents blocking/timeout)
+    background_tasks.add_task(run_evaluation_background, job_id, normalized_data)
+    
+
+    
+    return {
+        "message": "Evaluation started", 
+        "job_id": job_id,
+        "status_url": f"/api/evaluate/status/{job_id}" 
+    }
+
+
+# =========================================================
+# 3. CHECK STATUS ENDPOINT (New!)
+# =========================================================
+
+@router.get("/evaluate/status/{job_id}")
+async def get_job_status(job_id: str):
+    """
+    Call this repeatedly (poll) to check if the job is done.
+    """
+    job = JOBS.get(job_id)
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job ID not found")
+        
+    if job["status"] == "running":
+        return {"status": "running", "message": "AI is working..."}
+    
+    if job["status"] == "failed":
+        return {"status": "failed", "error": job.get("error")}
+        
+    # If completed, return the result
+    return {
+        "status": "completed", 
+        "result": job["result"]
+    }
+
+
+# =========================================================
+# 4. GENERATE REPORT (Unchanged)
+# =========================================================
+
 @router.post("/generate-report")
 async def generate_reports_endpoint(report_data: Dict[str, Any]):
     """
