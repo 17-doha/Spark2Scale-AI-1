@@ -17,10 +17,11 @@ async def research_idea(request: ResearchRequest):
     
     try:
         # Invoke the LangGraph workflow
-        # The state expects "input_idea" and "input_problem"
+        # The state expects "input_idea", "input_problem", "input_region"
         inputs = {
             "input_idea": request.idea,
-            "input_problem": request.problem
+            "input_problem": request.problem,
+            "input_region": request.region
         }
         
         result = await market_research_app.ainvoke(inputs)

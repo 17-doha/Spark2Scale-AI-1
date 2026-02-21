@@ -55,76 +55,39 @@ def generate_validation_queries(idea, problem_statement):
         return None
 
 def search_multiple_sources(queries_dict, idea):
-    """
-    Search across multiple platforms for better validation coverage
-    
-    Args:
-        queries_dict: Dict with 'problem' and 'solution' query lists
-        idea: Business idea name
-    
-    Returns:
-        List of evidence with metadata
-    """
     all_evidence = []
     
-    # Problem queries - search across multiple sources
     prob_queries = queries_dict.get("problem_queries", []) or queries_dict.get("problem", [])
     sol_queries = queries_dict.get("solution_queries", []) or queries_dict.get("solution", [])
     
     logger.info(f"   🔍 Searching {len(prob_queries)} problem queries and {len(sol_queries)} solution queries...")
-    
-    # Use configured limits instead of hardcoded values
     max_queries = ResearchConfig.MAX_VALIDATION_QUERIES_PER_TYPE
     
-    # Search problem evidence across multiple platforms
-    for q in prob_queries[:max_queries]:
-        for source in ResearchConfig.VALIDATION_SOURCES:
-            site = source["site"]
-            weight = source["weight"]
-            credibility = source["credibility"]
-            
-            search_query = f"site:{site} {q}"
-            logger.info(f"   📱 Searching {site} for: {q}")
-            
-            res = search_forums(search_query)
+    def process_queries(query_list, query_type):
+        for q in query_list[:max_queries]:
+            logger.info(f"   📱 Executing validation search: {q}")
+            res = search_forums(q)
             if "organic" in res:
                 for item in res["organic"]:
+                    # Try to extract the source from the link (e.g., 'reddit.com')
+                    link = item.get('link', '')
+                    domain = link.split('/')[2] if '//' in link else "web"
+                    
                     all_evidence.append({
-                        "type": "PROBLEM",
+                        "type": query_type,
                         "title": item.get('title', ''),
                         "snippet": item.get('snippet', ''),
-                        "link": item.get('link', ''),
-                        "source": site,
-                        "weight": weight,
-                        "credibility": credibility,
-                        "date": item.get('date', 'unknown')  # Some APIs provide this
-                    })
-    
-    # Search solution evidence (existing alternatives/competitors)
-    for q in sol_queries[:max_queries]:
-        for source in ResearchConfig.VALIDATION_SOURCES[:3]:  # Limit solution searches
-            site = source["site"]
-            weight = source["weight"]
-            credibility = source["credibility"]
-            
-            search_query = f"site:{site} {q}"
-            logger.info(f"   🔍 Searching {site} for: {q}")
-            
-            res = search_forums(search_query)
-            if "organic" in res:
-                for item in res["organic"]:
-                    all_evidence.append({
-                        "type": "SOLUTION",
-                        "title": item.get('title', ''),
-                        "snippet": item.get('snippet', ''),
-                        "link": item.get('link', ''),
-                        "source": site,
-                        "weight": weight,
-                        "credibility": credibility,
+                        "link": link,
+                        "source": domain,
+                        "weight": 0.20, # Default weight
+                        "credibility": "medium" if "reddit" in domain or "quora" in domain else "high",
                         "date": item.get('date', 'unknown')
                     })
+
+    process_queries(prob_queries, "PROBLEM")
+    process_queries(sol_queries, "SOLUTION")
     
-    logger.info(f"   ✅ Found {len(all_evidence)} pieces of evidence across {len(set(e['source'] for e in all_evidence))} sources")
+    logger.info(f"   ✅ Found {len(all_evidence)} pieces of evidence.")
     return all_evidence
 
 def analyze_evidence_quality(evidence_list):

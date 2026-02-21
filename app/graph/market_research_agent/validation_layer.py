@@ -218,24 +218,30 @@ class MarketSizingValidator:
     
     @staticmethod
     def extract_numeric_value(value_string):
-        """Extract number from strings like '$5 Billion'"""
+        """Extract number from strings like 'Approximately $5.2 Billion'"""
+        if not value_string or value_string == "Unknown": 
+            return None
+            
         try:
-            # Remove currency symbols and commas
-            clean = re.sub(r'[^\d.]', '', value_string.split()[0])
-            num = float(clean)
+            # Find the first sequence of digits/decimals in the entire string
+            matches = re.findall(r'[\d\.]+', str(value_string).replace(',', ''))
+            if not matches:
+                return None
+                
+            num = float(matches[0])
             
             # Adjust for unit
-            value_lower = value_string.lower()
+            value_lower = str(value_string).lower()
             if 'trillion' in value_lower:
                 num *= 1_000_000
             elif 'billion' in value_lower:
                 num *= 1_000
             elif 'thousand' in value_lower:
                 num *= 0.001
-            # else: assume millions
             
             return num  # Returns in millions
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse numeric value from {value_string}: {e}")
             return None
     
     @staticmethod

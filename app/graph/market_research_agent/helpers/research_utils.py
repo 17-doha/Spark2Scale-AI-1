@@ -58,8 +58,8 @@ def execute_serper_search(queries):
     all_raw_results = []
     print(f"   🔎 executing {len(queries)} search queries...")
     
-    # LIMIT TO 2 QUERIES TO SAVE QUOTA
-    for q in queries[:2]:
+    # The AI will now actually use the research plan it generated!
+    for q in queries:
         conn = http.client.HTTPSConnection("google.serper.dev")
         payload = json.dumps({ "q": q, "num": 5 })
         headers = { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }
@@ -76,4 +76,3 @@ def execute_serper_search(queries):
             print(f"   ⚠️ Serper Request Failed: {e}")
     
     return all_raw_results
-

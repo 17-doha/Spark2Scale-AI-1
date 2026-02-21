@@ -66,7 +66,9 @@ def trends_node(state: MarketResearchState):
         industry = plan.get("market_identity", {}).get("industry")
         if industry: trend_keyword = industry
     
-    trend_csv, _ = fetch_trend_data([trend_keyword], geo_code='EG', plan=plan)
+    region = state.get("input_region") or 'EG'
+    
+    trend_csv, _ = fetch_trend_data([trend_keyword], geo_code=region, plan=plan)
     return {"trends_file": trend_csv}
 
 def finance_node(state: MarketResearchState):

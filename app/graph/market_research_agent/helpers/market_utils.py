@@ -240,20 +240,55 @@ def analyze_market_size(idea, industry, location, market_data):
         logger.warning(f"   ⚠️ Sizing Analysis Error: {e}")
         return None
 
+import re
+
 def plot_market_funnel(result, industry):
     try:
-        # Convert strings like "$5 Billion" to relative numbers for plotting
-        # (This is a visual approximation)
-        raw_som = str(result.get('som_value', 'N/A'))
-        clean_som = raw_som.replace('$', '').split(' ')[0]  # Grab just the number part
+        # FIXED: Helper to extract numbers AND handle units correctly
+        def extract_scaled_num(text):
+            if not text or str(text) == "Unknown" or str(text) == "Insufficient data": 
+                return 0
+            
+            # Extract the raw digits
+            matches = re.findall(r'[\d\.]+', str(text).replace(',', ''))
+            if not matches: 
+                return 0
+                
+            num = float(matches[0])
+            text_lower = str(text).lower()
+            
+            # Scale the numbers so they are all relative to Millions
+            if 'trillion' in text_lower:
+                num *= 1_000_000
+            elif 'billion' in text_lower:
+                num *= 1_000
+            elif 'thousand' in text_lower:
+                num *= 0.001
+                
+            return num
+
+        # Get the correctly scaled numbers
+        tam_num = extract_scaled_num(result.get('tam_value'))
+        sam_num = extract_scaled_num(result.get('sam_value'))
+        som_num = extract_scaled_num(result.get('som_value'))
         
-        # --- 2. UPDATE THE LABELS LIST ---
-        sizes = [100, 20, 1] 
-        # Use 'clean_som' (or the original if you prefer) in the label below:
+        # Fallback to visual defaults ONLY if data extraction completely fails
+        if tam_num == 0 or sam_num == 0:
+            sizes = [100, 20, 1]
+        else:
+            # Normalize sizes relative to TAM so the chart fits perfectly
+            sizes = [
+                100.0, 
+                min((sam_num / tam_num) * 100, 100.0),  # Cap at 100% just in case
+                min((som_num / tam_num) * 100, 100.0)
+            ]
+            # Ensure SOM is visible even if it's less than 1% of TAM
+            sizes[2] = max(sizes[2], 1.0) 
+            
         labels = [
             f"TAM\n{result.get('tam_value')}", 
             f"SAM\n{result.get('sam_value')}", 
-            f"SOM\n{result.get('som_value')}" # You can change this to f"SOM\n${clean_som}M" if you want strictly formatted text
+            f"SOM\n{result.get('som_value')}" 
         ]
         
         colors = ['#ff9999', '#66b3ff', '#99ff99']
@@ -261,13 +296,12 @@ def plot_market_funnel(result, industry):
         plt.figure(figsize=(8, 6), facecolor='#F0EADC')
         ax = plt.gca()
         ax.set_facecolor('#F0EADC')
-        # Create a funnel-like bar chart
+        
         plt.barh([3, 2, 1], sizes, color=colors, height=0.6)
         plt.yticks([3, 2, 1], ["TAM", "SAM", "SOM"])
-        plt.xlabel("Market Potential (Relative Scale)")
+        plt.xlabel("Market Potential (Relative to TAM)")
         plt.title(f"Market Sizing: {industry}")
         
-        # Add text labels on bars
         for i, v in enumerate(sizes):
             plt.text(v/2, 3-i, labels[i], ha='center', va='center', fontweight='bold', color='black')
             

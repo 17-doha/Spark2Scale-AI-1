@@ -3,6 +3,7 @@ from typing import TypedDict, Optional
 class MarketResearchState(TypedDict):
     input_idea: str
     input_problem: str
+    input_region: Optional[str]
     
     # Shared Research Plan (Optimized)
     research_plan: Optional[dict]

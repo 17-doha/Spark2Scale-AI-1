@@ -1,7 +1,7 @@
-# app/graph/market_research_agent/research_config.py
 """
 Configuration for Market Research Agent - Controls realism and quality thresholds
 """
+import re
 
 class ResearchConfig:
     """Central configuration for realistic market research parameters"""
@@ -182,20 +182,23 @@ class ResearchConfig:
     WARN_IF_SEARCHES_FAIL = True   # Alert if API calls fail
     WARN_IF_SCORES_INCONSISTENT = True  # Alert if pain/growth don't match grade
 
+    RUNWAY_CRITICAL = 3       # Less than 3 months = Imminent death
+    RUNWAY_DANGER = 9         # 3 to 9 months = High stress, constant fundraising
+    RUNWAY_STANDARD = 18      # 10 to 18 months = Standard seed runway
+    
+    BREAK_EVEN_EXCELLENT = 12 # 1 year to profitability (Rare)
+    BREAK_EVEN_STANDARD = 36  # 3 years to profitability (Normal SaaS)
+    BREAK_EVEN_TOXIC = 60     # >5 years (Requires massive VC backing)
+
 
 # Helper Functions
 def get_evidence_quality(evidence_count: int) -> tuple[str, float]:
     """Returns quality level and multiplier based on evidence count"""
-    if evidence_count >= 10:
-        return "very_strong", ResearchConfig.EVIDENCE_MULTIPLIERS["very_strong"]
-    elif evidence_count >= 8:
-        return "strong", ResearchConfig.EVIDENCE_MULTIPLIERS["strong"]
-    elif evidence_count >= 5:
-        return "moderate", ResearchConfig.EVIDENCE_MULTIPLIERS["moderate"]
-    elif evidence_count >= 3:
-        return "weak", ResearchConfig.EVIDENCE_MULTIPLIERS["weak"]
-    else:
-        return "minimal", ResearchConfig.EVIDENCE_MULTIPLIERS["minimal"]
+    if evidence_count >= 10: return "very_strong", 1.0
+    elif evidence_count >= 8: return "strong", 0.9
+    elif evidence_count >= 5: return "moderate", 0.7
+    elif evidence_count >= 3: return "weak", 0.5
+    else: return "minimal", 0.3
 
 
 def get_competition_level(competitor_count: int) -> dict:
@@ -212,14 +215,6 @@ def get_competition_level(competitor_count: int) -> dict:
     return ResearchConfig.COMPETITION_LEVELS["High"]  # Default to worst case
 
 
-def get_industry_benchmark(industry: str) -> dict:
-    """Returns industry-specific benchmarks or default"""
-    return ResearchConfig.INDUSTRY_BENCHMARKS.get(
-        industry, 
-        ResearchConfig.INDUSTRY_BENCHMARKS["Default"]
-    )
-
-
 def calculate_realistic_opportunity_score(
     pain_score: float,
     growth_pct: float,
@@ -229,154 +224,125 @@ def calculate_realistic_opportunity_score(
     finance_summary: str = ""
 ) -> dict:
     """
-    Calculate opportunity score with realistic weighting and adjustments
-    
-    Returns:
-        dict with score, grade, warnings, and breakdown
+    Calculate opportunity score with realistic VC-style gating for insolvency.
     """
-    import re
     
-    # Adjust pain score based on evidence quality
+    # 1. PAIN & GROWTH SCORING
     evidence_quality, evidence_multiplier = get_evidence_quality(evidence_count)
-    
-    # 1. NEW SOLUTION PENALTY: 
-    # Try to extract the solution fit score if it was passed via a global context or parsed into finance_summary 
-    # (For simplicity here, we assume if finance_summary contains "Low Fit" we penalize)
     if "Low Fit" in finance_summary:
         evidence_multiplier *= 0.5
         
     adjusted_pain_score = pain_score * evidence_multiplier
     
     # Convert growth % to score (0-100 scale)
-    # Severe penalty for negative growth
     if growth_pct < 0:
-        growth_score = max(0, 50 - (abs(growth_pct) * 3)) # Maps -10% to 20, -17% to 0
+        growth_score = max(0, 50 - (abs(growth_pct) * 3))
     else:
-        growth_score = min(100, 50 + (growth_pct * 1.5)) # Maps +33% to 100
+        growth_score = min(100, 50 + (growth_pct * 1.5))
     
-    # Get competition penalty
+    # 2. COMPETITION SCORING
     competition_data = get_competition_level(competitor_count)
     competition_score = 100 * competition_data["multiplier"]
     
-    # 2. FINANCIAL PENALTY SCORE
-    finance_score = 50 # Default middle
+    # 3. FINANCIAL SCORING PARSING
     startup_cost = 0
     monthly_profit = 0
-    break_even = 99
+    break_even = 999
     runway = None
+    finance_score = 50 # Default
     
-    # Extremely basic parse of the finance_summary string
     if finance_summary:
         try:
-           for line in finance_summary.split('\n'):
-               if 'Total Startup' in line:
-                   startup_cost = float(re.findall(r'[\d\.]+', line.split()[-1])[0])
-               elif 'Net Profit' in line:
-                   # Find the last number on the line, could be negative
-                   matches = re.findall(r'-?[\d\.]+', line)
-                   if matches: monthly_profit = float(matches[-1])
-               elif 'Break-Even Month' in line:
-                   matches = re.findall(r'[\d\.]+', line.split()[-1])
-                   if matches: break_even = int(matches[0])
-               elif 'Runway Months' in line:
-                   val = line.split()[-1].strip()
-                   if val != 'N/A' and val.isdigit(): runway = int(val)
-                   
-           if break_even == 999 or (runway is not None and runway < 12):
-               finance_score = 0 # Insolvent quickly
-           elif break_even <= 12:
-               finance_score = 100
-           elif break_even <= 24:
-               finance_score = 70
-           elif monthly_profit > 0:
-               finance_score = 50
-           else:
-               finance_score = 20 # Endless bleed
-               
-        except Exception as e:
-           pass
+            for line in finance_summary.split('\n'):
+                if 'Net Profit' in line:
+                    matches = re.findall(r'-?[\d\.]+', line.replace(',',''))
+                    if matches: monthly_profit = float(matches[-1])
+                elif 'Break-Even Month' in line:
+                    matches = re.findall(r'[\d\.]+', line.split()[-1])
+                    if matches: break_even = int(float(matches[0]))
+                elif 'Runway' in line:
+                    matches = re.findall(r'[\d\.]+', line)
+                    if matches: runway = float(matches[-1])
+        except Exception:
+            pass
 
     # Dynamic Weights (Must sum to 1.0)
-    w_pain = 0.35
-    w_growth = 0.20
-    w_size = 0.15
-    w_comp = 0.10
-    w_fin = 0.20
+    w_pain, w_growth, w_size, w_comp, w_fin = 0.35, 0.20, 0.15, 0.10, 0.20
     
-    # Calculate weighted score
-    opportunity_score = (
-        adjusted_pain_score * w_pain +
-        growth_score * w_growth +
-        market_size_score * w_size +
-        competition_score * w_comp +
-        finance_score * w_fin
+    # Base Weighted Score
+    base_score = (
+        (adjusted_pain_score * w_pain) +
+        (growth_score * w_growth) +
+        (market_size_score * w_size) +
+        (competition_score * w_comp) +
+        (finance_score * w_fin)
     )
-    
-    # Determine grade
-    if opportunity_score >= ResearchConfig.GRADE_A_THRESHOLD:
-        grade = "A (Gold Mine)"
-        confidence = "High"
-    elif opportunity_score >= ResearchConfig.GRADE_B_THRESHOLD:
-        grade = "B (Solid Opportunity)"
-        confidence = "Medium-High"
-    elif opportunity_score >= ResearchConfig.GRADE_C_THRESHOLD:
-        grade = "C (Risky)"
-        confidence = "Medium"
-    else:
-        grade = "D (Not Recommended)"
-        confidence = "Low"
-    
-    # Generate warnings
+
+    # ==========================================================
+    # 4. THE SURVIVAL GATE (CRITICAL FIX)
+    # ==========================================================
+    survival_multiplier = 1.0
     warnings = []
+    
+    # Evaluate Runway
+    if runway is not None:
+        if runway < ResearchConfig.RUNWAY_CRITICAL:
+            survival_multiplier = 0.25 # Caps a perfect score at ~25 (Grade D)
+            warnings.append(f"🚨 CRITICAL: Imminent insolvency. Runway is only {runway:.1f} months.")
+        elif runway < ResearchConfig.RUNWAY_DANGER:
+            survival_multiplier = 0.60 # Caps a perfect score at ~60 (Grade C)
+            warnings.append(f"⚠️ HIGH RISK: Short runway ({runway:.1f} months). Urgent capital required.")
+            
+    # Evaluate Path to Profitability
+    if break_even >= ResearchConfig.BREAK_EVEN_TOXIC or break_even == 999:
+        # If they don't die immediately but have no path to profit
+        if survival_multiplier > 0.6: 
+            survival_multiplier = 0.70
+        warnings.append("⚠️ STRUCTURAL RISK: No realistic path to break-even identified.")
+
+    # Apply the Gate
+    final_opportunity_score = base_score * survival_multiplier
+
+    # Generate standard warnings
     if evidence_count < ResearchConfig.WARN_IF_EVIDENCE_BELOW:
-        warnings.append(f"⚠️ Limited evidence ({evidence_count} sources). Results may be unreliable.")
-    
-    if evidence_multiplier < 0.7:
-        warnings.append(f"⚠️ Evidence quality is {evidence_quality}. Increase data collection for accuracy.")
-    
+        warnings.append(f"⚠️ Limited validation evidence ({evidence_count} sources).")
     if competitor_count > 10:
-        warnings.append(f"⚠️ Highly competitive market ({competitor_count} competitors). Differentiation critical.")
-    
+        warnings.append(f"⚠️ Highly competitive 'Red Ocean' market ({competitor_count} competitors).")
     if growth_pct < 0:
-        warnings.append(f"⚠️ Market is declining ({growth_pct:.1f}%). High risk.")
-        
-    if finance_score <= 20:
-        warnings.append("⚠️ Severe Financial Risk: Business model shows unsustainable cash burn or mathematical insolvency.")
-    
+        warnings.append(f"⚠️ Market is shrinking ({growth_pct:.1f}% YoY).")
+
+    # Determine final grade
+    if final_opportunity_score >= 85: grade, conf = "A (Gold Mine)", "High"
+    elif final_opportunity_score >= 70: grade, conf = "B (Solid Opportunity)", "Medium-High"
+    elif final_opportunity_score >= 50: grade, conf = "C (Risky)", "Medium"
+    else: grade, conf = "D (Not Recommended)", "Low"
+
     return {
-        "opportunity_score": round(opportunity_score, 1),
+        "opportunity_score": round(final_opportunity_score, 1),
         "grade": grade,
-        "confidence": confidence,
+        "confidence": conf,
         "breakdown": {
+            "base_score_before_penalties": round(base_score, 1),
+            "survival_multiplier": survival_multiplier,
             "pain_score_raw": pain_score,
             "pain_score_adjusted": round(adjusted_pain_score, 1),
-            "evidence_quality": evidence_quality,
             "evidence_count": evidence_count,
-            "growth_score": round(growth_score, 1),
+            "evidence_quality": evidence_quality,
             "growth_pct": growth_pct,
-            "market_size_score": market_size_score,
-            "competition_level": competition_data["level"],
-            "competition_score": round(competition_score, 1),
+            "growth_score": growth_score,
             "competitor_count": competitor_count,
-            "finance_score": round(finance_score, 1)
+            "competition_level": competition_data["level"],
+            "competition_score": competition_score,
+            "runway_months": runway if runway is not None else "Unknown",
+            "break_even_month": break_even
         },
         "warnings": warnings,
-        "recommendation": _generate_recommendation(opportunity_score, warnings)
+        "recommendation": _generate_recommendation(final_opportunity_score, warnings)
     }
 
-
 def _generate_recommendation(score: float, warnings: list) -> str:
-    """Generate action recommendation based on score and warnings"""
-    if score >= 85:
-        base = "Strong opportunity. Proceed with confidence but validate assumptions."
-    elif score >= 70:
-        base = "Solid opportunity. Conduct additional validation before major investment."
-    elif score >= 50:
-        base = "Risky opportunity. Only proceed if you have unique advantages or insights."
-    else:
-        base = "Not recommended. Consider pivoting or finding a different market."
-    
-    if warnings:
-        base += f" Address {len(warnings)} concern(s) identified."
-    
-    return base
+    # [KEEP EXISTING RECOMMENDATION LOGIC]
+    if score >= 85: return "Strong opportunity. Proceed with confidence but validate assumptions."
+    elif score >= 70: return "Solid opportunity. Conduct additional validation before major investment."
+    elif score >= 50: return "Risky opportunity. Only proceed if you have unique advantages or insights."
+    else: return "Not recommended. Financial or market structure presents unacceptable risk."

@@ -63,8 +63,7 @@ def get_real_world_estimates(idea, currency_context=None):
         queries = [f"commercial rent prices {country}", f"average salary {country}", f"coffee bean price {country}"]
 
     market_data = ""
-    # LIMIT TO 2 QUERIES TO SAVE QUOTA
-    for q in queries[:2]:
+    for q in queries[:5]:
         market_data += search_cost_data(q) + "\n"
         
     print(f"   🧮 Extracting {curr_code} financial model from search results...")
@@ -111,36 +110,37 @@ def generate_financial_visuals(estimates):
         # Normalize to 0.1 - 1.0 range approx
         growth_factor = (growth_factor - growth_factor.min()) / (growth_factor.max() - growth_factor.min()) * 0.9 + 0.1
         
-        # Monthly Profit = (Max Revenue * Growth Factor) - Fixed Costs
-        # Note: Valid only for months > 0. Month 0 is just startup cost.
+        # Fix 1: Assume initial funding covers startup costs + 6 months of operating expenses 
+        # (This is standard seed-stage logic)
+        initial_capital = total_startup + (total_monthly * 6)
+        
+        # Monthly Profit calculation
         monthly_profits = (monthly_rev * growth_factor) - total_monthly
-        monthly_profits[0] = -total_monthly # Month 0 is pure loss/setup
+        monthly_profits[0] = -total_monthly # Month 0 is setup
         
-        # Cumulative Cash Flow
-        cash_flow = -total_startup + np.cumsum(monthly_profits)
+        # Cumulative Cash Flow (Starting with the Capital in the bank minus setup costs)
+        cash_flow = (initial_capital - total_startup) + np.cumsum(monthly_profits)
         
-        # Find break-even month (first month where cash_flow > 0)
-        break_even_indices = np.where(cash_flow > 0)[0]
+        # Find break-even month (first month where MONTHLY profit is > 0)
+        break_even_indices = np.where(monthly_profits > 0)[0]
         
-        # Determine if we run out of cash before 24 months
-        # A business is insolvent if the cash flow ever drops below 0 (meaning it burned through its initial startup capital)
-        # Since cash_flow starts at -total_startup, we check if it drops further by the monthly losses.
-        insolvent_indices = np.where(cash_flow < -total_startup)[0]
+        # Check insolvency (When bank account hits 0)
+        insolvent_indices = np.where(cash_flow < 0)[0]
         
-        if len(insolvent_indices) > 0 and insolvent_indices[0] == 0:
-            # If insolvent in the very first month, check if total startup covers first month.
-            # Actually, if total_monthly > 0, cash_flow[0] = -total_startup - total_monthly, which is always < -total_startup.
-            # This means initial startup capital doesn't cover operations. We flag this immediately.
+        if len(insolvent_indices) > 0 and len(break_even_indices) == 0:
+            # Runs out of cash, never breaks even
+            break_even_month = 999 
+            runway_months = insolvent_indices[0]
+        elif len(insolvent_indices) > 0 and insolvent_indices[0] < break_even_indices[0]:
+            # Runs out of cash BEFORE breaking even
             break_even_month = 999
-            runway_months = round(total_startup / total_monthly, 2) if total_monthly > 0 else 0
-        elif len(insolvent_indices) > 0:
-            break_even_month = 999  # Flag for never breaking even
             runway_months = insolvent_indices[0]
         elif len(break_even_indices) > 0:
             break_even_month = break_even_indices[0]
-            runway_months = None # we broke even!
+            # Runway is technically infinite if they break even before cash runs out
+            runway_months = None 
         else:
-            break_even_month = 99  # Flag for not breaking even in 24 period, but not completely insolvent yet
+            break_even_month = 99 
             runway_months = 24
         
         plt.figure(figsize=(10, 6), facecolor='#F0EADC')

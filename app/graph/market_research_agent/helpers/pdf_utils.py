@@ -96,7 +96,8 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
     # 4. LOAD COMPETITOR DATA
     # ========================================
     competitor_count = 0
-    competitors_file = glob.glob(f"data_output/{query.replace(' ', '_')}_competitors.csv")
+    clean_query = query.replace(' ', '_').replace('"', '').replace("'", "")
+    competitors_file = glob.glob(f"data_output/{clean_query}_competitors.csv")
     
     if competitors_file:
         try:
@@ -643,9 +644,9 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_text_color(0, 0, 0)
             pdf.set_font_for_content('', 10)
             
-            pdf.multi_cell(0, 6, f"Pain Score: {breakdown.get('pain_score_adjusted', 0):.1f}/100 (Evidence: {breakdown.get('evidence_count', 0)} sources)")
-            pdf.multi_cell(0, 6, f"Market Growth: {breakdown.get('growth_score', 0):.1f}/100 (YoY: {breakdown.get('growth_pct', 0):.1f}%)")
-            pdf.multi_cell(0, 6, f"Competition: {breakdown.get('competition_score', 0):.1f}/100 ({breakdown.get('competition_level', 'Unknown')}, {breakdown.get('competitor_count', 0)} found)")
+            pdf.multi_cell(0, 6, fix_arabic(f"Pain Score: {breakdown.get('pain_score_adjusted', 0):.1f}/100 (Evidence: {breakdown.get('evidence_count', 0)} sources)"))
+            pdf.multi_cell(0, 6, fix_arabic(f"Market Growth: {breakdown.get('growth_score', 0):.1f}/100 (YoY: {breakdown.get('growth_pct', 0):.1f}%)"))
+            pdf.multi_cell(0, 6, fix_arabic(f"Competition: {breakdown.get('competition_score', 0):.1f}/100 ({breakdown.get('competition_level', 'Unknown')}, {breakdown.get('competitor_count', 0)} found)"))
             
             pdf.ln(5)
             
@@ -654,12 +655,12 @@ def compile_final_pdf_report(idea_name: str):
             if warnings:
                 pdf.set_font_for_content('B', 11)
                 pdf.set_text_color(200, 50, 50)
-                pdf.cell(0, 8, "⚠ Warnings:", 0, 1, 'L')
+                pdf.cell(0, 8, fix_arabic("Warnings:"), 0, 1, 'L')
                 pdf.set_text_color(0, 0, 0)
                 pdf.set_font_for_content('', 9)
                 
                 for warning in warnings:
-                    pdf.multi_cell(0, 5, f"• {warning}")
+                    pdf.multi_cell(0, 5, fix_arabic(f"- {warning}"))
             
         except Exception as e:
             logger.error(f"   ⚠️ Error loading opportunity analysis: {e}")
@@ -669,7 +670,8 @@ def compile_final_pdf_report(idea_name: str):
     logger.info(f"   📄 Generating Page {pdf.page_no()}: Market Validation")
     pdf.chapter_title("Market Validation & Evidence")
     
-    val_file = f"data_output/{idea_name.replace(' ', '_')}_validation.json"
+    clean_idea_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
+    val_file = f"data_output/{clean_idea_name}_validation.json"
     if os.path.exists(val_file):
         try:
             with open(val_file, 'r') as f:
@@ -683,8 +685,8 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_font_for_content('B', 11)
             pdf.cell(0, 8, f"Evidence Quality: {evidence_qual.get('quality_level', 'Unknown').title()}", 0, 1, 'L')
             pdf.set_font_for_content('', 10)
-            pdf.multi_cell(0, 6, f"Sources analyzed: {evidence_qual.get('total_count', 0)} across {evidence_qual.get('source_diversity', 0)} platforms")
-            pdf.multi_cell(0, 6, f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0")
+            pdf.multi_cell(0, 6, fix_arabic(f"Sources analyzed: {evidence_qual.get('total_count', 0)} across {evidence_qual.get('source_diversity', 0)} platforms"))
+            pdf.multi_cell(0, 6, fix_arabic(f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0"))
             
         except Exception as e:
             logger.error(f"   ⚠️ Error reading validation data: {e}")
@@ -771,11 +773,11 @@ def compile_final_pdf_report(idea_name: str):
         pdf.add_image_centered("data_output/market_sizing_funnel.png")
         
         pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, f"TAM: {size_data.get('tam_description', 'N/A')}")
+        pdf.multi_cell(0, 6, fix_arabic(f"TAM: {size_data.get('tam_description', 'N/A')}"))
         pdf.ln(2)
-        pdf.multi_cell(0, 6, f"SAM: {size_data.get('sam_description', 'N/A')}")
+        pdf.multi_cell(0, 6, fix_arabic(f"SAM: {size_data.get('sam_description', 'N/A')}"))
         pdf.ln(2)
-        pdf.multi_cell(0, 6, f"SOM: {size_data.get('som_description', 'N/A')}")
+        pdf.multi_cell(0, 6, fix_arabic(f"SOM: {size_data.get('som_description', 'N/A')}"))
         pdf.ln(5)
         
         # Show corrections if applied
@@ -787,7 +789,7 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_text_color(0, 0, 0)
             pdf.set_font_for_content('', 9)
             for correction in corrections:
-                pdf.multi_cell(0, 5, f"• {correction}")
+                pdf.multi_cell(0, 5, fix_arabic(f"- {correction}"))
             pdf.ln(3)
         
         pdf.chapter_title("Scalability Analysis")
@@ -813,9 +815,9 @@ def compile_final_pdf_report(idea_name: str):
              scalability_score_text = "Severely Limited by Insolvency"
              scalability_reasoning = f"ATTENTION: While the technical/operational scalability of this model may be '{size_data.get('scalability_score', 'High')}', the financial reality is INSOLVENT. High burn rate causes the business to run out of cash in {runway_val} months. Scaling is effectively unattainable without massive capital injections.\n\n" + scalability_reasoning
              
-        pdf.cell(0, 10, f"Scalability: {scalability_score_text}", 0, 1)
+        pdf.cell(0, 10, fix_arabic(f"Scalability: {scalability_score_text}"), 0, 1)
         pdf.set_font_for_content('', 11)
-        pdf.multi_cell(0, 6, scalability_reasoning)
+        pdf.multi_cell(0, 6, fix_arabic(scalability_reasoning))
     
     # --- PAGE 6: COMPETITORS ---
     pdf.add_page()

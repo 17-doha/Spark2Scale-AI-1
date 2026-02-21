@@ -295,9 +295,10 @@ def investment_memo_prompt_enhanced(query, pain_score, growth_pct, grade, opp_sc
     
     SCORE BREAKDOWN:
     - Pain Component: {breakdown['pain_score_adjusted']:.1f} (weight: 35%)
-    - Growth Component: {breakdown['growth_score']:.1f} (weight: 25%)
-    - Market Size Component: Calculated from TAM/SAM data (weight: 25%)
-    - Competition Component: {breakdown['competition_score']:.1f} (weight: 15%)
+    - Growth Component: {breakdown['growth_score']:.1f} (weight: 20%)
+    - Market Size Component: Calculated from TAM/SAM data (weight: 15%)
+    - Competition Component: {breakdown['competition_score']:.1f} (weight: 10%)
+    - Financial Component: (weight: 20%)
     
     FINANCIAL PROJECTIONS: 
     {finance_summary}

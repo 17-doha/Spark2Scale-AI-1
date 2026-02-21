@@ -157,29 +157,15 @@ class RealisticMarketSizer:
         
         # Check 1: Exceeds industry maximum
         if tam_millions > max_reasonable:
-            corrections.append(
-                f"Original TAM ${tam_millions:,.0f}M exceeds reasonable max "
-                f"for {industry} (${max_reasonable:,.0f}M)"
-            )
-            tam_millions = max_reasonable * 0.5  # Use 50% of max as conservative estimate
+            corrections.append(f"Original TAM ${tam_millions:,.0f}M exceeds max for {industry}. Capped at ${max_reasonable:,.0f}M.")
+            tam_millions = max_reasonable
         
         # Check 2: Exceeds global economy size
         if tam_millions > 10_000_000:  # $10 Trillion
-            corrections.append(
-                f"Original TAM ${tam_millions:,.0f}M exceeds reasonable global market size"
-            )
-            tam_millions = max_reasonable * 0.3
-        
-        # Check 3: Geography-specific correction
-        geo_key = RealisticMarketSizer.get_geography_key(geography)
-        
-        if geo_key not in ["Global", "World", "Worldwide"] and tam_millions > max_reasonable * 0.5:
-            corrections.append(
-                f"TAM seems too high for {geography}. Likely using global number."
-            )
-            # Apply geographic multiplier to TAM as well
-            geo_ratio = RealisticMarketSizer.SAM_RATIOS[geo_key]
-            tam_millions = tam_millions * geo_ratio * 2  # 2x geo_ratio for TAM (SAM will reduce further)
+            corrections.append(f"Original TAM ${tam_millions:,.0f}M exceeds global economy size. Capped.")
+            tam_millions = max_reasonable
+
+        # REMOVED the geographic TAM multiplier to prevent double-penalizing the SAM.
         
         correction_reason = "; ".join(corrections) if corrections else None
         

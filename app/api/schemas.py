@@ -4,6 +4,7 @@ from typing import Optional
 class ResearchRequest(BaseModel):
     idea: str
     problem: str
+    region: Optional[str] = None
 
 class ResearchResponse(BaseModel):
     message: str

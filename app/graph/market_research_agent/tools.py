@@ -14,6 +14,10 @@ from .helpers.market_sizing_validator import RealisticMarketSizer  # NEW
 
 logger = get_logger("MarketResearchTools")
 
+def _clean_filename(name: str) -> str:
+    """Ensures consistent file naming across all nodes."""
+    return name.replace(' ', '_').replace('"', '').replace("'", "")
+
 # ==========================================
 # 3. Research Engine (Competitors)
 # ==========================================
@@ -44,7 +48,7 @@ def _execute_competitor_search(business_idea, queries):
     
     if competitors:
         os.makedirs("data_output", exist_ok=True)
-        filename = f"data_output/{business_idea.replace(' ', '_')}_competitors.csv"
+        filename = f"data_output/{_clean_filename(business_idea)}_competitors.csv"
         
         try:
             df = pd.DataFrame(competitors)
@@ -97,10 +101,10 @@ def validate_problem(idea, problem_statement, plan=None):
         }
         
         os.makedirs("data_output", exist_ok=True)
-        with open(f"data_output/{idea.replace(' ', '_')}_validation.json", "w") as f:
+        with open(f"data_output/{_clean_filename(idea)}_validation.json", "w") as f:
             json.dump(minimal_result, f, indent=4)
         
-        return f"data_output/{idea.replace(' ', '_')}_validation.json"
+        return f"data_output/{_clean_filename(idea)}_validation.json"
 
     # NEW: Enhanced analysis with evidence quality scoring
     analysis = validator_utils.analyze_pain_points(idea, problem_statement, evidence_list)
@@ -111,7 +115,7 @@ def validate_problem(idea, problem_statement, plan=None):
 
     # Save enhanced validation results
     os.makedirs("data_output", exist_ok=True)
-    output_file = f"data_output/{idea.replace(' ', '_')}_validation.json"
+    output_file = f"data_output/{_clean_filename(idea)}_validation.json"
     
     with open(output_file, "w") as f:
         json.dump(analysis, f, indent=4)
@@ -140,8 +144,6 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
         wiki_topic = plan["market_identity"].get("wikipedia_topic")
         if wiki_topic: 
             search_term = wiki_topic
-
-    data, source_name = market_utils.get_trending_data([search_term], geo_code)
     
     # Use Google Trends
     data, source_name = market_utils.get_trending_data([search_term], geo_code)
@@ -199,7 +201,7 @@ def calculate_market_size(idea, location="Global", plan=None):
         industry = market_utils.identify_industry(idea)
     
     # Get actual competitor count from earlier analysis
-    competitors_file = glob.glob(f"data_output/{idea.replace(' ', '_')}_competitors.csv")
+    competitors_file = glob.glob(f"data_output/{_clean_filename(idea)}_competitors.csv")
     if competitors_file:
         try:
             df = pd.read_csv(competitors_file[0])
@@ -389,16 +391,17 @@ def compile_final_json(idea_name):
             json_data["market_sizing"] = json.load(f)
 
     # Competitors
-    comp_file = f"data_output/{idea_name.replace(' ', '_')}_competitors.csv"
+    comp_file = f"data_output/{_clean_filename(idea_name)}_competitors.csv"
     if os.path.exists(comp_file):
         try:
             df = pd.read_csv(comp_file)
             json_data["competitors"] = df.to_dict(orient="records")
         except Exception as e:
             logger.error(f"Error reading competitors: {e}")
+            json_data["competitors"] = [{"Name": "Data Unavailable", "Features": "Could not parse competitor data"}]
 
     # Validation
-    val_file = f"data_output/{idea_name.replace(' ', '_')}_validation.json"
+    val_file = f"data_output/{_clean_filename(idea_name)}_validation.json"
     if os.path.exists(val_file):
         with open(val_file, "r") as f:
             json_data["validation"] = json.load(f)
@@ -417,7 +420,7 @@ def compile_final_json(idea_name):
             logger.error(f"Error reading trends: {e}")
             
     try:
-        clean_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
+        clean_name = _clean_filename(idea_name)
         output_filename = f"data_output/{clean_name}_Market_Report.json"
         
         with open(output_filename, "w", encoding="utf-8") as f:

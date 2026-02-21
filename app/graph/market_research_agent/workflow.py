@@ -75,19 +75,22 @@ def create_market_research_graph():
     workflow.add_edge("plan", "validation")       # Parallel 2/5
     workflow.add_edge("plan", "trends")           # Parallel 3/5
     workflow.add_edge("plan", "finance")          # Parallel 4/5 ✅ CORRECTED
-    workflow.add_edge("plan", "market_sizing")    # Parallel 5/5 ✅ CORRECTED
+
     
-    # Step 3: Report waits for ALL 5 parallel tasks to complete
-    # LangGraph automatically merges the state from all branches
-    workflow.add_edge("competitors", "report")
+    # Step 3: RESOLVE RACE CONDITION
+    # Market Sizing must wait for Competitors to finish so it can read the CSV
+    workflow.add_edge("competitors", "market_sizing") 
+    
+    # Step 4: Report waits for the remaining terminal nodes
     workflow.add_edge("validation", "report")
     workflow.add_edge("trends", "report")
     workflow.add_edge("finance", "report")
-    workflow.add_edge("market_sizing", "report")
+    workflow.add_edge("market_sizing", "report")  # Market Sizing is now the end of the competitor branch
     
-    # Step 4: PDF compilation is the final step
+    # Step 5: PDF compilation
     workflow.add_edge("report", "pdf")
     workflow.add_edge("pdf", END)
+
 
     return workflow.compile()
 
