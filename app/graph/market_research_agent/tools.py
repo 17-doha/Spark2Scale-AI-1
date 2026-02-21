@@ -143,19 +143,39 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
 
     data, source_name = market_utils.get_trending_data([search_term], geo_code)
     
-    if data is None:
-        topic = search_term
-        if not plan:
-            topic = market_utils.search_wikidata(search_term)
-        data, source_name = market_utils.fetch_wikipedia_data(topic)
-
+    # Use Google Trends
+    data, source_name = market_utils.get_trending_data([search_term], geo_code)
+    
     if data is not None and not data.empty:
         col = data.columns[0]
         growth_pct = market_utils.plot_trends(data, source_name, col)
         
         logger.info(f"✅ Success: Growth calculated at {growth_pct:.1f}%")
         return "data_output/market_trends.csv", "data_output/market_demand_chart.png"
+    
+    # Fallback to CAGR search instead of Wikipedia
+    logger.info("   ⚠️ Google Trends failed, falling back to Industry CAGR Reports via web search...")
+    industry_term = search_term   
+    if plan and "market_identity" in plan:
+        industry_term = plan["market_identity"].get("industry", search_term)
         
+    cagr_pct = market_utils.fetch_industry_cagr(industry_term)
+    
+    if cagr_pct is not None:
+        logger.info(f"✅ Success: Market CAGR extracted at {cagr_pct}%")
+        # Save a basic stats file so pdf_utils can read it
+        stats_df = pd.DataFrame({
+            'metric': ['growth_pct', 'source'],
+            'value': [cagr_pct, 'Industry Reports (CAGR)']
+        })
+        os.makedirs("data_output", exist_ok=True)
+        stats_df.to_csv("data_output/market_stats.csv", index=False)
+        
+        with open("data_output/trend_analysis.txt", "w") as f:
+            f.write(f"Based on recent industry reports, the market for {industry_term} is projected to grow at a Compound Annual Growth Rate (CAGR) of {cagr_pct}%.")
+            
+        return "data_output/market_stats.csv", None
+
     logger.warning("⚠️ No trend data available.")
     return None, None
 

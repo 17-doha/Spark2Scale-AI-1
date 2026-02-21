@@ -141,15 +141,17 @@ def analyze_pain_points_prompt(idea, problem_statement, evidence):
 def identify_industry_prompt(idea):
     return f"Identify the broader 'Industry' for: '{idea}'. Return ONLY the string (e.g. 'Online Dating Services')."
 
-def wiki_fallback_prompt(query):
+def extract_cagr_prompt(industry, search_data):
     return f"""
-    Task: Identify the main Wikipedia Article Title for the industry of: "{query}".
-    Examples:
-    - "Cat Cafe" -> "Cat_café"
-    - "AI Dating App" -> "Online_dating_service"
-    - "Solar Panels" -> "Solar_power"
+    You are a Market Analyst calculating Compound Annual Growth Rate.
+    INDUSTRY: "{industry}"
+    SEARCH DATA:
+    {search_data}
     
-    RETURN ONLY THE TITLE STRING (No quotes, use underscores for spaces).
+    TASK: Find the projected CAGR percentage or YoY growth for this market.
+    RETURN ONLY a SINGLE NUMERIC FLOAT (e.g. "14.5" or "-2.1").
+    If no number is found, return "0.0".
+    No text, no % sign, just the number.
     """
 
 def analyze_market_size_prompt(idea, industry, location, market_data):
@@ -373,32 +375,33 @@ def trend_analysis_prompt(growth_pct, source, trend_data=""):
     
     BE REALISTIC:
     - Sentence 1: Interpret the growth rate (explosive >50%, strong 20-50%, moderate 5-20%, flat/declining <5%)
-    - Sentence 2: Explain possible drivers based on the numbers
+    - Sentence 2: Explain possible drivers based on the numbers, PAY SPECIAL ATTENTION to the "Recent Trend Data Points" (The last 10 days of data). If the overall YoY is negative, but there is a massive recent spike, EMPHASIZE the recent surge.
     - Sentence 3: Assess implications for new entrants (opportunity vs saturation)
     - FORMATTING: Use **double asterisks** to bold 2-3 key phrases
 
-    If growth is negative or near zero, acknowledge the challenging market conditions.
+    If growth is negative or near zero but recent data points show a massive spike, acknowledge the sudden momentum shift.
     
     RETURN ONLY THE PARAGRAPH. No intro/outro.
     """
 
-def financial_analysis_prompt(startup_total, currency, break_even_month, net_profit):
+def financial_analysis_prompt(startup_total, currency, break_even_month, net_profit, runway_months=None):
     return f"""
     You are a Senior Financial Consultant.
     DATA:
     - Total Startup Cost: {startup_total:,.0f} {currency}
     - Break-Even Point: Month {break_even_month}
     - Monthly Net Profit (Projected): {net_profit:,.0f} {currency}
+    - Runway (if insolvent): {runway_months} months
 
     TASK: Write a 3-4 sentence financial health assessment for a report caption.
     
     BE REALISTIC:
     - Sentence 1: Evaluate capital requirements (Low <$25K, Medium $25-100K, High >$100K)
-    - Sentence 2: Assess break-even timeline (Fast <6mo, Moderate 6-12mo, Slow >12mo)
+    - Sentence 2: Assess break-even timeline (Fast <6mo, Moderate 6-12mo, Slow >12mo). If break-even is NEVER or runway is very short (e.g., < 6 months), explicitly state that the business will run out of cash in {runway_months} months and is effectively insolvent.
     - Sentence 3: Comment on margin sustainability and cash burn risk
     - FORMATTING: Use **double asterisks** to bold key insights
 
-    If numbers seem unrealistic (too optimistic or pessimistic), note this.
+    If numbers seem unrealistic (too optimistic or pessimistic) or if the burn rate is suicidal compared to startup capital, explicitly highlight this logical flaw.
     
     RETURN ONLY THE PARAGRAPH. No intro/outro.
     """

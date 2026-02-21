@@ -121,7 +121,27 @@ def generate_financial_visuals(estimates):
         
         # Find break-even month (first month where cash_flow > 0)
         break_even_indices = np.where(cash_flow > 0)[0]
-        break_even_month = break_even_indices[0] if len(break_even_indices) > 0 else 99
+        
+        # Determine if we run out of cash before 24 months
+        # A business is insolvent if the cash flow ever drops below 0 (meaning it burned through its initial startup capital)
+        # Since cash_flow starts at -total_startup, we check if it drops further by the monthly losses.
+        insolvent_indices = np.where(cash_flow < -total_startup)[0]
+        
+        if len(insolvent_indices) > 0 and insolvent_indices[0] == 0:
+            # If insolvent in the very first month, check if total startup covers first month.
+            # Actually, if total_monthly > 0, cash_flow[0] = -total_startup - total_monthly, which is always < -total_startup.
+            # This means initial startup capital doesn't cover operations. We flag this immediately.
+            break_even_month = 999
+            runway_months = round(total_startup / total_monthly, 2) if total_monthly > 0 else 0
+        elif len(insolvent_indices) > 0:
+            break_even_month = 999  # Flag for never breaking even
+            runway_months = insolvent_indices[0]
+        elif len(break_even_indices) > 0:
+            break_even_month = break_even_indices[0]
+            runway_months = None # we broke even!
+        else:
+            break_even_month = 99  # Flag for not breaking even in 24 period, but not completely insolvent yet
+            runway_months = 24
         
         plt.figure(figsize=(10, 6), facecolor='#F0EADC')
         ax = plt.gca()
@@ -141,14 +161,19 @@ def generate_financial_visuals(estimates):
         plt.close()
     
     summary = {
-        "Metric": ["Currency", "Total Startup", "Monthly Expenses", "Monthly Revenue", "Net Profit", "Break-Even Month"],
-        "Value": [curr, total_startup, total_monthly, monthly_rev, monthly_profit, break_even_month]
+        "Metric": ["Currency", "Total Startup", "Monthly Expenses", "Monthly Revenue", "Net Profit", "Break-Even Month", "Runway Months"],
+        "Value": [curr, total_startup, total_monthly, monthly_rev, monthly_profit, break_even_month, runway_months if runway_months else "N/A"]
     }
     pd.DataFrame(summary).to_csv("data_output/finance_summary.csv", index=False)
     
     # --- DYNAMIC ANALYSIS ---
     try:
-        prompt = prompts.financial_analysis_prompt(total_startup, curr, break_even_month, monthly_profit)
+        if break_even_month == 999:
+           analysis_context = f"Total Startup: {total_startup}, Break-even: NEVER (Insolvent in {runway_months} months), Monthly Profit: {monthly_profit}"
+        else:
+           analysis_context = f"Total Startup: {total_startup}, Break-even: Month {break_even_month}, Monthly Profit: {monthly_profit}"
+
+        prompt = prompts.financial_analysis_prompt(total_startup, curr, break_even_month if break_even_month not in [99, 999] else "NEVER", monthly_profit, runway_months)
         res = call_gemini(prompt)
         analysis_text = res.text.strip().replace('"', '')
         with open("data_output/financial_analysis.txt", "w") as f:
@@ -156,7 +181,12 @@ def generate_financial_visuals(estimates):
     except Exception as e:
         logger.warning(f"Financial Analysis Failed: {e}")
         with open("data_output/financial_analysis.txt", "w") as f:
-            f.write(f"Estimated startup costs are {total_startup:,.0f} {curr} with a projected break-even at month {break_even_month}. Careful cash flow management is recommended.")
+            if break_even_month == 999:
+                 f.write(f"Estimated startup costs are {total_startup:,.0f} {curr} but the business runs out of cash in {runway_months} months. Highly unsustainable.")
+            elif break_even_month == 99:
+                 f.write(f"Estimated startup costs are {total_startup:,.0f} {curr}. The business does not break even within 24 months, but survives with current capital.")
+            else:
+                 f.write(f"Estimated startup costs are {total_startup:,.0f} {curr} with a projected break-even at month {break_even_month}. Careful cash flow management is recommended.")
     
     # Save raw estimates to JSON for final report compilation
     with open("data_output/finance_estimates.json", "w") as f:

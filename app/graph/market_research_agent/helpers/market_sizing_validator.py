@@ -266,8 +266,16 @@ class RealisticMarketSizer:
         
         som_millions = sam_millions * som_pct
         
-        # Minimum viable SOM check
-        if som_millions < 0.1:  # Less than $100K
+        # Hard cap for realistic startup SOM (no startup realistically expects $1B+ revenue in early years)
+        absolute_max_som = 100.0 # $100 Million
+        if som_millions > absolute_max_som:
+            som_millions = absolute_max_som
+            reasoning = (
+                f"Market structure: {market_structure}. "
+                f"Calculated capture was highly unrealistic for a startup. "
+                f"Capped at absolute maximum realistic SOM of $100M."
+            )
+        elif som_millions < 0.1:  # Less than $100K
             som_millions = 0.1
             reasoning = (
                 f"Market structure: {market_structure}. "

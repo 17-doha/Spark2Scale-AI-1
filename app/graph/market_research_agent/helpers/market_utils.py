@@ -86,82 +86,6 @@ def calculate_technical_indicators(input_file: str):
         logger.warning(f"⚠️ Math Error: {e}")
         return None
 
-def search_wikidata(query):
-    """
-    Searches Wikidata for the most likely entity and returns its English Wikipedia title.
-    """
-    logger.info(f"   🌐 Searching Wikidata for: '{query}'...")
-    try:
-        # 1. Search for the entity
-        search_url = "https://www.wikidata.org/w/api.php"
-        params = {
-            "action": "wbsearchentities",
-            "format": "json",
-            "language": "en",
-            "search": query
-        }
-        res = requests.get(search_url, params=params)
-        data = res.json()
-        
-        if not data.get("search"):
-            return "Business"
-            
-        # Get the first result's ID (e.g., Q12345)
-        entity_id = data["search"][0]["id"]
-        
-        # 2. Get the Wikipedia Sitelink
-        details_url = "https://www.wikidata.org/w/api.php"
-        details_params = {
-            "action": "wbgetentities",
-            "ids": entity_id,
-            "format": "json",
-            "props": "sitelinks",
-            "sitefilter": "enwiki"
-        }
-        res = requests.get(details_url, params=details_params)
-        details = res.json()
-        
-        # Extract the title
-        try:
-            sitelinks = details["entities"][entity_id]["sitelinks"]
-            if "enwiki" in sitelinks:
-                title = sitelinks["enwiki"]["title"]
-                # Convert spaces to underscores for the Pageviews API
-                return title.replace(" ", "_")
-        except: pass
-        
-        # Fallback main match label if no sitelink
-        return data["search"][0]["label"].replace(" ", "_")
-        
-    except Exception as e:
-        logger.warning(f"   ⚠️ Wikidata Error: {e}")
-        
-        try:
-            logger.info("   🤖 Wikidata failed. Asking AI for the best Wikipedia topic...")
-            fallback_prompt = prompts.wiki_fallback_prompt(query)
-            res = call_gemini(fallback_prompt)
-            return res.text.strip()
-        except:
-            return "Business"
-
-def fetch_wikipedia_data(topic):
-    logger.info(f"   📖 Switching to Wikipedia Data for: '{topic}'...")
-    end = datetime.datetime.now()
-    start = end - datetime.timedelta(days=365)
-    url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/all-agents/{topic}/daily/{start.strftime('%Y%m%d')}/{end.strftime('%Y%m%d')}"
-    headers = {'User-Agent': 'MarketResearchAgent/1.0'}
-    
-    try:
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200: return None, None
-        data = response.json()
-        if 'items' not in data: return None, None
-        
-        dates = [datetime.datetime.strptime(item['timestamp'], "%Y%m%d00") for item in data['items']]
-        views = [item['views'] for item in data['items']]
-        return pd.DataFrame({'interest': views}, index=dates), f"Wikipedia Views: {topic}"
-    except: return None, None
-
 def get_trending_data(keywords, geo_code='EG'):
     logger.info(f"   📊 Querying Google Trends for: {keywords}...")
     try:
@@ -208,7 +132,7 @@ def plot_trends(data, source_name, col):
     
     # --- DYNAMIC ANALYSIS ---
     try:
-        recent_data = str(data[col].tail(5).values.tolist())
+        recent_data = str(data[col].tail(10).values.tolist())
         prompt = prompts.trend_analysis_prompt(growth_pct, source_name, recent_data)
         res = call_gemini(prompt)
         analysis_text = res.text.strip().replace('"', '')
@@ -254,6 +178,27 @@ def search_market_reports(query):
     except Exception as e:
         logger.warning(f"   ⚠️ Search Error: {e}")
         return ""
+
+def fetch_industry_cagr(industry):
+    logger.info(f"   📈 Fetching CAGR reports for '{industry}'...")
+    query = f"{industry} market growth rate CAGR 2024"
+    search_data = search_market_reports(query)
+    
+    if not search_data:
+        return None
+        
+    try:
+        prompt = prompts.extract_cagr_prompt(industry, search_data)
+        res = call_gemini(prompt)
+        # the prompt asks to return ONLY a float number
+        import re
+        matches = re.findall(r'-?[\d\.]+', res.text)
+        if matches:
+            return float(matches[0])
+    except Exception as e:
+        logger.warning(f"Error extracting CAGR: {e}")
+        
+    return None
 
 import re
 

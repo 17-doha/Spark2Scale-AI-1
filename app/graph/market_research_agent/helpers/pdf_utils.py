@@ -166,7 +166,8 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
         growth_pct=growth_pct,
         market_size_score=market_size_score,
         competitor_count=competitor_count,
-        evidence_count=evidence_count
+        evidence_count=evidence_count,
+        finance_summary=finance_summary
     )
     
     opp_score = opportunity_analysis['opportunity_score']
@@ -189,6 +190,13 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
     # ========================================
     if not val_data:
         val_data = "Validation data was not generated."
+
+    # HARMONIZE: Set competition level details explicitly so the Executive Summary uses exactly the calculated level.
+    comp_level_str = "Medium"
+    if 'competition_level' in breakdown:
+        comp_level_str = breakdown['competition_level']
+        if "Red Ocean" in breakdown.get('competition_description', ''):
+             comp_level_str += " (Red Ocean)"
 
     # Create enhanced prompt with breakdown
     prompt = prompts.investment_memo_prompt_enhanced(
@@ -225,12 +233,14 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
 - **Market Growth:** {breakdown['growth_score']:.1f}/100 (YoY: {breakdown['growth_pct']:.1f}%)
 - **Market Size:** {market_size_score}/100 (SAM: {sam_value})
 - **Competition:** {breakdown['competition_score']:.1f}/100 (Level: {breakdown['competition_level']}, Count: {breakdown['competitor_count']})
+- **Financial Health:** {breakdown.get('finance_score', 50):.1f}/100
 
 ### Methodology:
-- Pain Weight: {ResearchConfig.PAIN_WEIGHT * 100:.0f}%
-- Growth Weight: {ResearchConfig.GROWTH_WEIGHT * 100:.0f}%
-- Market Size Weight: {ResearchConfig.MARKET_SIZE_WEIGHT * 100:.0f}%
-- Competition Weight: {ResearchConfig.COMPETITION_WEIGHT * 100:.0f}%
+- Pain Weight: 35%
+- Growth Weight: 20%
+- Market Size Weight: 15%
+- Competition Weight: 10%
+- Financial Weight: 20%
 
 ### Recommendation:
 {recommendation}
@@ -255,7 +265,50 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
         logger.info(f"✅ Final Report Saved with Realistic Opportunity Scoring.")
         
     except Exception as e:
-        logger.error(f"⚠️ Report Error: {e}")
+        logger.error(f"⚠️ Report Error: {e}. Using fallback Executive Summary.")
+        # Fallback summary
+        fallback_content = f"**Executive Summary (Fallback Generated)**\n\nThe market analysis for {query} resulted in an overall opportunity score of {opp_score}/100 ({grade}).\n\n**Key Findings:**\n- Market Growth: {growth_pct}%\n- Pain Score: {pain_score}/100\n- Competition Level: {comp_level_str}\n\n**Recommendation:**\n{recommendation}\n\n"
+        
+        # Add opportunity analysis section to report
+        analysis_section = f"""
+
+---
+
+## Opportunity Analysis Breakdown
+
+**Overall Score:** {opp_score}/100 - **{grade}**
+
+### Component Scores:
+- **Pain Score:** {breakdown['pain_score_adjusted']:.1f}/100 (Raw: {breakdown['pain_score_raw']}, Evidence: {breakdown['evidence_count']} sources, Quality: {breakdown['evidence_quality']})
+- **Market Growth:** {breakdown['growth_score']:.1f}/100 (YoY: {breakdown['growth_pct']:.1f}%)
+- **Market Size:** {market_size_score}/100 (SAM: {sam_value})
+- **Competition:** {breakdown['competition_score']:.1f}/100 (Level: {breakdown['competition_level']}, Count: {breakdown['competitor_count']})
+- **Financial Health:** {breakdown.get('finance_score', 50):.1f}/100
+
+### Methodology:
+- Pain Weight: 35%
+- Growth Weight: 20%
+- Market Size Weight: 15%
+- Competition Weight: 10%
+- Financial Weight: 20%
+
+### Recommendation:
+{recommendation}
+
+"""
+        
+        if warnings:
+            analysis_section += "\n### ⚠️ Warnings:\n"
+            for warning in warnings:
+                analysis_section += f"- {warning}\n"
+        
+        fallback_content += analysis_section
+        
+        with open("data_output/FINAL_MARKET_REPORT.md", "w", encoding="utf-8") as f:
+            f.write(fallback_content)
+            
+        with open("data_output/opportunity_analysis.json", "w", encoding="utf-8") as f:
+            json.dump(opportunity_analysis, f, indent=4)
 
 
 # Note: The PDFReport class and other PDF generation functions remain the same
@@ -688,8 +741,26 @@ def compile_final_pdf_report(idea_name: str):
         with open("data_output/market_sizing.json", "r") as f:
             size_data = json.load(f)
         
-        ocean = size_data.get("market_type", "Unknown")
-        color = (200, 50, 50) if "Red" in ocean else PDFReport.COLOR_MOSS
+        # Match the "Market Type" printed on the PDF to the computed competition level to prevent mismatch
+        computed_comp_level = "Unknown"
+        if os.path.exists("data_output/opportunity_analysis.json"):
+            try:
+                 with open("data_output/opportunity_analysis.json", "r") as opp_f:
+                      opp_data = json.load(opp_f)
+                      computed_comp_level = opp_data.get('breakdown', {}).get('competition_level', "Unknown")
+            except:
+                 pass
+                 
+        if computed_comp_level == "High":
+             ocean = "Highly Competitive (Red Ocean)"
+        elif computed_comp_level == "Medium":
+             ocean = "Competitive (Medium)"
+        elif computed_comp_level == "Low":
+             ocean = "Few Competitors (Blue Ocean)"
+        else:
+             ocean = size_data.get("market_type", "Unknown")
+             
+        color = (200, 50, 50) if "Red" in ocean or "High" in ocean else PDFReport.COLOR_MOSS
         
         pdf.set_font_for_content('B', 14)
         pdf.set_text_color(*color)
@@ -721,9 +792,30 @@ def compile_final_pdf_report(idea_name: str):
         
         pdf.chapter_title("Scalability Analysis")
         pdf.set_font_for_content('B', 12)
-        pdf.cell(0, 10, f"Scalability: {size_data.get('scalability_score', 'N/A')}", 0, 1)
+        
+        # Check if financial summary indicates insolvency to modify scalability
+        is_insolvent = False
+        runway_val = "Unknown"
+        if os.path.exists("data_output/finance_summary.csv"):
+             try:
+                 df_fin_check = pd.read_csv("data_output/finance_summary.csv")
+                 for _, row in df_fin_check.iterrows():
+                     if row.get('Metric') == 'Break-Even Month' and str(row.get('Value')) == '999':
+                         is_insolvent = True
+                     if row.get('Metric') == 'Runway Months':
+                         runway_val = str(row.get('Value'))
+             except: pass
+        
+        scalability_score_text = size_data.get('scalability_score', 'N/A')
+        scalability_reasoning = size_data.get('scalability_reasoning', 'N/A')
+        
+        if is_insolvent:
+             scalability_score_text = "Severely Limited by Insolvency"
+             scalability_reasoning = f"ATTENTION: While the technical/operational scalability of this model may be '{size_data.get('scalability_score', 'High')}', the financial reality is INSOLVENT. High burn rate causes the business to run out of cash in {runway_val} months. Scaling is effectively unattainable without massive capital injections.\n\n" + scalability_reasoning
+             
+        pdf.cell(0, 10, f"Scalability: {scalability_score_text}", 0, 1)
         pdf.set_font_for_content('', 11)
-        pdf.multi_cell(0, 6, size_data.get('scalability_reasoning', 'N/A'))
+        pdf.multi_cell(0, 6, scalability_reasoning)
     
     # --- PAGE 6: COMPETITORS ---
     pdf.add_page()

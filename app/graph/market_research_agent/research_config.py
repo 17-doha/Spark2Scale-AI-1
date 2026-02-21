@@ -225,7 +225,8 @@ def calculate_realistic_opportunity_score(
     growth_pct: float,
     market_size_score: float,
     competitor_count: int,
-    evidence_count: int
+    evidence_count: int,
+    finance_summary: str = ""
 ) -> dict:
     """
     Calculate opportunity score with realistic weighting and adjustments
@@ -233,24 +234,82 @@ def calculate_realistic_opportunity_score(
     Returns:
         dict with score, grade, warnings, and breakdown
     """
+    import re
+    
     # Adjust pain score based on evidence quality
     evidence_quality, evidence_multiplier = get_evidence_quality(evidence_count)
+    
+    # 1. NEW SOLUTION PENALTY: 
+    # Try to extract the solution fit score if it was passed via a global context or parsed into finance_summary 
+    # (For simplicity here, we assume if finance_summary contains "Low Fit" we penalize)
+    if "Low Fit" in finance_summary:
+        evidence_multiplier *= 0.5
+        
     adjusted_pain_score = pain_score * evidence_multiplier
     
     # Convert growth % to score (0-100 scale)
-    # -50% growth = 0, +50% growth = 100
-    growth_score = max(0, min(100, (growth_pct + 50) * 2))
+    # Severe penalty for negative growth
+    if growth_pct < 0:
+        growth_score = max(0, 50 - (abs(growth_pct) * 3)) # Maps -10% to 20, -17% to 0
+    else:
+        growth_score = min(100, 50 + (growth_pct * 1.5)) # Maps +33% to 100
     
     # Get competition penalty
     competition_data = get_competition_level(competitor_count)
     competition_score = 100 * competition_data["multiplier"]
     
+    # 2. FINANCIAL PENALTY SCORE
+    finance_score = 50 # Default middle
+    startup_cost = 0
+    monthly_profit = 0
+    break_even = 99
+    runway = None
+    
+    # Extremely basic parse of the finance_summary string
+    if finance_summary:
+        try:
+           for line in finance_summary.split('\n'):
+               if 'Total Startup' in line:
+                   startup_cost = float(re.findall(r'[\d\.]+', line.split()[-1])[0])
+               elif 'Net Profit' in line:
+                   # Find the last number on the line, could be negative
+                   matches = re.findall(r'-?[\d\.]+', line)
+                   if matches: monthly_profit = float(matches[-1])
+               elif 'Break-Even Month' in line:
+                   matches = re.findall(r'[\d\.]+', line.split()[-1])
+                   if matches: break_even = int(matches[0])
+               elif 'Runway Months' in line:
+                   val = line.split()[-1].strip()
+                   if val != 'N/A' and val.isdigit(): runway = int(val)
+                   
+           if break_even == 999 or (runway is not None and runway < 12):
+               finance_score = 0 # Insolvent quickly
+           elif break_even <= 12:
+               finance_score = 100
+           elif break_even <= 24:
+               finance_score = 70
+           elif monthly_profit > 0:
+               finance_score = 50
+           else:
+               finance_score = 20 # Endless bleed
+               
+        except Exception as e:
+           pass
+
+    # Dynamic Weights (Must sum to 1.0)
+    w_pain = 0.35
+    w_growth = 0.20
+    w_size = 0.15
+    w_comp = 0.10
+    w_fin = 0.20
+    
     # Calculate weighted score
     opportunity_score = (
-        adjusted_pain_score * ResearchConfig.PAIN_WEIGHT +
-        growth_score * ResearchConfig.GROWTH_WEIGHT +
-        market_size_score * ResearchConfig.MARKET_SIZE_WEIGHT +
-        competition_score * ResearchConfig.COMPETITION_WEIGHT
+        adjusted_pain_score * w_pain +
+        growth_score * w_growth +
+        market_size_score * w_size +
+        competition_score * w_comp +
+        finance_score * w_fin
     )
     
     # Determine grade
@@ -280,6 +339,9 @@ def calculate_realistic_opportunity_score(
     
     if growth_pct < 0:
         warnings.append(f"⚠️ Market is declining ({growth_pct:.1f}%). High risk.")
+        
+    if finance_score <= 20:
+        warnings.append("⚠️ Severe Financial Risk: Business model shows unsustainable cash burn or mathematical insolvency.")
     
     return {
         "opportunity_score": round(opportunity_score, 1),
@@ -295,7 +357,8 @@ def calculate_realistic_opportunity_score(
             "market_size_score": market_size_score,
             "competition_level": competition_data["level"],
             "competition_score": round(competition_score, 1),
-            "competitor_count": competitor_count
+            "competitor_count": competitor_count,
+            "finance_score": round(finance_score, 1)
         },
         "warnings": warnings,
         "recommendation": _generate_recommendation(opportunity_score, warnings)
