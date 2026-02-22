@@ -12,6 +12,5 @@ def main():
     uvicorn.run("app.api.main:app", host="0.0.0.0", port=8000, reload=False)
 
 if __name__ == "__main__":
-    # In Docker, the CMD command triggers uvicorn directly.
     # This block is only used if you run `python main.py` manually.
     main()
