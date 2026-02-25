@@ -1,0 +1,197 @@
+import pytest
+import json
+from unittest.mock import patch, AsyncMock, MagicMock
+
+# --- Imports from your application ---
+from app.graph.evaluation_agent.helpers import (
+    extract_team_data,
+    safe_score_numeric,
+    parse_and_repair_json
+)
+from app.graph.evaluation_agent.tools import (
+    tech_stack_detective,
+    tam_sam_verifier_tool,
+    team_scoring_agent,
+    calculate_economics_with_judgment
+)
+
+# ==========================================
+# 1. TESTS FOR helpers.py (Data & Parsing)
+# ==========================================
+
+def test_extract_team_data():
+    """Test extracting team data from a deeply nested evaluation JSON."""
+    # Arrange
+    dummy_data = {
+        "startup_evaluation": {
+            "founder_and_team": {
+                "founders": [
+                    {
+                        "name": "Jane Doe",
+                        "role": "CEO",
+                        "ownership_percentage": 50,
+                        "prior_experience": "Ex-Google",
+                        "years_direct_experience": 10,
+                        "founder_market_fit_statement": "Built ad-tech before"
+                    }
+                ],
+                "execution": {
+                    "full_time_start_date": "2023-01-01",
+                    "key_shipments": [{"date": "2023-06-01", "item": "MVP"}]
+                }
+            },
+            "problem_definition": {
+                "problem_statement": "Testing is hard.",
+                "current_solution": "Manual testing",
+                "gap_analysis": "Automated AI testing"
+            }
+        }
+    }
+
+    # Act
+    result = extract_team_data(dummy_data)
+
+    # Assert
+    assert len(result["founders"]) == 1
+    assert result["founders"][0]["name"] == "Jane Doe"
+    assert result["founders"][0]["equity"] == 50
+    assert result["execution_history"]["start_date"] == "2023-01-01"
+    assert result["problem_context"]["statement"] == "Testing is hard."
+
+def test_safe_score_numeric():
+    """Test converting raw 'X/5' string scores into 0-100 integer bounds."""
+    # Valid formats
+    assert safe_score_numeric({"score": "4/5"}) == 80
+    assert safe_score_numeric({"score": "3.5/5"}) == 70
+    assert safe_score_numeric({"score": "5"}) == 100
+    
+    # Invalid formats should degrade gracefully to 0
+    assert safe_score_numeric({"score": "Invalid"}) == 0
+    assert safe_score_numeric({}) == 0
+
+def test_parse_and_repair_json():
+    """Test the robust JSON parser's ability to handle LLM markdown hallucinations."""
+    # Valid JSON
+    assert parse_and_repair_json('{"key": "value"}') == {"key": "value"}
+    
+    # JSON wrapped in markdown code blocks
+    markdown_json = "```json\n{\"key\": \"value\"}\n```"
+    assert parse_and_repair_json(markdown_json) == {"key": "value"}
+    
+    # Completely broken JSON should return a safe fallback dictionary
+    broken_str = "This is not JSON at all, I am an AI and I like to chat."
+    result = parse_and_repair_json(broken_str)
+    assert "score_numeric" in result
+    assert result["score_numeric"] == 0
+    assert "Error parsing" in result.get("explanation", "")
+
+
+# ==========================================
+# 2. TESTS FOR tools.py (Agents & APIs)
+# ==========================================
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.builtwith.parse")
+async def test_tech_stack_detective(mock_builtwith_parse):
+    """Test the tech stack detective without actually hitting the network."""
+    # Arrange: Mock the synchronous builtwith response
+    mock_builtwith_parse.return_value = {"javascript-frameworks": ["React", "Vue"]}
+    
+    # Act
+    result = await tech_stack_detective("https://example.com")
+    
+    # Assert
+    assert result["status"] == "Success"
+    assert "React" in result["technologies_found"]
+    assert "Vue" in result["technologies_found"]
+
+@pytest.mark.asyncio
+async def test_tech_stack_detective_no_url():
+    """Test early exit for missing URLs."""
+    result = await tech_stack_detective("")
+    assert result["verdict"] == "No URL"
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+async def test_tam_sam_verifier_tool(mock_post, mock_env):
+    """Test the TAM Search tool by mocking the Serper API network call."""
+    # Arrange
+    mock_env.return_value = "fake_api_key"
+    
+    # Create a mock response for aiohttp's async context manager
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "organic": [
+            {"title": "TAM Study", "snippet": "The market is $10B."}
+        ]
+    }
+    mock_post.return_value.__aenter__.return_value = mock_response
+    
+    # Act
+    result = await tam_sam_verifier_tool("AI Startups", "Global", "$5B")
+    
+    # Assert
+    assert result["tool"] == "TAM_Verifier"
+    assert result["status"] == "Success"
+    assert "The market is $10B." in result["search_evidence"]
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+async def test_team_scoring_agent(mock_get_llm):
+    """Test the LangChain scoring agent by patching the chain's ainvoke method."""
+    # Arrange
+    mock_llm_instance = AsyncMock()
+    mock_get_llm.return_value = mock_llm_instance
+    
+    # Instead of deep-mocking the entire LCEL chain, we patch the final parser's invoke
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_chain_ainvoke:
+        # Mock the exact string the LLM would theoretically return
+        mock_chain_ainvoke.return_value = '{"score": "4/5", "explanation": "Great team"}'
+        
+        data_package = {
+            "user_data": {"founders": []},
+            "risk_report": "None",
+            "contradiction_report": "None",
+            "missing_report": "None"
+        }
+        
+        # Act
+        result = await team_scoring_agent(data_package)
+        
+        # Assert
+        assert result["score"] == "4/5"
+        assert result["explanation"] == "Great team"
+        assert result["score_numeric"] == 80  # 4/5 * 20
+
+@patch("app.graph.evaluation_agent.tools.get_llm")
+def test_calculate_economics_with_judgment(mock_get_llm):
+    """Test the synchronous logic mixed with AI judgment for Unit Economics."""
+    # Arrange
+    gtm_data = {
+        "unit_economics": {
+            "burn_rate": "10000",
+            "total_users": "500",
+            "paid_users": "50",
+            "revenue": "2000",
+            "price_point": "40"
+        },
+        "context": {"founded_date": "2023-01-01", "stage": "Seed"},
+        "strategy": {"icp_description": "B2B SaaS"}
+    }
+    
+    # Arrange: Mock the synchronous LangChain invocation
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.invoke") as mock_chain_invoke:
+        mock_chain_invoke.return_value = '{"verdict": "Healthy metrics", "score": "4/5"}'
+        
+        # Act
+        result = calculate_economics_with_judgment(gtm_data)
+        
+        # Assert the purely deterministic math
+        assert result["monthly_burn"] == "$10000"
+        assert result["price_point"] == "$40"
+        assert result["conversion_rate"] == 10.0  # 50 / 500 * 100
+        
+        # Assert that the AI analysis got stitched back in correctly
+        assert result["ai_analysis"]["verdict"] == "Healthy metrics"
