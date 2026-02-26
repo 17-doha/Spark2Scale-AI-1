@@ -563,10 +563,21 @@ def compile_final_pdf_report(idea_name: str):
     
     pdf.ln(5)
     
+    # Basic Idea Name Extraction
+    display_name = idea_name
+    if len(idea_name.split()) > 5 or len(idea_name) > 40:
+        try:
+            logger.info("   🧠 Extracting basic short name for long idea title...")
+            res = call_gemini(f"Extract a 2-4 word basic, catchy project or product name from this idea: '{idea_name}'. Return ONLY the basic name without quotes or explanation.")
+            display_name = res.text.strip().replace('"', '')
+        except Exception as e:
+            logger.warning(f"   ⚠️ Failed to get basic name: {e}")
+            display_name = " ".join(idea_name.split()[:5]) + "..."
+
     # Idea Name
     pdf.set_font_for_content('B', 20)
     pdf.set_x(15)
-    pdf.multi_cell(180, 10, fix_arabic(idea_name.upper()), 0, 'C')
+    pdf.multi_cell(180, 10, fix_arabic(display_name.upper()), 0, 'C')
     
     pdf.ln(5)
     
