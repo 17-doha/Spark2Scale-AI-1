@@ -676,7 +676,7 @@ def generate_queries(vision_data: dict) -> tuple[str, list]:
 
 async def get_market_signals_serper(vision_data: dict) -> str:
     """Runs search using Google Serper API via Async HTTP (Parallelized)."""
-    logger.info("🌐 Running Market Search (Serper/Google)...")
+    logger.info("[GLOBAL] Running Market Search (Serper/Google)...")
     
     api_key = os.environ.get("SERPER_API_KEY")
     if not api_key: return "No Serper API Key found."

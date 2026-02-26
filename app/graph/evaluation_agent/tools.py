@@ -564,7 +564,7 @@ async def business_scoring_agent(data_package: dict) -> dict:
 
 @retry(**RETRY_CONFIG)
 async def analyze_category_future(vision_data: dict) -> dict:
-    logger.info("🌐 Vision Market Analysis...")
+    logger.info("[GLOBAL] Vision Market Analysis...")
     try:
         # Search Phase
         market_text = await get_market_signals_serper(vision_data)
@@ -576,7 +576,7 @@ async def analyze_category_future(vision_data: dict) -> dict:
         
         # LLM Phase (Sequential)
         async with concurrency_limiter:
-            logger.info("🌐 Vision Analysis (LLM)...")
+            logger.info("[GLOBAL] Vision Analysis (LLM)...")
             llm = get_llm(temperature=0, provider="groq")
             prompt = PromptTemplate.from_template(CATEGORY_FUTURE_PROMPT)
             chain = prompt | llm | StrOutputParser()
