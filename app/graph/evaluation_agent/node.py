@@ -4,33 +4,49 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.core.llm import get_llm
 from .state import AgentState
-from .tools.tools import (
-    contradiction_check, 
-    team_risk_check, 
-    team_scoring_agent,
-    verify_problem_claims, 
-    loaded_risk_check_with_search, 
-    problem_scoring_agent,
-    tech_stack_detective, 
-    product_scoring_agent,
-    tam_sam_verifier_tool,
-    regulation_trend_radar_tool,
-    local_dependency_detective,
-    market_scoring_agent,
-    traction_risk_agent,
-    traction_scoring_agent,
-    gtm_risk_agent,
-    gtm_scoring_agent,
-    calculate_economics_with_judgment,
+from .tools.business_tools import (
     business_risk_agent,
-    evaluate_business_model_with_context,
     business_scoring_agent,
-    analyze_category_future,
-    vision_risk_agent,
-    vision_scoring_agent,
-    get_funding_benchmarks,
-    operations_risk_agent,
+    evaluate_business_model_with_context,
+    calculate_economics_with_judgment
+)
+from .tools.gtm_tools import (
+    gtm_risk_agent, 
+    gtm_scoring_agent
+)
+from .tools.market_tools import (
+    market_scoring_agent, 
+    tam_sam_verifier_tool, 
+    regulation_trend_radar_tool
+)
+from .tools.operations_tools import (
+    operations_risk_agent, 
     operations_scoring_agent
+)
+from .tools.problem_tools import (
+    problem_scoring_agent, 
+    verify_problem_claims, 
+    loaded_risk_check_with_search
+)
+from .tools.product_tools import (
+    product_scoring_agent, 
+    tech_stack_detective, 
+    local_dependency_detective
+)
+from .tools.team_tools import (
+    team_risk_check, 
+    team_scoring_agent
+)
+from .tools.tools import contradiction_check  
+from .tools.traction_tools import (
+    traction_risk_agent, 
+    traction_scoring_agent
+)
+from .tools.vision_tools import (
+    vision_risk_agent, 
+    vision_scoring_agent, 
+    analyze_category_future, 
+    get_funding_benchmarks
 )
 from .prompts.prompts import (
     PLANNER_PROMPT,

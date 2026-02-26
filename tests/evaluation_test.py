@@ -8,11 +8,30 @@ from app.graph.evaluation_agent.helpers import (
     safe_score_numeric,
     parse_and_repair_json
 )
-from app.graph.evaluation_agent.tools.tools import (
+from app.graph.evaluation_agent.tools import (
     tech_stack_detective,
     tam_sam_verifier_tool,
     team_scoring_agent,
     calculate_economics_with_judgment
+)
+
+# --- Additional Imports Needed ---
+from app.graph.evaluation_agent.helpers import (
+    extract_problem_data,
+    extract_market_data,
+    extract_traction_data,
+    check_missing_fields,
+    generate_queries,
+    get_market_signals_serper
+)
+from app.graph.evaluation_agent.tools import (
+    contradiction_check,
+    verify_problem_claims,
+    problem_scoring_agent,
+    regulation_trend_radar_tool,
+    market_scoring_agent,
+    evaluate_business_model_with_context,
+    get_funding_benchmarks
 )
 
 # ==========================================
@@ -195,3 +214,217 @@ def test_calculate_economics_with_judgment(mock_get_llm):
         
         # Assert that the AI analysis got stitched back in correctly
         assert result["ai_analysis"]["verdict"] == "Healthy metrics"
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+async def test_contradiction_check(mock_get_llm):
+    """Test standard StrOutputParser risk agents."""
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+        mock_invoke.return_value = "No contradictions found."
+        
+        result = await contradiction_check({"data": "test"}, "Find contradictions in {json_data}")
+        
+        # We only need to assert that the function executes and returns our mocked output
+        assert result == "No contradictions found."
+        mock_invoke.assert_called_once()
+
+        
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+async def test_verify_problem_claims(mock_post, mock_env, mock_get_llm):
+    """Test complex tool involving LLM query generation + Parallel Async Searching."""
+    mock_env.return_value = "fake_api_key"
+    
+    # Mock LLM generating the JSON queries
+    mock_llm_instance = AsyncMock()
+    mock_llm_instance.ainvoke.return_value.content = '{"pain_query": "Q1", "symptom_query": "Q2", "solution_query": "Q3"}'
+    mock_get_llm.return_value = mock_llm_instance
+    
+    # Mock Aiohttp Search Responses
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {"organic": [{"title": "Hit", "link": "url", "snippet": "Text"}]}
+    mock_post.return_value.__aenter__.return_value = mock_response
+
+    result = await verify_problem_claims("Bad APIs", "Devs")
+    
+    # Assert
+    assert result["generated_queries"]["pain_query"] == "Q1"
+    assert len(result["pain_validation_search"]) == 2 # Q1 + Q2 hits
+    assert len(result["competitor_search"]) == 1 # Q3 hit
+    assert result["pain_validation_search"][0]["title"] == "Hit"
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+async def test_problem_scoring_agent(mock_get_llm):
+    """Test scoring agent repairing JSON and converting string score to numeric."""
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+        # Mocking an LLM returning Markdown JSON
+        mock_invoke.return_value = "```json\n{\"score\": \"3.5/5\", \"explanation\": \"Good\"}\n```"
+        
+        result = await problem_scoring_agent({
+            "problem_definition": {}, "search_report": {},
+            "missing_report": "", "risk_report": "", "contradiction_report": ""
+        })
+        
+        assert result["score"] == "3.5/5"
+        assert result["explanation"] == "Good"
+        assert result["score_numeric"] == 70 # 3.5 * 20
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+async def test_regulation_trend_radar_tool(mock_post, mock_env):
+    """Test dual-query radar search for regulations and trends."""
+    mock_env.return_value = "fake_api_key"
+    
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {"organic": [{"snippet": "Reg hit 1"}]}
+    mock_post.return_value.__aenter__.return_value = mock_response
+    
+    result = await regulation_trend_radar_tool("Fintech", "USA")
+    
+    assert result["tool"] == "Regulation_Radar"
+    assert "Reg hit 1" in result["findings"]["regulatory_evidence"]
+    assert "Reg hit 1" in result["findings"]["trend_evidence"]
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+async def test_evaluate_business_model_with_context(mock_get_llm):
+    """Test AI business math integration."""
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+        mock_invoke.return_value = '{"verdict": "Solid Margin"}'
+        
+        data = {
+            "monetization_structure": {"price_point": "100", "gross_margin": "80"},
+            "cash_health": {"burn_rate": "50000", "runway_months": "12"},
+            "context": {"company_name": "TestCo"}
+        }
+        
+        result = await evaluate_business_model_with_context(data)
+        
+        assert result["metrics"]["monthly_burn"] == "$50000"
+        assert result["metrics"]["runway_months"] == 12.0
+        assert result["metrics"]["gross_margin"] == "80.0%"
+        assert result["ai_analysis"]["verdict"] == "Solid Margin"
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+async def test_get_funding_benchmarks(mock_post, mock_env):
+    """Test fallback logic for empty benchmarks."""
+    mock_env.return_value = "fake_api_key"
+    
+    # Simulate a failed search or no organic hits
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {"organic": []}
+    mock_post.return_value.__aenter__.return_value = mock_response
+    
+    result = await get_funding_benchmarks("UK", "Seed", "MedTech")
+    
+    assert result == "No specific benchmarks found."
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.get_llm")
+async def test_market_scoring_agent_rubric_logic(mock_get_llm):
+    """Test that market scoring correctly maps numeric scores to rubrics."""
+    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+        # Score of 5/5 maps to 100, which maps to Blue Ocean (100 // 20 = 5)
+        mock_invoke.return_value = '{"score": "5/5"}'
+        
+        result = await market_scoring_agent({"internal_data": {}})
+        
+        assert result["score_numeric"] == 100
+        assert result["rubric_rating"] == "Blue Ocean"
+
+
+
+
+
+def test_extract_problem_data():
+    """Test the problem data extraction logic."""
+    data = {
+        "startup_evaluation": {
+            "problem_definition": {
+                "problem_statement": "Manual testing is slow.",
+                "frequency": "High",
+                "impact_metrics": {"cost_type": "Time", "description": "Losing 10h/week"}
+            },
+            "market_and_scope": {
+                "beachhead_market": "QA Engineers"
+            },
+            "founder_and_team": {
+                "founders": [{"founder_market_fit_statement": "I was a QA engineer."}]
+            }
+        }
+    }
+    res = extract_problem_data(data)
+    
+    assert res["problem_core"]["frequency"] == "High"
+    assert res["audience"]["beachhead"] == "QA Engineers"
+    assert "I was a QA engineer." in res["founder_alignment_statements"]
+
+def test_extract_traction_data_pre_seed():
+    """Test traction extraction logic branching (Pre-Seed)."""
+    data = {
+        "company_snapshot": {"current_stage": "Pre-Seed"},
+        "traction_metrics": {"user_count": 150, "early_revenue": "0"},
+        "product_and_solution": {"defensibility_moat": "Proprietary AI"}
+    }
+    res = extract_traction_data(data)
+    
+    assert res["analysis_type"] == "Pre-Seed Validation"
+    assert res["validation_signals"]["users_total"] == 150
+    assert res["defensibility"] == "Proprietary AI"
+
+def test_check_missing_fields():
+    """Test recursive missing field detection."""
+    data = {
+        "valid_field": "Hello",
+        "empty_string": "",
+        "empty_list": [],
+        "nested": {
+            "good": 100,
+            "bad_null": None
+        }
+    }
+    errors = check_missing_fields(data)
+    
+    # Should find 3 errors: empty_string, empty_list, bad_null
+    assert len(errors) == 3
+    assert any("empty_string" in e for e in errors)
+    assert any("empty_list" in e for e in errors)
+    assert any("nested.bad_null" in e for e in errors)
+
+def test_generate_queries():
+    """Test query generator for search tools."""
+    vision_data = {"category_play": {"definition": "SpaceTech"}}
+    topic, queries = generate_queries(vision_data)
+    
+    assert topic == "SpaceTech"
+    assert len(queries) == 4
+    assert any("SpaceTech" in q for q in queries)
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers.os.environ.get")
+@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
+async def test_get_market_signals_serper(mock_post, mock_env):
+    """Test async Serper market signals fetching."""
+    mock_env.return_value = "fake_api_key"
+    
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "organic": [{"title": "Report", "snippet": "Market is booming."}]
+    }
+    mock_post.return_value.__aenter__.return_value = mock_response
+    
+    vision_data = {"category_play": {"definition": "AI SaaS"}}
+    result = await get_market_signals_serper(vision_data)
+    
+    assert "SOURCE" in result
+    assert "Market is booming." in result
