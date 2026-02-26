@@ -500,7 +500,8 @@ class PDFReport(FPDF):
 
 def remove_emojis(text):
     if not isinstance(text, str): return text
-    return re.sub(r'[^\w\s,.\-\(\)\[\]/\%\$\:\'\"\+\&\?\!\@\#\*\;\<\>\=\u0600-\u06FF]', '', text)
+    return re.sub(r'[^\x00-\x7F\u0600-\u06FF]', '', text)
+
 
 def fix_arabic(text):
     """
@@ -564,7 +565,8 @@ def compile_final_pdf_report(idea_name: str):
     
     # Idea Name
     pdf.set_font_for_content('B', 20)
-    pdf.multi_cell(0, 10, fix_arabic(idea_name.upper()), 0, 'C')
+    pdf.set_x(15)
+    pdf.multi_cell(180, 10, fix_arabic(idea_name.upper()), 0, 'C')
     
     pdf.ln(5)
     
@@ -644,9 +646,12 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_text_color(0, 0, 0)
             pdf.set_font_for_content('', 10)
             
-            pdf.multi_cell(0, 6, fix_arabic(f"Pain Score: {breakdown.get('pain_score_adjusted', 0):.1f}/100 (Evidence: {breakdown.get('evidence_count', 0)} sources)"))
-            pdf.multi_cell(0, 6, fix_arabic(f"Market Growth: {breakdown.get('growth_score', 0):.1f}/100 (YoY: {breakdown.get('growth_pct', 0):.1f}%)"))
-            pdf.multi_cell(0, 6, fix_arabic(f"Competition: {breakdown.get('competition_score', 0):.1f}/100 ({breakdown.get('competition_level', 'Unknown')}, {breakdown.get('competitor_count', 0)} found)"))
+            pdf.set_x(15)
+            pdf.multi_cell(180, 6, fix_arabic(f"Pain Score: {breakdown.get('pain_score_adjusted', 0):.1f}/100 (Evidence: {breakdown.get('evidence_count', 0)} sources)"))
+            pdf.set_x(15)
+            pdf.multi_cell(180, 6, fix_arabic(f"Market Growth: {breakdown.get('growth_score', 0):.1f}/100 (YoY: {breakdown.get('growth_pct', 0):.1f}%)"))
+            pdf.set_x(15)
+            pdf.multi_cell(180, 6, fix_arabic(f"Competition: {breakdown.get('competition_score', 0):.1f}/100 ({breakdown.get('competition_level', 'Unknown')}, {breakdown.get('competitor_count', 0)} found)"))
             
             pdf.ln(5)
             
@@ -660,7 +665,8 @@ def compile_final_pdf_report(idea_name: str):
                 pdf.set_font_for_content('', 9)
                 
                 for warning in warnings:
-                    pdf.multi_cell(0, 5, fix_arabic(f"- {warning}"))
+                    pdf.set_x(15)
+                    pdf.multi_cell(180, 5, fix_arabic(f"- {warning}"))
             
         except Exception as e:
             logger.error(f"   ⚠️ Error loading opportunity analysis: {e}")
@@ -685,8 +691,10 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_font_for_content('B', 11)
             pdf.cell(0, 8, f"Evidence Quality: {evidence_qual.get('quality_level', 'Unknown').title()}", 0, 1, 'L')
             pdf.set_font_for_content('', 10)
-            pdf.multi_cell(0, 6, fix_arabic(f"Sources analyzed: {evidence_qual.get('total_count', 0)} across {evidence_qual.get('source_diversity', 0)} platforms"))
-            pdf.multi_cell(0, 6, fix_arabic(f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0"))
+            pdf.set_x(15)
+            pdf.multi_cell(180, 6, fix_arabic(f"Sources analyzed: {evidence_qual.get('total_count', 0)} across {evidence_qual.get('source_diversity', 0)} platforms"))
+            pdf.set_x(15)
+            pdf.multi_cell(180, 6, fix_arabic(f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0"))
             
         except Exception as e:
             logger.error(f"   ⚠️ Error reading validation data: {e}")
@@ -703,7 +711,8 @@ def compile_final_pdf_report(idea_name: str):
                 trend_text = f.read().strip()
                 
         pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, fix_arabic(trend_text))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(trend_text))
     
     # --- PAGE 4: FINANCIALS ---
     pdf.add_page()
@@ -721,14 +730,16 @@ def compile_final_pdf_report(idea_name: str):
                 fin_text = f.read().strip()
                 
         pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, fix_arabic(fin_text))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(fin_text))
         
         pdf.add_page()
         pdf.chapter_title("Profitability Projections")
         pdf.cell(0, 10, "2. Break-Even Analysis", 0, 1, 'L')
         pdf.add_image_centered("data_output/finance_breakeven_line.png")
         pdf.ln(2)
-        pdf.multi_cell(0, 6, "Projected cumulative cash flow over the first 24 months.")
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, "Projected cumulative cash flow over the first 24 months.")
     else:
         pdf.set_text_color(255, 0, 0)
         pdf.cell(0, 10, "Financial data unavailable.", 0, 1, 'L')
@@ -773,11 +784,14 @@ def compile_final_pdf_report(idea_name: str):
         pdf.add_image_centered("data_output/market_sizing_funnel.png")
         
         pdf.set_font_for_content('', 10)
-        pdf.multi_cell(0, 6, fix_arabic(f"TAM: {size_data.get('tam_description', 'N/A')}"))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(f"TAM: {size_data.get('tam_description', 'N/A')}"))
         pdf.ln(2)
-        pdf.multi_cell(0, 6, fix_arabic(f"SAM: {size_data.get('sam_description', 'N/A')}"))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(f"SAM: {size_data.get('sam_description', 'N/A')}"))
         pdf.ln(2)
-        pdf.multi_cell(0, 6, fix_arabic(f"SOM: {size_data.get('som_description', 'N/A')}"))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(f"SOM: {size_data.get('som_description', 'N/A')}"))
         pdf.ln(5)
         
         # Show corrections if applied
@@ -789,7 +803,8 @@ def compile_final_pdf_report(idea_name: str):
             pdf.set_text_color(0, 0, 0)
             pdf.set_font_for_content('', 9)
             for correction in corrections:
-                pdf.multi_cell(0, 5, fix_arabic(f"- {correction}"))
+                pdf.set_x(15)
+                pdf.multi_cell(180, 5, fix_arabic(f"- {correction}"))
             pdf.ln(3)
         
         pdf.chapter_title("Scalability Analysis")
@@ -817,7 +832,8 @@ def compile_final_pdf_report(idea_name: str):
              
         pdf.cell(0, 10, fix_arabic(f"Scalability: {scalability_score_text}"), 0, 1)
         pdf.set_font_for_content('', 11)
-        pdf.multi_cell(0, 6, fix_arabic(scalability_reasoning))
+        pdf.set_x(15)
+        pdf.multi_cell(180, 6, fix_arabic(scalability_reasoning))
     
     # --- PAGE 6: COMPETITORS ---
     pdf.add_page()
