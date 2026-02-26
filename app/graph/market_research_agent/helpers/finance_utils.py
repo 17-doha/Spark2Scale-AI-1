@@ -18,7 +18,7 @@ logger = get_logger("FinanceUtils")
 SERPER_API_KEY = Config.SERPER_API_KEY
 
 def detect_currency(idea):
-    print(f"   🌍 Detecting location and currency for: '{idea}'...")
+    print(f"   [GLOBAL] Detecting location and currency for: '{idea}'...")
     try:
         prompt = prompts.detect_currency_prompt(idea)
         res = call_gemini(prompt)
@@ -27,7 +27,7 @@ def detect_currency(idea):
         return {"country": "Global", "currency_code": "USD", "currency_symbol": "$"}
 
 def search_cost_data(query):
-    print(f"   🔎 Searching market for: '{query}'...")
+    print(f"   [SEARCH] Searching market for: '{query}'...")
     try:
         conn = http.client.HTTPSConnection("google.serper.dev")
         payload = json.dumps({ "q": query, "num": 5 })
@@ -41,20 +41,20 @@ def search_cost_data(query):
                 evidence += f"- {item.get('title')}: {item.get('snippet')} (Source: {item.get('link')})\n"
         return evidence
     except Exception as e:
-        print(f"   ⚠️ Search failed: {e}")
+        print(f"   [WARNING] Search failed: {e}")
         return ""
 
 def get_real_world_estimates(idea, currency_context=None):
     if currency_context:
         loc_data = currency_context
-        print(f"   🌍 Using existing location data: {loc_data.get('country')} ({loc_data.get('currency_code')})")
+        print(f"   [GLOBAL] Using existing location data: {loc_data.get('country')} ({loc_data.get('currency_code')})")
     else:
         loc_data = detect_currency(idea)
         
     curr_code = loc_data.get("currency_code", "USD")
     country = loc_data.get("country", "Global")
     
-    print(f"   🤖 Identifying cost drivers in {country} ({curr_code})...")
+    print(f"   [AI] Identifying cost drivers in {country} ({curr_code})...")
     plan_prompt = prompts.financial_plan_prompt(idea, country, curr_code)
     try:
         res = call_gemini(plan_prompt)
@@ -66,7 +66,7 @@ def get_real_world_estimates(idea, currency_context=None):
     for q in queries[:5]:
         market_data += search_cost_data(q) + "\n"
         
-    print(f"   🧮 Extracting {curr_code} financial model from search results...")
+    print(f"   [CALCULATE] Extracting {curr_code} financial model from search results...")
     return generate_financial_estimates(idea, market_data, curr_code)
 
 def generate_financial_estimates(idea, market_data, currency_code):
@@ -75,11 +75,11 @@ def generate_financial_estimates(idea, market_data, currency_code):
         res = call_gemini(extract_prompt)
         return json.loads(res.text.replace("```json","").replace("```","").strip())
     except Exception as e:
-        print(f"⚠️ Extraction Error: {e}")
+        print(f"[WARNING] Extraction Error: {e}")
         return None
 
 def generate_financial_visuals(estimates):
-    print("   📊 Generating Localized Financial Charts...")
+    print("   [DATA] Generating Localized Financial Charts...")
     os.makedirs("data_output", exist_ok=True)
     
     curr = estimates.get("currency", "USD")
@@ -156,7 +156,7 @@ def generate_financial_visuals(estimates):
         plt.savefig("data_output/finance_breakeven_line.png")
         plt.close()
     except Exception as e:
-        print(f"❌ Chart Generation Failed: {e}")
+        print(f"[ERROR] Chart Generation Failed: {e}")
         # Ensure plot is closed even if error occurs
         plt.close()
     
@@ -196,10 +196,10 @@ def generate_financial_visuals(estimates):
         f.write("SOURCES USED:\n")
         for s in estimates.get("sources_used", []): f.write(f"- {s}\n")
             
-    print(f"✅ Success: Financials built in {curr}.")
+    print(f"[SUCCESS] Success: Financials built in {curr}.")
     return "data_output/finance_summary.csv"
 
 def run_finance_model(idea):
-    print(f"\n💰 [Tool 8] Starting Localized Financial Model...")
+    print(f"\n[FINANCE] [Tool 8] Starting Localized Financial Model...")
     estimates = get_real_world_estimates(idea)
     return generate_financial_visuals(estimates)

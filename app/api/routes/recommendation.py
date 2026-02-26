@@ -25,12 +25,12 @@ async def get_recommendations(input_data: RecommendationInput):
     It processes evaluation scores and generates experiment-led advice.
     """
     start_time = time.time()
-    logger.info(f"🚀 Recommendation Agent triggered for Request ID: {input_data.request_id}")
+    logger.info(f"[LAUNCH] Recommendation Agent triggered for Request ID: {input_data.request_id}")
 
     # Ensure API Key is present
     api_key = Config.GEMINI_API_KEY
     if not api_key:
-        logger.error("❌ GEMINI_API_KEY is missing in configuration.")
+        logger.error("[ERROR] GEMINI_API_KEY is missing in configuration.")
         raise HTTPException(status_code=500, detail="Gemini API Key not configured.")
 
     try:
@@ -45,12 +45,12 @@ async def get_recommendations(input_data: RecommendationInput):
         )
 
         duration = time.time() - start_time
-        logger.info(f"✅ Recommendation workflow finished in {duration:.2f}s")
+        logger.info(f"[SUCCESS] Recommendation workflow finished in {duration:.2f}s")
         
         return result
 
     except Exception as e:
-        logger.error(f"❌ Recommendation Agent Failed: {str(e)}")
+        logger.error(f"[ERROR] Recommendation Agent Failed: {str(e)}")
         # Provide more context if it's a validation error
         if "validation error" in str(e).lower():
             raise HTTPException(status_code=422, detail=f"Data Schema Mismatch: {str(e)}")

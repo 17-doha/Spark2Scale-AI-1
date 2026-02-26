@@ -23,14 +23,14 @@ def fetch_stock_data(ticker_symbol: str, period: str = "2y"):
     """
     Fetches historical stock data for a given ticker.
     """
-    logger.info(f"\n📥 [Tool 1] Fetching data for: {ticker_symbol}...")
+    logger.info(f"\n[DOWNLOAD] [Tool 1] Fetching data for: {ticker_symbol}...")
     try:
         # Initialize Ticker
         stock = yf.Ticker(ticker_symbol)
         df = stock.history(period=period, auto_adjust=True)
         
         if df.empty:
-            logger.error(f"❌ Error: No data found for symbol '{ticker_symbol}'.")
+            logger.error(f"[ERROR] Error: No data found for symbol '{ticker_symbol}'.")
             return None
         
         # Clean Data
@@ -43,21 +43,21 @@ def fetch_stock_data(ticker_symbol: str, period: str = "2y"):
         filename = f"data_output/{ticker_symbol}_market_data.csv"
         df.to_csv(filename, index=False)
         
-        logger.info(f"✅ Success: Fetched {len(df)} rows.")
+        logger.info(f"[SUCCESS] Success: Fetched {len(df)} rows.")
         return filename
 
     except Exception as e:
-        logger.warning(f"⚠️ Fetch Error: {e}")
+        logger.warning(f"[WARNING] Fetch Error: {e}")
         return None
 
 def calculate_technical_indicators(input_file: str):
     """
     Calculates SMA (Trend) and RSI (Momentum) indicators.
     """
-    logger.info(f"\n📈 [Tool 2] Calculating indicators...")
+    logger.info(f"\n[TREND UP] [Tool 2] Calculating indicators...")
     try:
         if not os.path.exists(input_file):
-            logger.error("❌ Error: Input file not found.")
+            logger.error("[ERROR] Error: Input file not found.")
             return None
             
         df = pd.read_csv(input_file)
@@ -79,15 +79,15 @@ def calculate_technical_indicators(input_file: str):
         output_file = input_file.replace(".csv", "_analyzed.csv")
         df.to_csv(output_file, index=False)
         
-        logger.info(f"✅ Success: Added SMA and RSI columns.")
+        logger.info(f"[SUCCESS] Success: Added SMA and RSI columns.")
         return output_file
 
     except Exception as e:
-        logger.warning(f"⚠️ Math Error: {e}")
+        logger.warning(f"[WARNING] Math Error: {e}")
         return None
 
 def get_trending_data(keywords, geo_code='EG'):
-    logger.info(f"   📊 Querying Google Trends for: {keywords}...")
+    logger.info(f"   [DATA] Querying Google Trends for: {keywords}...")
     try:
         pytrends = TrendReq(hl='en-US', tz=360)
         pytrends.build_payload(keywords, cat=0, timeframe='today 12-m', geo=geo_code)
@@ -96,7 +96,7 @@ def get_trending_data(keywords, geo_code='EG'):
         if 'isPartial' in data.columns: del data['isPartial']
         return data, "Google Trends"
     except Exception as e:
-        logger.warning(f"   ⚠️ Trends Error: {e}")
+        logger.warning(f"   [WARNING] Trends Error: {e}")
         return None, None
 
 def plot_trends(data, source_name, col):
@@ -152,12 +152,12 @@ def identify_industry(idea):
         res = call_gemini(prompt_ind)
         return res.text.strip().replace('"','')
     except Exception as e:
-        logger.warning(f"   ⚠️ Industry ID Error: {e}")
+        logger.warning(f"   [WARNING] Industry ID Error: {e}")
         return idea
 
 
 def search_market_reports(query):
-    logger.info(f"   🔎 Searching: '{query}'...")
+    logger.info(f"   [SEARCH] Searching: '{query}'...")
     try:
         conn = http.client.HTTPSConnection("google.serper.dev")
         payload = json.dumps({ "q": query, "num": 5 })
@@ -176,11 +176,11 @@ def search_market_reports(query):
                 output += f"Title: {item.get('title')}\nSnippet: {item.get('snippet')}\n\n"
         return output
     except Exception as e:
-        logger.warning(f"   ⚠️ Search Error: {e}")
+        logger.warning(f"   [WARNING] Search Error: {e}")
         return ""
 
 def fetch_industry_cagr(industry):
-    logger.info(f"   📈 Fetching CAGR reports for '{industry}'...")
+    logger.info(f"   [TREND UP] Fetching CAGR reports for '{industry}'...")
     query = f"{industry} market growth rate CAGR 2024"
     search_data = search_market_reports(query)
     
@@ -224,7 +224,7 @@ def extract_json_from_text(text):
         return None
 
 def analyze_market_size(idea, industry, location, market_data):
-    logger.info("   🧮 triangulating market numbers...")
+    logger.info("   [CALCULATE] triangulating market numbers...")
     analysis_prompt = prompts.analyze_market_size_prompt(idea, industry, location, market_data)
     
     try:
@@ -234,10 +234,10 @@ def analyze_market_size(idea, industry, location, market_data):
         if data: return data
         
         # Fallback if extraction fails
-        logger.warning("   ⚠️ JSON Extraction returned None. Using raw text fallback logic or error.")
+        logger.warning("   [WARNING] JSON Extraction returned None. Using raw text fallback logic or error.")
         return None
     except Exception as e:
-        logger.warning(f"   ⚠️ Sizing Analysis Error: {e}")
+        logger.warning(f"   [WARNING] Sizing Analysis Error: {e}")
         return None
 
 import re
@@ -310,5 +310,5 @@ def plot_market_funnel(result, industry):
         plt.close()
         return "data_output/market_sizing_funnel.png"
     except Exception as e:
-        logger.warning(f"⚠️ Sizing Visual Error: {e}")
+        logger.warning(f"[WARNING] Sizing Visual Error: {e}")
         return None

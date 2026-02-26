@@ -13,7 +13,7 @@ async def research_idea(request: ResearchRequest):
     """
     Triggers the Market Research Agent for a given idea and problem statement.
     """
-    logger.info(f"🚀 Received Market Research Request: {request.idea}")
+    logger.info(f"[LAUNCH] Received Market Research Request: {request.idea}")
     
     try:
         # Invoke the LangGraph workflow
@@ -48,5 +48,5 @@ async def research_idea(request: ResearchRequest):
         )
         
     except Exception as e:
-        logger.error(f"❌ Market Research Failed: {e}")
+        logger.error(f"[ERROR] Market Research Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

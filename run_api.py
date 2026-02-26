@@ -15,7 +15,7 @@ if __name__ == "__main__":
     try:
         uvicorn.run("app.api.main:app", host="0.0.0.0", port=8000, reload=True)
     except ImportError as e:
-        print(f"❌ Error importing app: {e}")
+        print(f"[ERROR] Error importing app: {e}")
         print("Please ensure you are running this script from the project root directory.")
     except Exception as e:
-        print(f"❌ Server failed to start: {e}")
+        print(f"[ERROR] Server failed to start: {e}")

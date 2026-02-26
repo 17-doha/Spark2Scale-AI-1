@@ -737,7 +737,7 @@ def parse_and_repair_json(raw_text: str) -> dict:
         parsed = json.loads(repair_json(cleaned_text))
         return parsed
     except Exception as e:
-        logger.error(f"❌ JSON Repair Failed: {e} | Raw: {raw_text[:100]}...")
+        logger.error(f"[ERROR] JSON Repair Failed: {e} | Raw: {raw_text[:100]}...")
         # Return safe fallback to prevent pipeline crash
         return {
             "score": "0/5", 

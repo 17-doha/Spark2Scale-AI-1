@@ -94,7 +94,7 @@ Compare the specific fields below. If they conflict, flag it as a Contradiction.
 
 ### OUTPUT FORMAT:
 If contradictions exist, list them as bullet points with specific evidence.
-If NO contradictions exist, output exactly: "✅ No logic contradictions found."
+If NO contradictions exist, output exactly: "[SUCCESS] No logic contradictions found."
 
 **Example Output (If faults found):**
 ## Logic Contradictions
@@ -102,7 +102,7 @@ If NO contradictions exist, output exactly: "✅ No logic contradictions found."
 * **Active Search Failure:** Founder claims the problem causes "Severe Burnout," yet Current Solution is "None." Real pain always has an alternative solution (even if it's bad).
 
 **Example Output (If clean):**
-✅ No logic contradictions found.
+[SUCCESS] No logic contradictions found.
 """
 
 
@@ -160,7 +160,7 @@ Compare the specific fields below. If they conflict, flag it as a Contradiction.
 
 ### OUTPUT FORMAT:
 If contradictions exist, list them as bullet points with specific evidence.
-If NO contradictions exist, output exactly: "✅ No logic contradictions found."
+If NO contradictions exist, output exactly: "[SUCCESS] No logic contradictions found."
 
 **Example Output (If faults found):**
 ## Logic Contradictions
@@ -169,7 +169,7 @@ If NO contradictions exist, output exactly: "✅ No logic contradictions found."
 * **Execution Failure:** Product Status is listed as "MVP," but Shipping History is empty and Visuals are missing. No evidence of an MVP exists.
 
 **Example Output (If clean):**
-✅ No logic contradictions found.
+[SUCCESS] No logic contradictions found.
 """
 
 CONTRADICTION_MARKET_PROMPT_TEMPLATE = """
@@ -210,7 +210,7 @@ Compare the specific fields below. If they conflict, flag it as a Contradiction.
 
 ### OUTPUT FORMAT:
 If contradictions exist, list them as bullet points with specific evidence.
-If NO contradictions exist, output exactly: "✅ No market logic contradictions found."
+If NO contradictions exist, output exactly: "[SUCCESS] No market logic contradictions found."
 
 **Example Output (If faults found):**
 ## Market Logic Contradictions
@@ -218,7 +218,7 @@ If NO contradictions exist, output exactly: "✅ No market logic contradictions 
 * **Trust Mismatch:** Target customer is "Ministry of Education," but the primary channel is "TikTok Ads." Government contracts are sold via tenders/sales, not social media.
 
 **Example Output (If clean):**
-✅ No market logic contradictions found.
+[SUCCESS] No market logic contradictions found.
 """
 
 CONTRADICTION_PRE_SEED_TRACTION_AGENT_PROMPT = """
@@ -250,7 +250,7 @@ Be strict: "Ideas" without "Action" are contradictions.
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No traction logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No traction logic contradictions found."
 """
 CONTRADICTION_SEED_TRACTION_AGENT_PROMPT = """
 You are a **Series A Investment Associate**.
@@ -281,7 +281,7 @@ You are looking for **Mathematical Impossibilities** and **Scalability Blockers*
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No traction logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No traction logic contradictions found."
 """
 
 CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT = """
@@ -317,7 +317,7 @@ Be strict: You are looking for "Impossible Physics" in their business logic.
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No GTM logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No GTM logic contradictions found."
 """
 
 CONTRADICTION_SEED_GTM_AGENT_PROMPT = """
@@ -353,7 +353,7 @@ You are looking for **Mathematical Impossibilities** and **Data Integrity Failur
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No GTM logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No GTM logic contradictions found."
 """
 
 CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT = """
@@ -389,7 +389,7 @@ Be strict: You are looking for "Economic Impossibilities" in their hypothesis.
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No Business Logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No Business Logic contradictions found."
 """
 
 CONTRADICTION_SEED_BIZ_MODEL_PROMPT = """
@@ -425,7 +425,7 @@ You are looking for **Metric Inconsistencies** and **Inefficient Growth**.
 ---
 ### OUTPUT FORMAT
 List specific contradictions found as bullet points.
-If NO contradictions, output: "✅ No Business Logic contradictions found."
+If NO contradictions, output: "[SUCCESS] No Business Logic contradictions found."
 """
 
 CONTRADICTION_VISION_PROMPT_TEMPLATE = """
@@ -466,7 +466,7 @@ Compare the specific fields below. If they conflict, flag it as a Contradiction.
 
 ### OUTPUT FORMAT:
 If contradictions exist, list them as bullet points with specific evidence.
-If NO contradictions exist, output exactly: "✅ No vision logic contradictions found."
+If NO contradictions exist, output exactly: "[SUCCESS] No vision logic contradictions found."
 
 **Example Output (If faults found):**
 ## Vision Logic Contradictions
@@ -474,7 +474,7 @@ If NO contradictions exist, output exactly: "✅ No vision logic contradictions 
 * **Fake Moat Alert:** The startup claims "Data Network Effects" as a moat, but they are Pre-Seed with 0 users. There is no network yet.
 
 **Example Output (If clean):**
-✅ No vision logic contradictions found.
+[SUCCESS] No vision logic contradictions found.
 """
 
 CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE = """
@@ -524,7 +524,7 @@ Compare the specific fields below. If they conflict, flag it as a Contradiction.
 
 ### OUTPUT FORMAT:
 If contradictions exist, list them as bullet points with specific evidence.
-If NO contradictions exist, output exactly: "✅ No operational logic contradictions found."
+If NO contradictions exist, output exactly: "[SUCCESS] No operational logic contradictions found."
 
 **Example Output (If faults found):**
 ## Operational Logic Contradictions
@@ -975,7 +975,7 @@ You are looking for **Naivety**, **Charity Projects**, and **Short Runways**.
 
 ### OUTPUT FORMAT:
 Strictly list the risks found as bullet points.
-If NO risks are found, output "✅ No critical Business Model risks identified."
+If NO risks are found, output "[SUCCESS] No critical Business Model risks identified."
 
 ## Business Model Risks (Pre-Seed)
 * **[Risk Flag Name]**: [Explanation of the risk]
@@ -1020,7 +1020,7 @@ You are looking for **Leaky Buckets**, **Inefficient Spend**, and **Fake Growth*
 
 ### OUTPUT FORMAT:
 Strictly list the risks found as bullet points.
-If NO risks are found, output "✅ No critical Business Model risks identified."
+If NO risks are found, output "[SUCCESS] No critical Business Model risks identified."
 
 ## Business Model Risks (Seed)
 * **[Risk Flag Name]**: [Explanation of the risk]
@@ -1075,7 +1075,7 @@ You are looking for **Ambition** and **Founder Insight**. You are forgiving of "
 
 ### OUTPUT FORMAT:
 Strictly list the risks found.
-If NO critical risks are found, output exactly: "✅ No critical vision risks identified."
+If NO critical risks are found, output exactly: "[SUCCESS] No critical vision risks identified."
 
 ## Vision Risks (Pre-Seed)
 * **[Risk Flag Name]**: [Explanation]
@@ -1126,7 +1126,7 @@ You are looking for **Defensibility**, **Clarity**, and **Category Creation**.
 
 ### OUTPUT FORMAT:
 Strictly list the risks found.
-If NO critical risks are found, output exactly: "✅ No critical vision risks identified."
+If NO critical risks are found, output exactly: "[SUCCESS] No critical vision risks identified."
 
 ## Vision Risks (Seed)
 * **[Risk Flag Name]**: [Explanation]

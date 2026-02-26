@@ -25,7 +25,7 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
     """
     Generate executive summary report with realistic opportunity scoring
     """
-    logger.info(f"\n📝 [Tool 5] Synthesizing Data & Calculating Realistic Opportunity Score...")
+    logger.info(f"\n[REPORT] [Tool 5] Synthesizing Data & Calculating Realistic Opportunity Score...")
     
     # ========================================
     # 1. LOAD VALIDATION DATA
@@ -44,9 +44,9 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
                 evidence_count = d.get('evidence_quality', {}).get('total_count', 0)
                 confidence = d.get('confidence', 'Unknown')
                 
-                logger.info(f"   📊 Pain Score: {pain_score}/100 (Confidence: {confidence}, Evidence: {evidence_count} sources)")
+                logger.info(f"   [DATA] Pain Score: {pain_score}/100 (Confidence: {confidence}, Evidence: {evidence_count} sources)")
             except Exception as e:
-                logger.warning(f"   ⚠️ Error parsing validation data: {e}")
+                logger.warning(f"   [WARNING] Error parsing validation data: {e}")
 
     # ========================================
     # 2. LOAD TREND DATA
@@ -61,9 +61,9 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
             if not growth_row.empty:
                 growth_pct = float(growth_row.iloc[0]['value'])
                 trend_summary = f"12-Month Growth: {growth_pct:.1f}%"
-                logger.info(f"   📈 Market Growth: {growth_pct:.1f}%")
+                logger.info(f"   [TREND UP] Market Growth: {growth_pct:.1f}%")
         except Exception as e:
-            logger.warning(f"   ⚠️ Error reading trend data: {e}")
+            logger.warning(f"   [WARNING] Error reading trend data: {e}")
 
     # ========================================
     # 3. LOAD FINANCIAL DATA
@@ -88,9 +88,9 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
                 elif metric == 'Break-Even Month':
                     break_even = row.get('Value', 99)
             
-            logger.info(f"   💰 Startup Cost: {startup_cost}, Break-Even: Month {break_even}")
+            logger.info(f"   [FINANCE] Startup Cost: {startup_cost}, Break-Even: Month {break_even}")
         except Exception as e:
-            logger.warning(f"   ⚠️ Error reading finance data: {e}")
+            logger.warning(f"   [WARNING] Error reading finance data: {e}")
 
     # ========================================
     # 4. LOAD COMPETITOR DATA
@@ -103,9 +103,9 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
         try:
             df_comp = pd.read_csv(competitors_file[0])
             competitor_count = len(df_comp)
-            logger.info(f"   🏢 Competitors Found: {competitor_count}")
+            logger.info(f"   [COMPANY] Competitors Found: {competitor_count}")
         except Exception as e:
-            logger.warning(f"   ⚠️ Error reading competitor data: {e}")
+            logger.warning(f"   [WARNING] Error reading competitor data: {e}")
 
     # ========================================
     # 5. LOAD MARKET SIZING DATA
@@ -153,14 +153,14 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
                 else:
                     market_size_score = 90
                 
-                logger.info(f"   📐 Market Size Score: {market_size_score}/100 (SAM: {sam_value})")
+                logger.info(f"   [MEASURE] Market Size Score: {market_size_score}/100 (SAM: {sam_value})")
         except Exception as e:
-            logger.warning(f"   ⚠️ Error reading market sizing: {e}")
+            logger.warning(f"   [WARNING] Error reading market sizing: {e}")
 
     # ========================================
     # 6. CALCULATE REALISTIC OPPORTUNITY SCORE
     # ========================================
-    logger.info(f"\n   🧮 Calculating Opportunity Score with Realistic Weights...")
+    logger.info(f"\n   [CALCULATE] Calculating Opportunity Score with Realistic Weights...")
     
     opportunity_analysis = calculate_realistic_opportunity_score(
         pain_score=pain_score,
@@ -177,12 +177,12 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
     recommendation = opportunity_analysis['recommendation']
     breakdown = opportunity_analysis['breakdown']
     
-    logger.info(f"\n   ✅ FINAL OPPORTUNITY SCORE: {opp_score}/100")
-    logger.info(f"   🏆 GRADE: {grade}")
-    logger.info(f"   💡 RECOMMENDATION: {recommendation}")
+    logger.info(f"\n   [SUCCESS] FINAL OPPORTUNITY SCORE: {opp_score}/100")
+    logger.info(f"   [SCORE] GRADE: {grade}")
+    logger.info(f"   [IDEA] RECOMMENDATION: {recommendation}")
     
     if warnings:
-        logger.warning(f"\n   ⚠️  WARNINGS:")
+        logger.warning(f"\n   [WARNING]  WARNINGS:")
         for warning in warnings:
             logger.warning(f"      {warning}")
 
@@ -249,7 +249,7 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
 """
         
         if warnings:
-            analysis_section += "\n### ⚠️ Warnings:\n"
+            analysis_section += "\n### [WARNING] Warnings:\n"
             for warning in warnings:
                 analysis_section += f"- {warning}\n"
         
@@ -263,10 +263,10 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
         with open("data_output/opportunity_analysis.json", "w", encoding="utf-8") as f:
             json.dump(opportunity_analysis, f, indent=4)
         
-        logger.info(f"✅ Final Report Saved with Realistic Opportunity Scoring.")
+        logger.info(f"[SUCCESS] Final Report Saved with Realistic Opportunity Scoring.")
         
     except Exception as e:
-        logger.error(f"⚠️ Report Error: {e}. Using fallback Executive Summary.")
+        logger.error(f"[WARNING] Report Error: {e}. Using fallback Executive Summary.")
         # Fallback summary
         fallback_content = f"**Executive Summary (Fallback Generated)**\n\nThe market analysis for {query} resulted in an overall opportunity score of {opp_score}/100 ({grade}).\n\n**Key Findings:**\n- Market Growth: {growth_pct}%\n- Pain Score: {pain_score}/100\n- Competition Level: {comp_level_str}\n\n**Recommendation:**\n{recommendation}\n\n"
         
@@ -299,7 +299,7 @@ def generate_report(file_path: str, query: str, trend_file=None, finance_file=No
 """
         
         if warnings:
-            analysis_section += "\n### ⚠️ Warnings:\n"
+            analysis_section += "\n### [WARNING] Warnings:\n"
             for warning in warnings:
                 analysis_section += f"- {warning}\n"
         
@@ -498,6 +498,7 @@ class PDFReport(FPDF):
         except:
             self.set_font('Arial', style, size)
 
+
 def remove_emojis(text):
     if not isinstance(text, str): return text
     return re.sub(r'[^\x00-\x7F\u0600-\u06FF]', '', text)
@@ -527,7 +528,7 @@ def compile_final_pdf_report(idea_name: str):
     """
     Compiles the final PDF report using generated data.
     """
-    logger.info(f"\n📄 [Tool 9] Compiling Professional PDF Report...")
+    logger.info(f"\n[DOC] [Tool 9] Compiling Professional PDF Report...")
     
     pdf = PDFReport()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -546,15 +547,15 @@ def compile_final_pdf_report(idea_name: str):
         if font_path and os.path.exists(font_path):
             pdf.add_font("ArialUnicode", style="", fname=font_path)
             pdf.add_font("ArialUnicode", style="B", fname=font_path)
-            logger.info(f"   ✅ Loaded System Font: {font_path}")
+            logger.info(f"   [SUCCESS] Loaded System Font: {font_path}")
         else:
-            logger.warning("   ⚠️ Custom font not found. Arabic may not render correctly.")
+            logger.warning("   [WARNING] Custom font not found. Arabic may not render correctly.")
     except Exception as e:
-        logger.error(f"   ⚠️ Font Error: {e}")
+        logger.error(f"   [WARNING] Font Error: {e}")
 
     # --- PAGE 1: TITLE & EXECUTIVE SUMMARY ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Title & Executive Summary")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Title & Executive Summary")
     
     # Title Styling
     pdf.set_font_for_content('B', 14)
@@ -567,11 +568,11 @@ def compile_final_pdf_report(idea_name: str):
     display_name = idea_name
     if len(idea_name.split()) > 5 or len(idea_name) > 40:
         try:
-            logger.info("   🧠 Extracting basic short name for long idea title...")
+            logger.info("   [AI] Extracting basic short name for long idea title...")
             res = call_gemini(f"Extract a 2-4 word basic, catchy project or product name from this idea: '{idea_name}'. Return ONLY the basic name without quotes or explanation.")
             display_name = res.text.strip().replace('"', '')
         except Exception as e:
-            logger.warning(f"   ⚠️ Failed to get basic name: {e}")
+            logger.warning(f"   [WARNING] Failed to get basic name: {e}")
             display_name = " ".join(idea_name.split()[:5]) + "..."
 
     # Idea Name
@@ -601,21 +602,21 @@ def compile_final_pdf_report(idea_name: str):
             with open(report_path, "r", encoding="utf-8") as f:
                 raw_text = f.read()
                 if not raw_text.strip():
-                    logger.warning("   ⚠️ Report file exists but is empty.")
+                    logger.warning("   [WARNING] Report file exists but is empty.")
                 else:
                     report_text = raw_text
         except Exception as e:
-            logger.error(f"   ⚠️ Error reading report: {e}")
+            logger.error(f"   [WARNING] Error reading report: {e}")
             report_text = f"Error reading executive summary: {e}"
     else:
-        logger.warning(f"   ⚠️ Report file not found at {report_path}")
+        logger.warning(f"   [WARNING] Report file not found at {report_path}")
 
     pdf.chapter_title("Executive Summary")
     pdf.chapter_body(report_text[:2500] + "...")
     
     # --- PAGE 2: OPPORTUNITY SCORE BREAKDOWN ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Opportunity Score Analysis")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Opportunity Score Analysis")
     pdf.chapter_title("Opportunity Score Breakdown")
     
     # Load opportunity analysis
@@ -680,11 +681,11 @@ def compile_final_pdf_report(idea_name: str):
                     pdf.multi_cell(180, 5, fix_arabic(f"- {warning}"))
             
         except Exception as e:
-            logger.error(f"   ⚠️ Error loading opportunity analysis: {e}")
+            logger.error(f"   [WARNING] Error loading opportunity analysis: {e}")
     
     # --- PAGE 3: MARKET VALIDATION ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Market Validation")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Market Validation")
     pdf.chapter_title("Market Validation & Evidence")
     
     clean_idea_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
@@ -708,7 +709,7 @@ def compile_final_pdf_report(idea_name: str):
             pdf.multi_cell(180, 6, fix_arabic(f"Credibility score: {evidence_qual.get('credibility_score', 0):.2f}/1.0"))
             
         except Exception as e:
-            logger.error(f"   ⚠️ Error reading validation data: {e}")
+            logger.error(f"   [WARNING] Error reading validation data: {e}")
     
     if os.path.exists("data_output/market_demand_chart.png"):
         pdf.ln(10)
@@ -727,7 +728,7 @@ def compile_final_pdf_report(idea_name: str):
     
     # --- PAGE 4: FINANCIALS ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Financials")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Financials")
     pdf.chapter_title("Financial Feasibility")
     
     if os.path.exists("data_output/finance_summary.csv"):
@@ -758,7 +759,7 @@ def compile_final_pdf_report(idea_name: str):
 
     # --- PAGE 5: MARKET SIZING ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Market Sizing")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Market Sizing")
     pdf.chapter_title("Market Opportunity & Sizing")
     
     if os.path.exists("data_output/market_sizing.json"):
@@ -848,7 +849,7 @@ def compile_final_pdf_report(idea_name: str):
     
     # --- PAGE 6: COMPETITORS ---
     pdf.add_page()
-    logger.info(f"   📄 Generating Page {pdf.page_no()}: Competitors")
+    logger.info(f"   [DOC] Generating Page {pdf.page_no()}: Competitors")
     pdf.chapter_title("Competitor Analysis")
     
     comp_files = glob.glob(f"data_output/{idea_name.replace(' ', '_')}_competitors.csv")
@@ -872,7 +873,7 @@ def compile_final_pdf_report(idea_name: str):
                 pdf.cell(140, 10, features, 1)
                 pdf.ln()
         except Exception as e:
-            logger.error(f"   ⚠️ Error adding competitors: {e}")
+            logger.error(f"   [WARNING] Error adding competitors: {e}")
     else:
         pdf.set_text_color(255, 0, 0)
         pdf.cell(0, 10, "Competitor data unavailable.", 0, 1, 'L')
@@ -884,8 +885,8 @@ def compile_final_pdf_report(idea_name: str):
     
     try:
         pdf.output(output_filename)
-        logger.info(f"✅ PDF GENERATED: {output_filename}")
+        logger.info(f"[SUCCESS] PDF GENERATED: {output_filename}")
         return output_filename
     except Exception as e:
-        logger.error(f"❌ PDF Save Failed: {e}")
+        logger.error(f"[ERROR] PDF Save Failed: {e}")
         return None

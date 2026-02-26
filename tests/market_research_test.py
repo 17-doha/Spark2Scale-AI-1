@@ -13,11 +13,10 @@ from app.graph.market_research_agent.helpers.validator_utils import analyze_pain
 # ==========================================
 # 1. TESTS FOR pdf_utils.py (Data & Parsing)
 # ==========================================
-
 def test_remove_emojis():
     """Test removing emojis from text."""
     # Note: 'remove_emojis' keeps ascii and arabic, removes others.
-    result = remove_emojis("Hello World 🌍")
+    result = remove_emojis("Hello World [GLOBAL]")
     assert result.strip() == "Hello World"
     
     # Check if None or non-string is passed

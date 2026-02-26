@@ -65,7 +65,7 @@ RETRY_CONFIG = {
 @retry(**RETRY_CONFIG)
 async def contradiction_check(data: dict, agent_prompt: str) -> str:
     async with concurrency_limiter:
-        logger.info("🤖 Contradiction Check...")
+        logger.info("[AI] Contradiction Check...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({
@@ -76,7 +76,7 @@ async def contradiction_check(data: dict, agent_prompt: str) -> str:
 @retry(**RETRY_CONFIG)
 async def team_risk_check(data: dict, agent_prompt: str) -> str:
     async with concurrency_limiter:
-        logger.info("📉 Team Risk Check...")
+        logger.info("[TREND DOWN] Team Risk Check...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({"json_data": json.dumps(data, indent=2)})
@@ -94,7 +94,7 @@ async def loaded_risk_check_with_search(problem_data: dict, search_results: dict
 @retry(**RETRY_CONFIG)
 async def team_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("🏆 Team Scoring...")
+        logger.info("[SCORE] Team Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         # Use StrOutputParser + repair_json
         chain = PromptTemplate.from_template(TEAM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
@@ -111,7 +111,7 @@ async def team_scoring_agent(data_package: dict) -> dict:
         return result_dict
 @retry(**RETRY_CONFIG)
 async def verify_problem_claims(problem_statement: str, target_audience: str) -> dict:
-    logger.info("🔎 Verifying Problem Claims...")
+    logger.info("[SEARCH] Verifying Problem Claims...")
     api_key = os.environ.get("SERPER_API_KEY")
     if not api_key: return {"error": "Missing SERPER_API_KEY."}
 
@@ -159,7 +159,7 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
 @retry(**RETRY_CONFIG)
 async def problem_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("🏆 Problem Scoring...")
+        logger.info("[SCORE] Problem Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(PROBLEM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
@@ -183,7 +183,7 @@ async def problem_scoring_agent(data_package: dict) -> dict:
             raise TimeoutError("Groq Request Timed Out")
 @retry(**RETRY_CONFIG)
 async def tech_stack_detective(url: str):
-    logger.info(f"🛠️ Tech Stack Detective: {url}")
+    logger.info(f"[TOOLS] Tech Stack Detective: {url}")
     if not url: return {"verdict": "No URL"}
     try:
         tech_data = await asyncio.to_thread(builtwith.parse, url)
@@ -212,7 +212,7 @@ async def tech_stack_detective(url: str):
 @retry(**RETRY_CONFIG)
 async def product_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("🏆 Product Scoring...")
+        logger.info("[SCORE] Product Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(PRODUCT_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
@@ -262,7 +262,7 @@ async def regulation_trend_radar_tool(category: str, location: str):
     return {"tool": "Regulation_Radar", "findings": results_data}
 @retry(**RETRY_CONFIG)
 async def tam_sam_verifier_tool(beachhead: str, location: str, claimed_size: str):
-    logger.info(f"📊 TAM Check: '{beachhead}' in '{location}'...")
+    logger.info(f"[DATA] TAM Check: '{beachhead}' in '{location}'...")
     if not os.environ.get("SERPER_API_KEY"):
         return {"tool": "TAM_Verifier", "status": "Simulated", "evidence": "Simulated: Market data not available."}
 
@@ -288,7 +288,7 @@ async def tam_sam_verifier_tool(beachhead: str, location: str, claimed_size: str
 
 async def local_dependency_detective(tech_stack: str, acquisition_channel: str, product_desc: str):
     async with concurrency_limiter:
-        logger.info("🕵️ Dependency Detective...")
+        logger.info("[AGENT] Dependency Detective...")
         llm = get_llm(temperature=0, provider="groq")
         prompt_text = f"""
         Analyze platform risks for Product: {product_desc}, Tech: {tech_stack}, Channel: {acquisition_channel}.
@@ -304,7 +304,7 @@ async def local_dependency_detective(tech_stack: str, acquisition_channel: str, 
 @retry(**RETRY_CONFIG)
 async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result):
     async with concurrency_limiter:
-        logger.info("📉 Market Risk...")
+        logger.info("[TREND DOWN] Market Risk...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(VALUATION_RISK_MARKET_PROMPT_TEMPLATE) | llm | StrOutputParser()
         return await chain.ainvoke({
@@ -317,7 +317,7 @@ async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result)
 @retry(**RETRY_CONFIG)
 async def market_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("⚖️ Market Scoring...")
+        logger.info("[BALANCE] Market Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(MARKET_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
@@ -351,7 +351,7 @@ async def traction_risk_agent(traction_data: dict, risk_prompt_template: str) ->
 @retry(**RETRY_CONFIG)
 async def traction_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("🚀 Traction Scoring...")
+        logger.info("[LAUNCH] Traction Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         traction_data = data_package.get("traction_data", {})
         stage_raw = traction_data.get("context", {}).get("stage", "Pre-Seed").lower()
@@ -382,7 +382,7 @@ async def gtm_risk_agent(gtm_data: dict, risk_prompt_template: str) -> str:
 @retry(**RETRY_CONFIG)
 async def gtm_scoring_agent(gtm_data: dict, economics_report: dict, contradiction_report: str, risk_report: str) -> dict:
     async with concurrency_limiter:
-        logger.info("🚀 GTM Scoring...")
+        logger.info("[LAUNCH] GTM Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         stage_raw = gtm_data.get("context", {}).get("stage", "Pre-Seed").lower()
         template = SCORING_GTM_PRE_SEED_PROMPT if "pre" in stage_raw else SCORING_GTM_SEED_PROMPT
@@ -406,7 +406,7 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
     NOTE: This function mixes Python Math (Calculations) with AI (Judgment).
     """
     
-    logger.info("🧮 Calculating Unit Economics & Business Logic...")
+    logger.info("[CALCULATE] Calculating Unit Economics & Business Logic...")
 
     # =========================================================
     # 1. EXTRACT & CALCULATE RAW METRICS (The Math)
@@ -485,7 +485,7 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
     return metrics
 async def evaluate_business_model_with_context(business_data: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("💰 Analyzing Business Model & Economics...")
+        logger.info("[FINANCE] Analyzing Business Model & Economics...")
         structure = business_data.get("monetization_structure", {})
         cash = business_data.get("cash_health", {})
         context = business_data.get("context", {})
@@ -539,7 +539,7 @@ async def business_risk_agent(business_data: dict, risk_prompt_template: str) ->
 @retry(**RETRY_CONFIG)
 async def business_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("🚀 Business Scoring...")
+        logger.info("[LAUNCH] Business Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         business_data = data_package.get("business_data", {})
         stage_raw = business_data.get("context", {}).get("stage", "Pre-Seed").lower()
@@ -603,7 +603,7 @@ async def vision_risk_agent(vision_data: dict, market_analysis: dict, template: 
 @retry(**RETRY_CONFIG)
 async def vision_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("⚖️ Vision Scoring...")
+        logger.info("[BALANCE] Vision Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(VISION_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
@@ -621,7 +621,7 @@ async def vision_scoring_agent(data_package: dict) -> dict:
 
 @retry(**RETRY_CONFIG)
 async def get_funding_benchmarks(location: str, stage: str, sector: str) -> str:
-    logger.info(f"💰 Searching Benchmarks for {stage} {sector} in {location}...")
+    logger.info(f"[FINANCE] Searching Benchmarks for {stage} {sector} in {location}...")
     url = "https://google.serper.dev/search"
     headers = {'X-API-KEY': os.environ.get("SERPER_API_KEY"), 'Content-Type': 'application/json'}
     current_year = datetime.now().year
@@ -657,7 +657,7 @@ async def operations_risk_agent(operations_data: dict, benchmarks: str, template
 @retry(**RETRY_CONFIG)
 async def operations_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
-        logger.info("⚖️ Operations Scoring...")
+        logger.info("[BALANCE] Operations Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(OPERATIONS_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         

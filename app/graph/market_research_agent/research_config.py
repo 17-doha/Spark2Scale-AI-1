@@ -288,28 +288,28 @@ def calculate_realistic_opportunity_score(
     if runway is not None:
         if runway < ResearchConfig.RUNWAY_CRITICAL:
             survival_multiplier = 0.25 # Caps a perfect score at ~25 (Grade D)
-            warnings.append(f"🚨 CRITICAL: Imminent insolvency. Runway is only {runway:.1f} months.")
+            warnings.append(f"[CRITICAL] CRITICAL: Imminent insolvency. Runway is only {runway:.1f} months.")
         elif runway < ResearchConfig.RUNWAY_DANGER:
             survival_multiplier = 0.60 # Caps a perfect score at ~60 (Grade C)
-            warnings.append(f"⚠️ HIGH RISK: Short runway ({runway:.1f} months). Urgent capital required.")
+            warnings.append(f"[WARNING] HIGH RISK: Short runway ({runway:.1f} months). Urgent capital required.")
             
     # Evaluate Path to Profitability
     if break_even >= ResearchConfig.BREAK_EVEN_TOXIC or break_even == 999:
         # If they don't die immediately but have no path to profit
         if survival_multiplier > 0.6: 
             survival_multiplier = 0.70
-        warnings.append("⚠️ STRUCTURAL RISK: No realistic path to break-even identified.")
+        warnings.append("[WARNING] STRUCTURAL RISK: No realistic path to break-even identified.")
 
     # Apply the Gate
     final_opportunity_score = base_score * survival_multiplier
 
     # Generate standard warnings
     if evidence_count < ResearchConfig.WARN_IF_EVIDENCE_BELOW:
-        warnings.append(f"⚠️ Limited validation evidence ({evidence_count} sources).")
+        warnings.append(f"[WARNING] Limited validation evidence ({evidence_count} sources).")
     if competitor_count > 10:
-        warnings.append(f"⚠️ Highly competitive 'Red Ocean' market ({competitor_count} competitors).")
+        warnings.append(f"[WARNING] Highly competitive 'Red Ocean' market ({competitor_count} competitors).")
     if growth_pct < 0:
-        warnings.append(f"⚠️ Market is shrinking ({growth_pct:.1f}% YoY).")
+        warnings.append(f"[WARNING] Market is shrinking ({growth_pct:.1f}% YoY).")
 
     # Determine final grade
     if final_opportunity_score >= 85: grade, conf = "A (Gold Mine)", "High"

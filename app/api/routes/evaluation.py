@@ -41,7 +41,7 @@ def save_agent_output(agent_name: str, data: dict):
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     
-    logger.info(f"💾 Saved {agent_name} output to {filepath}")
+    logger.info(f"[SAVE] Saved {agent_name} output to {filepath}")
 
 
 # =========================================================
@@ -54,7 +54,7 @@ async def run_evaluation_background(job_id: str, normalized_data: dict):
     AI work and updates the JOBS dictionary when finished.
     """
     start_time = time.time()
-    logger.info(f"🚀 Job {job_id}: Starting Background Evaluation...")
+    logger.info(f"[LAUNCH] Job {job_id}: Starting Background Evaluation...")
 
     try:
         # Run the full LangGraph
@@ -79,7 +79,7 @@ async def run_evaluation_background(job_id: str, normalized_data: dict):
         
         duration = time.time() - start_time
         logger.info(f"\n{'='*60}")
-        logger.info(f"✅ Job {job_id}: Evaluation COMPLETED in {duration:.2f}s")
+        logger.info(f"[SUCCESS] Job {job_id}: Evaluation COMPLETED in {duration:.2f}s")
         logger.info(f"{'='*60}")
         
         # Update Job Status to Completed
@@ -89,7 +89,7 @@ async def run_evaluation_background(job_id: str, normalized_data: dict):
         }
 
     except Exception as e:
-        logger.error(f"❌ Job {job_id} Failed: {e}")
+        logger.error(f"[ERROR] Job {job_id} Failed: {e}")
         JOBS[job_id] = {
             "status": "failed",
             "error": str(e)
@@ -195,5 +195,5 @@ async def generate_reports_endpoint(report_data: Dict[str, Any]):
         )
         
     except Exception as e:
-        logger.error(f"❌ PDF Generation Failed: {e}")
+        logger.error(f"[ERROR] PDF Generation Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
