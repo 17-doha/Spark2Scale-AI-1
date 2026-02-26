@@ -8,7 +8,7 @@ from app.graph.evaluation_agent.helpers import (
     safe_score_numeric,
     parse_and_repair_json
 )
-from app.graph.evaluation_agent.tools import (
+from app.graph.evaluation_agent.tools.tools import (
     tech_stack_detective,
     tam_sam_verifier_tool,
     team_scoring_agent,

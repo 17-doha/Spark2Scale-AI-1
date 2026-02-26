@@ -4,7 +4,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.core.llm import get_llm
 from .state import AgentState
-from .tools import (
+from .tools.tools import (
     contradiction_check, 
     team_risk_check, 
     team_scoring_agent,
@@ -32,7 +32,7 @@ from .tools import (
     operations_risk_agent,
     operations_scoring_agent
 )
-from .prompts import (
+from .prompts.prompts import (
     PLANNER_PROMPT,
     CONTRADICTION_TEAM_PROMPT_TEMPLATE,
     VALUATION_RISK_TEAM_PROMPT_TEMPLATE,
