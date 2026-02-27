@@ -40,4 +40,3 @@ try:
     gemini_client = genai
 except Exception as e:
     print(f"Warning: Failed to initialize Gemini client: {e}")
-
