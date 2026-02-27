@@ -228,3 +228,4 @@ outputs/*
 
 .env
 second
+pytest.ini
