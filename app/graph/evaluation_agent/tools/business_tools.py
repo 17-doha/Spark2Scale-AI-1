@@ -42,27 +42,20 @@ RETRY_CONFIG = {
 # --- TOOLS & AGENTS ---
 
 def calculate_economics_with_judgment(gtm_data: dict) -> dict:
-    """
-    Calculates Unit Economics using WallStreetPrep & HBS formulas, 
-    then uses an LLM to render a verdict based on sector benchmarks.
-    NOTE: This function mixes Python Math (Calculations) with AI (Judgment).
-    """
-    
     logger.info("🧮 Calculating Unit Economics & Business Logic...")
 
-    # =========================================================
-    # 1. EXTRACT & CALCULATE RAW METRICS (The Math)
-    # =========================================================
-    
-    # A. Setup Variables
     econ = gtm_data.get("unit_economics", {}) or gtm_data.get("economics_inputs", {})
     context = gtm_data.get("context", {})
     strategy = gtm_data.get("strategy", {})
     
-    # Safe Float Conversion
+    # IMPROVED: Handle placeholder strings like "string"
     def safe_float(val):
-        try: return float(val)
-        except: return 0.0
+        try: 
+            if isinstance(val, (int, float)): return float(val)
+            clean_val = str(val).replace('$', '').replace(',', '').strip()
+            return float(clean_val)
+        except (ValueError, TypeError): 
+            return 0.0
 
     burn = safe_float(econ.get("burn_rate"))
     total_users = safe_float(econ.get("total_users"))
@@ -70,7 +63,7 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
     revenue = safe_float(econ.get("revenue") or econ.get("early_revenue"))
     price = safe_float(econ.get("price_point"))
     
-    # B. Calculate "New Users" (Flow Metric)
+    # Calculate months_alive ONLY ONCE - do not hardcode 6 later
     founded_str = context.get("founded_date")
     try:
         f_date = datetime.strptime(founded_str, "%Y-%m-%d") if founded_str else datetime.now()
@@ -78,35 +71,35 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
     except:
         months_alive = 6
     
-    avg_new_users_mo = total_users / months_alive
+    avg_new_users_mo = total_users / months_alive if months_alive > 0 else 0
 
-    # C. Calculate Metrics (Based on Standard Formulas)
     metrics = {
         "monthly_burn": f"${int(burn)}",
         "price_point": f"${int(price)}",
         "revenue": f"${int(revenue)}"
     }
 
-    # --- CAC (Source: WallStreetPrep - Σ S&M / New Customers) ---
-    # Proxy: We assume 30% of Burn is S&M if not specified
+    # CAC Calculation using the actual variables
     est_s_m_spend = burn * 0.30
-    months_alive = 6 # Default
-    avg_new_users_mo = total_users / months_alive
     
-    if avg_new_users_mo > 0: metrics["implied_cac"] = round(est_s_m_spend / avg_new_users_mo, 2)
-    else: metrics["implied_cac"] = "N/A"
+    # Use 0.0 instead of "N/A" to keep types consistent
+    if avg_new_users_mo > 0: 
+        metrics["implied_cac"] = round(est_s_m_spend / avg_new_users_mo, 2)
+    else: 
+        metrics["implied_cac"] = 0.0
     
-    if total_users > 0: metrics["conversion_rate"] = round((paid_users / total_users) * 100, 2)
-    else: metrics["conversion_rate"] = 0
+    metrics["conversion_rate"] = round((paid_users / total_users) * 100, 2) if total_users > 0 else 0.0
 
-    if isinstance(metrics["implied_cac"], (int, float)) and price > 0:
+    # SAFE comparison: price is guaranteed to be float by safe_float
+    if price > 0 and metrics["implied_cac"] > 0:
         metrics["payback_months"] = round(metrics["implied_cac"] / price, 1)
-    else: metrics["payback_months"] = "Unknown"
+    else: 
+        metrics["payback_months"] = 0.0
 
     # AI JUDGE
-    llm = get_llm(temperature=0, provider="groq")
-    chain = PromptTemplate.from_template(ECONOMIC_JUDGEMENT_PROMPT) | llm | StrOutputParser()
     try:
+        llm = get_llm(temperature=0, provider="groq")
+        chain = PromptTemplate.from_template(ECONOMIC_JUDGEMENT_PROMPT) | llm | StrOutputParser()
         raw_judge = chain.invoke({
             "sector_info": strategy.get("icp_description", "Tech"),
             "stage": context.get("stage", "Pre-Seed"),
@@ -122,7 +115,8 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
         })
         metrics["ai_analysis"] = parse_and_repair_json(raw_judge)
     except Exception as e:
-        metrics["ai_analysis"] = {"error": str(e)}
+        logger.error(f"AI Judgment Failed: {e}") # This will catch your 401 error
+        metrics["ai_analysis"] = {"error": "AI Service Unavailable - Check API Key"}
 
     return metrics
 async def evaluate_business_model_with_context(business_data: dict) -> dict:
