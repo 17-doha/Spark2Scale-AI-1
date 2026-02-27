@@ -23,6 +23,8 @@ class Config:
     LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
     LANGCHAIN_PROJECT_NAME = os.getenv("LANGCHAIN_PROJECT_NAME", "spark2scale")
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 
     

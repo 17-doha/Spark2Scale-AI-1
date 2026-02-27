@@ -12,6 +12,7 @@ from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
 from app.core.logger import get_logger
+from app.core.supabase_client import supabase
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -40,6 +41,7 @@ class PPTGenerationResponse(BaseModel):
     title: Optional[str]
     iterations: Optional[int]
     message: Optional[str]
+    json_response: Optional[dict] = None
 
 async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPTGenerationResponse":
     """Helper to execute graph and store in Supabase."""
@@ -52,12 +54,28 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         output_path = os.path.join("output", f"{startup_id}.pptx")
         storage_path = await generate_pptx_file(final_draft, output_path)
 
+        if supabase:
+            try:
+                # Upload PPT to Supabase Storage could be done here if a bucket is provided
+                doc_data = {
+                    "startup_id": startup_id,
+                    "document_name": final_draft.title,
+                    "type": "pitch_deck",
+                    "current_path": storage_path,
+                    "json_response": final_draft.model_dump()
+                }
+                supabase.table("documents").insert(doc_data).execute()
+                logger.info("Successfully pushed PPT metadata & json_response to Supabase documents table")
+            except Exception as e:
+                logger.error(f"Failed to push to Supabase documents table: {e}")
+
         return PPTGenerationResponse(
             status="success",
             ppt_path=storage_path,
             title=final_draft.title,
             iterations=final_state.get("iteration", 0),
-            message="Presentation generated and uploaded to Supabase successfully"
+            message="Presentation generated and uploaded to Supabase successfully",
+            json_response=final_draft.model_dump()
         )
     except Exception as e:
         logger.error(f"Error in PPT generation: {str(e)}")
