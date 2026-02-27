@@ -10,7 +10,7 @@ from playwright.async_api import async_playwright
 from json_repair import repair_json
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.graph.evaluation_agent.prompts.prompts import NORMALIZER_PROMPT
+from app.graph.evaluation_agent.prompts.general_prompts import NORMALIZER_PROMPT
 try:
     from langchain_community.tools import DuckDuckGoSearchRun # <--- ADD THIS (Ensure pip install duckduckgo-search)
 except ImportError:

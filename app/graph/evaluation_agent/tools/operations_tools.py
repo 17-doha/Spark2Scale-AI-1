@@ -16,7 +16,7 @@ from groq import APIStatusError as GroqAPIStatusError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Relative Imports
-from ..prompts.prompts import (
+from ..prompts.operations_prompts import (
     OPERATIONS_SCORING_AGENT_PROMPT
 )
 from ..helpers import (
@@ -38,30 +38,6 @@ RETRY_CONFIG = {
 }
 
 # --- TOOLS & AGENTS ---
-@retry(**RETRY_CONFIG)
-async def get_funding_benchmarks(location: str, stage: str, sector: str) -> str:
-    logger.info(f"💰 Searching Benchmarks for {stage} {sector} in {location}...")
-    url = "https://google.serper.dev/search"
-    headers = {'X-API-KEY': os.environ.get("SERPER_API_KEY"), 'Content-Type': 'application/json'}
-    current_year = datetime.now().year
-    
-    queries = [
-        f"average {stage} {sector} startup round size {location} {current_year}",
-        f"average {stage} {sector} startup valuation {location} {current_year}"
-    ]
-    results = []
-    
-    async with aiohttp.ClientSession() as session:
-        for q in queries:
-            try:
-                async with session.post(url, headers=headers, json={"q": q}) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        for r in data.get('organic', [])[:2]:
-                            results.append(f"SOURCE: {r.get('title')} - {r.get('snippet')}")
-            except Exception: pass
-            
-    return "\n".join(results) if results else "No specific benchmarks found."
 
 @retry(**RETRY_CONFIG)
 async def operations_risk_agent(operations_data: dict, benchmarks: str, template: str) -> str:

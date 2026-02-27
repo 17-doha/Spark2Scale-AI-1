@@ -15,7 +15,7 @@ from groq import APIStatusError as GroqAPIStatusError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Relative Imports
-from ..prompts.prompts import (
+from ..prompts.problem_prompts import (
     PROBLEM_SCORING_AGENT_PROMPT
   
 )
@@ -86,7 +86,16 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
         results_report["competitor_search"] = sol
 
     return results_report
-
+@retry(**RETRY_CONFIG)
+async def loaded_risk_check_with_search(problem_data: dict, search_results: dict, agent_prompt: str) -> str:
+    async with concurrency_limiter:
+        logger.info("🛡️ Problem Risk Check...")
+        llm = get_llm(temperature=0, provider="groq")
+        chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
+        return await chain.ainvoke({
+            "internal_json": json.dumps(problem_data, indent=2),
+            "external_search_json": json.dumps(search_results, indent=2)
+        })
 @retry(**RETRY_CONFIG)
 async def problem_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:

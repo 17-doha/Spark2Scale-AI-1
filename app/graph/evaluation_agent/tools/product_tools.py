@@ -1,6 +1,7 @@
 import json
 import asyncio
 from datetime import datetime
+import builtwith
 
 
 
@@ -15,7 +16,7 @@ from groq import APIStatusError as GroqAPIStatusError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Relative Imports
-from ..prompts.prompts import (
+from ..prompts.product_prompts import (
     PRODUCT_SCORING_AGENT_PROMPT,
     
 )
@@ -51,6 +52,22 @@ async def tech_stack_detective(url: str):
         return {"technologies_found": detected, "status": "Success"}
     except Exception as e:
         return {"error": str(e)}
+    
+async def local_dependency_detective(tech_stack: str, acquisition_channel: str, product_desc: str):
+    async with concurrency_limiter:
+        logger.info("🕵️ Dependency Detective...")
+        llm = get_llm(temperature=0, provider="groq")
+        prompt_text = f"""
+        Analyze platform risks for Product: {product_desc}, Tech: {tech_stack}, Channel: {acquisition_channel}.
+        Respond ONLY JSON: {{ "risk_level": "High/Medium/Low", "red_flags": ["..."], "search_query_needed": "..." }}
+        """
+        try:
+            chain = StrOutputParser()
+            resp_text = await llm.ainvoke(prompt_text)
+            analysis = parse_and_repair_json(resp_text)
+            return {"tool": "Dependency_Detective", "risk_level": analysis.get("risk_level"), "analysis": str(analysis)}
+        except Exception as e:
+            return {"tool": "Dependency_Detective", "error": str(e)}
 
 # @retry(**RETRY_CONFIG)
 # async def analyze_visuals_with_langchain(company_name, website_url, prompt_template):

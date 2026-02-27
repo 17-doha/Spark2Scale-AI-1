@@ -14,7 +14,7 @@ from groq import APIStatusError as GroqAPIStatusError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Relative Imports
-from ..prompts.prompts import (
+from ..prompts.gtm_prompts import (
     SCORING_GTM_PRE_SEED_PROMPT,
     SCORING_GTM_SEED_PROMPT
 )

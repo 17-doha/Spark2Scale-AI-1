@@ -13,9 +13,11 @@ from groq import APIStatusError as GroqAPIStatusError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Relative Imports
-from ..prompts.prompts import (
+from ..prompts.general_prompts import (
     BUSINESS_MODEL_JUDGE_PROMPT,
-    ECONOMIC_JUDGEMENT_PROMPT,
+    ECONOMIC_JUDGEMENT_PROMPT
+)
+from ..prompts.business_prompts import (
     SCORING_BIZ_PRE_SEED_PROMPT,
     SCORING_BIZ_SEED_PROMPT
 )

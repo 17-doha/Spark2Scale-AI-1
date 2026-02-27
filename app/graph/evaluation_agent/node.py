@@ -37,7 +37,7 @@ from .tools.team_tools import (
     team_risk_check, 
     team_scoring_agent
 )
-from .tools.tools import contradiction_check  
+from .tools.general_tools import contradiction_check  
 from .tools.traction_tools import (
     traction_risk_agent, 
     traction_scoring_agent
@@ -48,35 +48,52 @@ from .tools.vision_tools import (
     analyze_category_future, 
     get_funding_benchmarks
 )
-from .prompts.prompts import (
+from .prompts.general_prompts import (
     PLANNER_PROMPT,
+    FINAL_SYNTHESIS_PROMPT
+)
+from .prompts.team_prompts import (
     CONTRADICTION_TEAM_PROMPT_TEMPLATE,
-    VALUATION_RISK_TEAM_PROMPT_TEMPLATE,
+    VALUATION_RISK_TEAM_PROMPT_TEMPLATE
+)
+from .prompts.problem_prompts import (
     CONTRADICTION_PROBLEM_PROMPT_TEMPLATE,
-    VALUATION_RISK_PROBLEM_PROMPT_TEMPLATE,
-    CONTRADICTION_PRODUCT_PROMPT_TEMPLATE, 
-    VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE,
-    VISUAL_VERIFICATION_PROMPT,
-    CONTRADICTION_MARKET_PROMPT_TEMPLATE,
+    VALUATION_RISK_PROBLEM_PROMPT_TEMPLATE
+)
+from .prompts.product_prompts import (
+    CONTRADICTION_PRODUCT_PROMPT_TEMPLATE,
+    VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE
+)
+from .prompts.market_prompts import (
+    CONTRADICTION_MARKET_PROMPT_TEMPLATE
+)
+from .prompts.operations_prompts import (
+    CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE,
+    VALUATION_RISK_OPS_PRE_SEED_PROMPT,
+    VALUATION_RISK_OPS_SEED_PROMPT   
+)
+from .prompts.traction_prompts import (
     CONTRADICTION_PRE_SEED_TRACTION_AGENT_PROMPT,
     CONTRADICTION_SEED_TRACTION_AGENT_PROMPT,
     VALUATION_RISK_TRACTION_PRE_SEED_PROMPT,
-    VALUATION_RISK_TRACTION_SEED_PROMPT,
-    CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT,
+    VALUATION_RISK_TRACTION_SEED_PROMPT
+)
+from .prompts.gtm_prompts import (
+    CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT,    
     CONTRADICTION_SEED_GTM_AGENT_PROMPT,
     VALUATION_RISK_GTM_PRE_SEED_PROMPT,
-    VALUATION_RISK_GTM_SEED_PROMPT,
-    CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT,
-    CONTRADICTION_SEED_BIZ_MODEL_PROMPT,
-    RISK_BIZ_MODEL_PRE_SEED_PROMPT,
-    RISK_BIZ_MODEL_SEED_PROMPT,
-    CONTRADICTION_VISION_PROMPT_TEMPLATE,
+    VALUATION_RISK_GTM_SEED_PROMPT
+)
+from .prompts.vision_prompts import (
     VALUATION_RISK_VISION_PRE_SEED_PROMPT,
     VALUATION_RISK_VISION_SEED_PROMPT,
-    CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE,
-    VALUATION_RISK_OPS_PRE_SEED_PROMPT,
-    VALUATION_RISK_OPS_SEED_PROMPT,
-    FINAL_SYNTHESIS_PROMPT
+    CONTRADICTION_VISION_PROMPT_TEMPLATE
+)
+from .prompts.business_prompts import (
+    RISK_BIZ_MODEL_PRE_SEED_PROMPT,
+    RISK_BIZ_MODEL_SEED_PROMPT,
+    CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT,
+    CONTRADICTION_SEED_BIZ_MODEL_PROMPT
 )
 from .helpers import (
     extract_team_data, 
