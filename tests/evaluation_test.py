@@ -6,17 +6,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from app.graph.evaluation_agent.helpers import (
     extract_team_data,
     safe_score_numeric,
-    parse_and_repair_json
-)
-from app.graph.evaluation_agent.tools import (
-    tech_stack_detective,
-    tam_sam_verifier_tool,
-    team_scoring_agent,
-    calculate_economics_with_judgment
-)
-
-# --- Additional Imports Needed ---
-from app.graph.evaluation_agent.helpers import (
+    parse_and_repair_json,
     extract_problem_data,
     extract_market_data,
     extract_traction_data,
@@ -24,13 +14,48 @@ from app.graph.evaluation_agent.helpers import (
     generate_queries,
     get_market_signals_serper
 )
-from app.graph.evaluation_agent.tools import (
-    contradiction_check,
-    verify_problem_claims,
-    problem_scoring_agent,
-    regulation_trend_radar_tool,
-    market_scoring_agent,
+from app.graph.evaluation_agent.tools.business_tools import (
+    business_risk_agent,
+    business_scoring_agent,
     evaluate_business_model_with_context,
+    calculate_economics_with_judgment
+)
+from app.graph.evaluation_agent.tools.gtm_tools import (
+    gtm_risk_agent, 
+    gtm_scoring_agent
+)
+from app.graph.evaluation_agent.tools.market_tools import (
+    market_scoring_agent, 
+    tam_sam_verifier_tool, 
+    regulation_trend_radar_tool
+)
+from app.graph.evaluation_agent.tools.operations_tools import (
+    operations_risk_agent, 
+    operations_scoring_agent
+)
+from app.graph.evaluation_agent.tools.problem_tools import (
+    problem_scoring_agent, 
+    verify_problem_claims, 
+    loaded_risk_check_with_search
+)
+from app.graph.evaluation_agent.tools.product_tools import (
+    product_scoring_agent, 
+    tech_stack_detective, 
+    local_dependency_detective
+)
+from  app.graph.evaluation_agent.tools.team_tools import (
+    team_risk_check, 
+    team_scoring_agent
+)
+from app.graph.evaluation_agent.tools.general_tools import contradiction_check  
+from app.graph.evaluation_agent.tools.traction_tools import (
+    traction_risk_agent, 
+    traction_scoring_agent
+)
+from app.graph.evaluation_agent.tools.vision_tools import (
+    vision_risk_agent, 
+    vision_scoring_agent, 
+    analyze_category_future, 
     get_funding_benchmarks
 )
 
@@ -110,7 +135,7 @@ def test_parse_and_repair_json():
 # ==========================================
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.builtwith.parse")
+@patch("app.graph.evaluation_agent.tools.product_tools.builtwith.parse")
 async def test_tech_stack_detective(mock_builtwith_parse):
     """Test the tech stack detective without actually hitting the network."""
     # Arrange: Mock the synchronous builtwith response
@@ -131,8 +156,8 @@ async def test_tech_stack_detective_no_url():
     assert result["verdict"] == "No URL"
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.os.environ.get")
-@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+@patch("app.graph.evaluation_agent.tools.market_tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.market_tools.aiohttp.ClientSession.post")
 async def test_tam_sam_verifier_tool(mock_post, mock_env):
     """Test the TAM Search tool by mocking the Serper API network call."""
     # Arrange
@@ -157,7 +182,7 @@ async def test_tam_sam_verifier_tool(mock_post, mock_env):
     assert "The market is $10B." in result["search_evidence"]
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.team_tools.get_llm")
 async def test_team_scoring_agent(mock_get_llm):
     """Test the LangChain scoring agent by patching the chain's ainvoke method."""
     # Arrange
@@ -165,7 +190,7 @@ async def test_team_scoring_agent(mock_get_llm):
     mock_get_llm.return_value = mock_llm_instance
     
     # Instead of deep-mocking the entire LCEL chain, we patch the final parser's invoke
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_chain_ainvoke:
+    with patch("app.graph.evaluation_agent.tools.team_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_chain_ainvoke:
         # Mock the exact string the LLM would theoretically return
         mock_chain_ainvoke.return_value = '{"score": "4/5", "explanation": "Great team"}'
         
@@ -184,7 +209,7 @@ async def test_team_scoring_agent(mock_get_llm):
         assert result["explanation"] == "Great team"
         assert result["score_numeric"] == 80  # 4/5 * 20
 
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.business_tools.get_llm")
 def test_calculate_economics_with_judgment(mock_get_llm):
     """Test the synchronous logic mixed with AI judgment for Unit Economics."""
     # Arrange
@@ -201,7 +226,7 @@ def test_calculate_economics_with_judgment(mock_get_llm):
     }
     
     # Arrange: Mock the synchronous LangChain invocation
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.invoke") as mock_chain_invoke:
+    with patch("app.graph.evaluation_agent.tools.business_tools.StrOutputParser.invoke") as mock_chain_invoke:
         mock_chain_invoke.return_value = '{"verdict": "Healthy metrics", "score": "4/5"}'
         
         # Act
@@ -216,10 +241,10 @@ def test_calculate_economics_with_judgment(mock_get_llm):
         assert result["ai_analysis"]["verdict"] == "Healthy metrics"
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.general_tools.get_llm")
 async def test_contradiction_check(mock_get_llm):
     """Test standard StrOutputParser risk agents."""
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+    with patch("app.graph.evaluation_agent.tools.general_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
         mock_invoke.return_value = "No contradictions found."
         
         result = await contradiction_check({"data": "test"}, "Find contradictions in {json_data}")
@@ -230,9 +255,9 @@ async def test_contradiction_check(mock_get_llm):
 
         
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
-@patch("app.graph.evaluation_agent.tools.os.environ.get")
-@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+@patch("app.graph.evaluation_agent.tools.problem_tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.problem_tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.problem_tools.aiohttp.ClientSession.post")
 async def test_verify_problem_claims(mock_post, mock_env, mock_get_llm):
     """Test complex tool involving LLM query generation + Parallel Async Searching."""
     mock_env.return_value = "fake_api_key"
@@ -257,10 +282,10 @@ async def test_verify_problem_claims(mock_post, mock_env, mock_get_llm):
     assert result["pain_validation_search"][0]["title"] == "Hit"
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.problem_tools.get_llm")
 async def test_problem_scoring_agent(mock_get_llm):
     """Test scoring agent repairing JSON and converting string score to numeric."""
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+    with patch("app.graph.evaluation_agent.tools.problem_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
         # Mocking an LLM returning Markdown JSON
         mock_invoke.return_value = "```json\n{\"score\": \"3.5/5\", \"explanation\": \"Good\"}\n```"
         
@@ -274,8 +299,8 @@ async def test_problem_scoring_agent(mock_get_llm):
         assert result["score_numeric"] == 70 # 3.5 * 20
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.os.environ.get")
-@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+@patch("app.graph.evaluation_agent.tools.market_tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.market_tools.aiohttp.ClientSession.post")
 async def test_regulation_trend_radar_tool(mock_post, mock_env):
     """Test dual-query radar search for regulations and trends."""
     mock_env.return_value = "fake_api_key"
@@ -292,10 +317,10 @@ async def test_regulation_trend_radar_tool(mock_post, mock_env):
     assert "Reg hit 1" in result["findings"]["trend_evidence"]
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.business_tools.get_llm")
 async def test_evaluate_business_model_with_context(mock_get_llm):
     """Test AI business math integration."""
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+    with patch("app.graph.evaluation_agent.tools.business_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
         mock_invoke.return_value = '{"verdict": "Solid Margin"}'
         
         data = {
@@ -312,8 +337,8 @@ async def test_evaluate_business_model_with_context(mock_get_llm):
         assert result["ai_analysis"]["verdict"] == "Solid Margin"
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.os.environ.get")
-@patch("app.graph.evaluation_agent.tools.aiohttp.ClientSession.post")
+@patch("app.graph.evaluation_agent.tools.vision_tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.vision_tools.aiohttp.ClientSession.post")
 async def test_get_funding_benchmarks(mock_post, mock_env):
     """Test fallback logic for empty benchmarks."""
     mock_env.return_value = "fake_api_key"
@@ -329,10 +354,10 @@ async def test_get_funding_benchmarks(mock_post, mock_env):
     assert result == "No specific benchmarks found."
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.market_tools.get_llm")
 async def test_market_scoring_agent_rubric_logic(mock_get_llm):
     """Test that market scoring correctly maps numeric scores to rubrics."""
-    with patch("app.graph.evaluation_agent.tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+    with patch("app.graph.evaluation_agent.tools.market_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
         # Score of 5/5 maps to 100, which maps to Blue Ocean (100 // 20 = 5)
         mock_invoke.return_value = '{"score": "5/5"}'
         
@@ -428,3 +453,42 @@ async def test_get_market_signals_serper(mock_post, mock_env):
     
     assert "SOURCE" in result
     assert "Market is booming." in result
+
+
+# ==========================================
+# T5-3B MODEL WRAPPER TESTS
+# ==========================================
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers._get_t5_client")
+async def test_fetch_t5_deep_insight_success(mock_get_client):
+    """T5 wrapper returns model output when client is available."""
+    from unittest.mock import MagicMock
+    mock_client = MagicMock()
+    mock_client.predict.return_value = "Strong team, clear problem, good traction."
+    mock_get_client.return_value = mock_client
+
+    user_data = {
+        "startup_evaluation": {
+            "company_snapshot": {"company_name": "TestCo", "current_stage": "Pre-Seed"},
+            "problem_definition": {"problem_statement": "Manual QA is slow."}
+        }
+    }
+
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight(user_data)
+
+    assert result == "Strong team, clear problem, good traction."
+    mock_client.predict.assert_called_once()
+    call_kwargs = mock_client.predict.call_args.kwargs
+    assert "TestCo" in call_kwargs["startup_idea"]
+    assert call_kwargs["api_name"] == "/evaluate_idea"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers._get_t5_client", return_value=None)
+async def test_fetch_t5_deep_insight_no_client(mock_get_client):
+    """T5 wrapper returns a safe fallback when the client cannot be created."""
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight({})
+    assert "unavailable" in result.lower()

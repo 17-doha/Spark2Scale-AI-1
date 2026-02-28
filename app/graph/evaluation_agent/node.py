@@ -107,7 +107,8 @@ from .helpers import (
     extract_business_pre_seed,
     extract_business_seed,
     extract_vision_data,
-    extract_operations_data
+    extract_operations_data,
+    fetch_t5_deep_insight
 )
 from .schema import Plan
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -531,6 +532,19 @@ async def operations_node(state: AgentState):
     })
     return {"operations_report": score}
 
+async def t5_insight_node(state: AgentState):
+    """
+    Dedicated node for the fine-tuned T5-3B model.
+    """
+    user_data = state.get("user_data", {})
+    logger.info("🧠 Triggering T5-3B Evaluation Model (Background Task)...")
+    
+    insight_text = await fetch_t5_deep_insight(user_data)
+    
+    # UPDATE THIS LINE: Print the actual text it generated (or the error message)
+    logger.info(f"🧠 T5 Insight Generation Complete. Output: {insight_text}")
+    
+    return {"t5_deep_insight": insight_text}
 
 def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, str, dict]:
     # 1. Normalize 0-100 to 0-5
@@ -585,6 +599,10 @@ async def final_node(state: AgentState):
         RISKS: {json.dumps(reds)}
         ------------------------------------------------
         """
+
+    # Inject T5-3B deep insight so Groq can synthesize it
+    t5_insight = state.get("t5_deep_insight", "No T5 insight available.")
+    agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
 
     # 4. Generate with LLM
     llm = get_llm(temperature=0, provider="groq") 
