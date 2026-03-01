@@ -51,7 +51,8 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         if not final_draft:
             raise HTTPException(status_code=500, detail="Draft generation failed.")
 
-        output_path = os.path.join("output", f"{startup_id}.pptx")
+        output_dir = os.path.join("output", "ppt_generation", f"ppt{startup_id}")
+        output_path = os.path.join(output_dir, f"{startup_id}.pptx")
         storage_path = await generate_pptx_file(final_draft, output_path)
 
         if supabase:
