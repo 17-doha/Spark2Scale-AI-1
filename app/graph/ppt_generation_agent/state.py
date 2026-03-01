@@ -15,3 +15,4 @@ class PPTGenerationState(TypedDict):
     critique: Optional[Critique]
     iteration: int
     ppt_path: Optional[str]
+    mode: Optional[str] # "create" or "edit"

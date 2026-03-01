@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
+from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
 
@@ -94,6 +95,7 @@ async def generate_ppt(input_data: PPTInput):
         "critique": None,
         "iteration": 0,
         "ppt_path": None,
+        "mode": "create"
     }
     return await run_ppt_generation(initial_state, input_data.startup_id)
 
@@ -133,6 +135,52 @@ async def generate_ppt_from_files(
             "critique": None,
             "iteration": 0,
             "ppt_path": None,
+            "mode": "create"
+        }
+
+        return await run_ppt_generation(initial_state, startup_id)
+
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+
+@router.post("/edit", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+async def edit_ppt(
+    startup_id: str = Form(..., description="The UUID of the startup"),
+    ppt_file: UploadFile = File(..., description="The existing PPTX file to edit"),
+    logo: Optional[UploadFile] = File(None),
+    use_default_colors: bool = Form(True)
+):
+    """Refine an existing PPTX file to match pitch standards."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        # Save uploaded PPTX
+        pptx_path = os.path.join(temp_dir, ppt_file.filename)
+        with open(pptx_path, "wb") as f:
+            f.write(await ppt_file.read())
+        
+        # Extract text
+        extracted_text = extract_text_from_pptx(pptx_path)
+        if not extracted_text:
+            raise HTTPException(status_code=400, detail="Could not extract text from the provided PPTX.")
+
+        # Handle logo if provided
+        logo_path = None
+        if logo:
+            logo_path = os.path.join(temp_dir, logo.filename)
+            with open(logo_path, "wb") as f:
+                f.write(await logo.read())
+
+        initial_state: PPTGenerationState = {
+            "research_data": extracted_text,
+            "logo_path": logo_path,
+            "color_palette": None,
+            "use_default_colors": use_default_colors,
+            "draft": None,
+            "critique": None,
+            "iteration": 0,
+            "ppt_path": None,
+            "mode": "edit"
         }
 
         return await run_ppt_generation(initial_state, startup_id)
