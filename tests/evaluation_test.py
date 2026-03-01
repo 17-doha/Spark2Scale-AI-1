@@ -460,7 +460,7 @@ async def test_get_market_signals_serper(mock_post, mock_env):
 # ==========================================
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.helpers._get_t5_client")
+@patch("app.core.llm._get_t5_client")
 async def test_fetch_t5_deep_insight_success(mock_get_client):
     """T5 wrapper returns model output when client is available."""
     from unittest.mock import MagicMock
@@ -486,7 +486,7 @@ async def test_fetch_t5_deep_insight_success(mock_get_client):
 
 
 @pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.helpers._get_t5_client", return_value=None)
+@patch("app.core.llm._get_t5_client", return_value=None)
 async def test_fetch_t5_deep_insight_no_client(mock_get_client):
     """T5 wrapper returns a safe fallback when the client cannot be created."""
     from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight

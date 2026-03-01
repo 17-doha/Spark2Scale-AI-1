@@ -15,19 +15,12 @@ try:
     from langchain_community.tools import DuckDuckGoSearchRun
 except ImportError:
     DuckDuckGoSearchRun = None
-try:
-    from gradio_client import Client as GradioClient
-except ImportError:
-    GradioClient = None
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# T5-3B GRADIO CLIENT  (lazy — connected on first real call, not at startup)
-# ---------------------------------------------------------------------------
-_T5_SPACE_URL = "Dohahemdann/Spark2Scale-Space"
-_t5_client = None        # populated on first fetch_t5_deep_insight() call
-t5_client   = None       # alias kept for test-script / unit-test patching
+# T5 client lives in app.core.llm — imported here so other helpers can reach it
+from app.core.llm import get_t5_insight, _get_t5_client  # noqa: E402
+t5_client = None   # kept as a module-level alias for backward-compat with tests
 
 TARGET_SCHEMA = {
   "startup_evaluation": {
@@ -805,46 +798,15 @@ async def normalize_input_data(raw_input: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# T5-3B ASYNC WRAPPER  (lazy-connect)
+# T5-3B ASYNC WRAPPER  — delegates to app.core.llm.get_t5_insight
 # ---------------------------------------------------------------------------
-
-def _get_t5_client():
-    """
-    Returns a live GradioClient, creating it the first time it is needed.
-    This avoids a permanent failure when the HF Space is asleep at server startup.
-    """
-    global _t5_client, t5_client  # keep both aliases in sync
-    if _t5_client is not None:
-        return _t5_client
-    if GradioClient is None:
-        return None
-    try:
-        hf_token = os.getenv("HF_TOKEN") or ""
-        logger.info("⏳ Connecting to T5-3B Gradio Space (lazy init)...")
-        _t5_client = GradioClient(_T5_SPACE_URL, token=hf_token)
-        t5_client  = _t5_client   # keep module alias in sync for tests
-        logger.info("✅ T5-3B Gradio client connected to %s", _T5_SPACE_URL)
-    except Exception as e:
-        logger.warning("⚠️  T5 Gradio client failed to connect: %s", e)
-        _t5_client = None
-        t5_client  = None
-    return _t5_client
-
 
 async def fetch_t5_deep_insight(user_data: dict) -> str:
     """
-    Calls the fine-tuned T5-3B model hosted on Hugging Face Spaces and returns
-    a qualitative text analysis of the startup.
-
-    Uses a lazy-connect strategy: the Gradio client is created on first call,
-    so a sleeping Space at server startup does NOT kill T5 for the entire session.
-    The blocking predict() call is offloaded to a background thread via
-    asyncio.to_thread so the event loop stays free.
+    Convenience wrapper used by t5_insight_node.
+    Builds a plain-text prompt from the startup state dict, then calls
+    the canonical get_t5_insight() from app.core.llm.
     """
-    client = await asyncio.to_thread(_get_t5_client)  # connect in thread too
-    if client is None:
-        return "T5 Model unavailable (gradio_client not installed or Space unreachable)."
-
     snapshot = user_data.get("startup_evaluation", {}).get("company_snapshot", {})
     problem  = user_data.get("startup_evaluation", {}).get("problem_definition", {})
 
@@ -854,16 +816,7 @@ async def fetch_t5_deep_insight(user_data: dict) -> str:
         f"Stage: {snapshot.get('current_stage', 'Unknown')}. "
         f"Problem: {problem.get('problem_statement', 'Not provided')}"
     )
-
     logger.info("🧠 Sending prompt to T5-3B model via Gradio...")
-    try:
-        result = await asyncio.to_thread(
-            client.predict,
-            startup_idea=prompt,
-            api_name="/evaluate_idea"
-        )
-        logger.info("🧠 T5-3B response received.")
-        return str(result)
-    except Exception as e:
-        logger.error("T5 Insight failed: %s", e)
-        return f"T5 Insight failed: {str(e)}"
+    result = await get_t5_insight(prompt)
+    logger.info("🧠 T5-3B response received.")
+    return result

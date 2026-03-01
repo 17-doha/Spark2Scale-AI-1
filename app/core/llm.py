@@ -1,10 +1,15 @@
 import os
+import asyncio
 import itertools
 import threading
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.chat_models import ChatOllama
 from langchain_groq import ChatGroq  
 from app.core.config import Config
+try:
+    from gradio_client import Client as GradioClient
+except ImportError:
+    GradioClient = None
 
 # =========================================================
 # GROQ API KEY ROTATION (Round-Robin across multiple keys)
@@ -76,3 +81,63 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
         convert_system_message_to_human=True,
         request_timeout=60  
     )
+
+
+# =========================================================
+# T5-3B  (Hugging Face Space via Gradio — lazy-connect)
+# =========================================================
+_T5_SPACE_URL = "Dohahemdann/Spark2Scale-Space"
+_t5_gradio_client = None
+_t5_client_lock = threading.Lock()
+
+def _get_t5_client():
+    """
+    Returns a live GradioClient, creating it on first call.
+    Thread-safe; reuses the same connection across all requests.
+    """
+    global _t5_gradio_client
+    if _t5_gradio_client is not None:
+        return _t5_gradio_client
+    if GradioClient is None:
+        return None
+    with _t5_client_lock:
+        # Double-checked locking
+        if _t5_gradio_client is not None:
+            return _t5_gradio_client
+        try:
+            hf_token = os.getenv("HF_TOKEN") or ""
+            _t5_gradio_client = GradioClient(_T5_SPACE_URL, token=hf_token)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("T5 Gradio client failed: %s", e)
+            _t5_gradio_client = None
+    return _t5_gradio_client
+
+
+async def get_t5_insight(prompt: str) -> str:
+    """
+    Calls the fine-tuned T5-3B model on Hugging Face Spaces.
+
+    Available to **any** agent via::
+
+        from app.core.llm import get_t5_insight
+        result = await get_t5_insight("Evaluate this startup ...")
+
+    The blocking Gradio predict() call runs in a background thread so the
+    async event loop stays free for Groq / search tasks running in parallel.
+
+    Returns:
+        str: Raw text from the T5 model, or a fallback message on failure.
+    """
+    client = await asyncio.to_thread(_get_t5_client)
+    if client is None:
+        return "T5 Model unavailable (gradio_client not installed or Space unreachable)."
+    try:
+        result = await asyncio.to_thread(
+            client.predict,
+            startup_idea=prompt,
+            api_name="/evaluate_idea"
+        )
+        return str(result)
+    except Exception as e:
+        return f"T5 Insight failed: {str(e)}"

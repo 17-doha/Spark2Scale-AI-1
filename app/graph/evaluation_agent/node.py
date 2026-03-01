@@ -2,7 +2,7 @@ import asyncio
 import json
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from app.core.llm import get_llm
+from app.core.llm import get_llm, get_t5_insight
 from .state import AgentState
 from .tools.business_tools import (
     business_risk_agent,
@@ -108,7 +108,6 @@ from .helpers import (
     extract_business_seed,
     extract_vision_data,
     extract_operations_data,
-    fetch_t5_deep_insight
 )
 from .schema import Plan
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -534,16 +533,23 @@ async def operations_node(state: AgentState):
 
 async def t5_insight_node(state: AgentState):
     """
-    Dedicated node for the fine-tuned T5-3B model.
+    Calls the T5-3B model via app.core.llm.get_t5_insight.
+    Runs in parallel with all other agents during the fan-out phase.
     """
-    user_data = state.get("user_data", {})
+    startup_eval = state.get("user_data", {}).get("startup_evaluation", {})
+    snapshot = startup_eval.get("company_snapshot", {})
+    problem  = startup_eval.get("problem_definition", {})
+
+    prompt = (
+        f"Evaluate the following startup context: "
+        f"Company: {snapshot.get('company_name', 'Unknown')}, "
+        f"Stage: {snapshot.get('current_stage', 'Unknown')}. "
+        f"Problem: {problem.get('problem_statement', 'Not provided')}"
+    )
+
     logger.info("🧠 Triggering T5-3B Evaluation Model (Background Task)...")
-    
-    insight_text = await fetch_t5_deep_insight(user_data)
-    
-    # UPDATE THIS LINE: Print the actual text it generated (or the error message)
-    logger.info(f"🧠 T5 Insight Generation Complete. Output: {insight_text}")
-    
+    insight_text = await get_t5_insight(prompt)
+    logger.info("🧠 T5 Insight Generation Complete. Output:\n%s", insight_text)
     return {"t5_deep_insight": insight_text}
 
 def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, str, dict]:
