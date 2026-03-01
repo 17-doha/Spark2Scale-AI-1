@@ -16,7 +16,7 @@ from app.graph.market_research_agent.helpers.validator_utils import analyze_pain
 def test_remove_emojis():
     """Test removing emojis from text."""
     # Note: 'remove_emojis' keeps ascii and arabic, removes others.
-    result = remove_emojis("Hello World [GLOBAL]")
+    result = remove_emojis("Hello World \U0001f30d")
     assert result.strip() == "Hello World"
     
     # Check if None or non-string is passed
