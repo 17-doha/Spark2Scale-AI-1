@@ -25,5 +25,4 @@ jobs:
           file: ./Dockerfile
           push: true
           # Replace 'your_username' with your actual Docker Hub username
-          tags: dohahemdan17/spark2scale-ai:latest
-
+          tags: dohahemdan17/spark2scale-ai:v2
