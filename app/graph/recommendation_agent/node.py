@@ -74,7 +74,8 @@ def recommendation_node(state: RecommendationState):
                 "recommendation_files": result.get("output_paths"),
                 "insights": result.get("insights"),
                 "matched_patterns": result.get("matched_patterns"),
-                "refined_statements": result.get("refined_statements")
+                "refined_statements": result.get("refined_statements"),
+                "market_signals": result.get("market_signals")
             }
         
         # Backward compatibility for tuple
@@ -97,7 +98,8 @@ def recommendation_node(state: RecommendationState):
 
 class AgentNodes:
     def __init__(self, api_key):
-        self.client = genai.Client(api_key=api_key)
+        # self.client = genai.Client(api_key="AIzaSyBvX80EbeRGsstF2RqUmyk4z0iBCrjQn-k")
+        self.client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         self.model_id = "gemini-3-flash-preview"
 
     def improve_statements(self, insights, max_retries=3, retry_delay=2):
@@ -118,7 +120,13 @@ class AgentNodes:
         
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(model=self.model_id, contents=prompt)
+                # Add temperature config from environment
+                api_config = {'temperature': Config.GEMINI_TEMPERATURE}
+                response = self.client.models.generate_content(
+                    model=self.model_id, 
+                    contents=prompt,
+                    config=api_config
+                )
                 # Handle cleaning of potential markdown
                 text = response.text.strip().replace("```json", "").replace("```", "")
                 return json.loads(text)
@@ -160,7 +168,13 @@ class AgentNodes:
                         f.write(f"API Error in improve_statements: {str(e)}\n")
                     raise
 
-    def synthesize_report(self, data, patterns, insights, replacements, max_retries=3, retry_delay=2):
+    def synthesize_report(self, data, patterns, insights, replacements, market_signals, max_retries=3, retry_delay=2):
+        # Format market intelligence strings
+        country_risk_json = json.dumps(market_signals.get('country_risk', {}), indent=2) if market_signals else "{}"
+        news_signals_json = json.dumps(market_signals.get('news_signals', []), indent=2) if market_signals else "[]"
+        risk_flags_json = json.dumps(market_signals.get('risk_flags', []), indent=2) if market_signals else "[]"
+        intel_confidence = market_signals.get('confidence', 'unknown') if market_signals else "unknown"
+
         prompt = RECOMMENDATION_PROMPT_TEMPLATE.format(
             company_name=insights['company_name'],
             stage=data.stage,
@@ -170,14 +184,23 @@ class AgentNodes:
             problem_statement=insights['problem_statement'],
             quotes_json=json.dumps(insights['customer_quotes']),
             target_raise=insights['target_raise'],
-            replacements_json=json.dumps(replacements)
+            replacements_json=json.dumps(replacements),
+            country_risk_json=country_risk_json,
+            news_signals_json=news_signals_json,
+            risk_flags_json=risk_flags_json,
+            intel_confidence=intel_confidence
         )
         
         for attempt in range(max_retries):
             try:
+                # Add temperature config along with system instruction
+                api_config = {
+                    'system_instruction': SYSTEM_ADVISOR_PROMPT,
+                    'temperature': Config.GEMINI_TEMPERATURE
+                }
                 response = self.client.models.generate_content(
                     model=self.model_id,
-                    config={'system_instruction': SYSTEM_ADVISOR_PROMPT},
+                    config=api_config,
                     contents=prompt
                 )
                 return response.text
