@@ -24,5 +24,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # Replace 'your_username' with your actual Docker Hub username
-          tags: dohahemdan17/spark2scale-ai:v2
+          no-cache: true 
+          tags: |
+            dohahemdan17/spark2scale-ai:v2
+            dohahemdan17/spark2scale-ai:${{ github.sha }}
