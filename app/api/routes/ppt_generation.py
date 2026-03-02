@@ -81,7 +81,7 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         logger.error(f"Error in PPT generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/generate", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+@router.post("/generate", response_model=PPTGenerationResponse)
 async def generate_ppt(input_data: PPTInput): 
     """Generate from JSON body."""
     initial_state: PPTGenerationState = {
@@ -96,7 +96,7 @@ async def generate_ppt(input_data: PPTInput):
     }
     return await run_ppt_generation(initial_state, input_data.startup_id)
 
-@router.post("/generate/upload", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+@router.post("/generate/upload", response_model=PPTGenerationResponse)
 async def generate_ppt_from_files(
     startup_id: str = Form(..., description="The UUID of the startup"),
     startup_info_file: UploadFile = File(..., description="Startup info JSON file"),
@@ -140,7 +140,7 @@ async def generate_ppt_from_files(
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
 
-@router.post("/edit", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+@router.post("/edit", response_model=PPTGenerationResponse)
 async def edit_ppt(
     startup_id: str = Form(..., description="The UUID of the startup"),
     ppt_file: UploadFile = File(..., description="The existing PPTX file to edit"),
