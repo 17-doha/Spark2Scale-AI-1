@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
+from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
 
@@ -18,7 +19,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 class PPTInput(BaseModel):
-    """Main API contract for JSON-based generation."""
     startup_id: str = Field(..., description="The UUID of the startup")
     research_data: Optional[dict] = None
     startup_info: Optional[dict] = None
@@ -44,19 +44,19 @@ class PPTGenerationResponse(BaseModel):
     json_response: Optional[dict] = None
 
 async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPTGenerationResponse":
-    """Helper to execute graph and store in Supabase."""
     try:
         final_state = await app_graph.ainvoke(state)
         final_draft = final_state.get("draft")
         if not final_draft:
             raise HTTPException(status_code=500, detail="Draft generation failed.")
 
-        output_path = os.path.join("output", f"{startup_id}.pptx")
+        output_dir = os.path.join("output", "ppt_generation", f"ppt{startup_id}")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{startup_id}.pptx")
         storage_path = await generate_pptx_file(final_draft, output_path)
 
         if supabase:
             try:
-                # Upload PPT to Supabase Storage could be done here if a bucket is provided
                 doc_data = {
                     "startup_id": startup_id,
                     "document_name": final_draft.title,
@@ -65,16 +65,16 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
                     "json_response": final_draft.model_dump()
                 }
                 supabase.table("documents").insert(doc_data).execute()
-                logger.info("Successfully pushed PPT metadata & json_response to Supabase documents table")
+                logger.info("Successfully pushed metadata to Supabase")
             except Exception as e:
-                logger.error(f"Failed to push to Supabase documents table: {e}")
+                logger.error(f"Supabase error: {e}")
 
         return PPTGenerationResponse(
             status="success",
             ppt_path=storage_path,
             title=final_draft.title,
             iterations=final_state.get("iteration", 0),
-            message="Presentation generated and uploaded to Supabase successfully",
+            message="Presentation generated successfully",
             json_response=final_draft.model_dump()
         )
     except Exception as e:
@@ -82,7 +82,7 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
-async def generate_ppt(input_data: PPTInput):
+async def generate_ppt(input_data: PPTInput): 
     """Generate from JSON body."""
     initial_state: PPTGenerationState = {
         "research_data": input_data.research_data,
@@ -132,6 +132,50 @@ async def generate_ppt_from_files(
             "critique": None,
             "iteration": 0,
             "ppt_path": None,
+        }
+
+        return await run_ppt_generation(initial_state, startup_id)
+
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+
+@router.post("/edit", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+async def edit_ppt(
+    startup_id: str = Form(..., description="The UUID of the startup"),
+    ppt_file: UploadFile = File(..., description="The existing PPTX file to edit"),
+    logo: Optional[UploadFile] = File(None),
+    use_default_colors: bool = Form(True)
+):
+    """Refine an existing PPTX file to match pitch standards."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        # Save uploaded PPTX
+        pptx_path = os.path.join(temp_dir, ppt_file.filename)
+        with open(pptx_path, "wb") as f:
+            f.write(await ppt_file.read())
+        
+        # Extract structured text
+        extracted_text = extract_text_from_pptx(pptx_path)
+        if not extracted_text:
+            raise HTTPException(status_code=400, detail="Could not extract text from the provided PPTX.")
+
+        logo_path = None
+        if logo:
+            logo_path = os.path.join(temp_dir, logo.filename)
+            with open(logo_path, "wb") as f:
+                f.write(await logo.read())
+
+        initial_state: PPTGenerationState = {
+            "research_data": extracted_text,
+            "logo_path": logo_path,
+            "color_palette": None,
+            "use_default_colors": use_default_colors,
+            "draft": None,
+            "critique": None,
+            "iteration": 0,
+            "ppt_path": pptx_path,
+            "mode": "edit"
         }
 
         return await run_ppt_generation(initial_state, startup_id)

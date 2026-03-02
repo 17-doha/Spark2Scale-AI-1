@@ -1,8 +1,11 @@
 import json
 
-def calculate_trigger_strength(severity, multipliers):
+def calculate_trigger_strength(severity, multipliers, cross_category_support=False):
     base_weight = 0.7
-    return round(base_weight * multipliers.get(severity, 1.0), 2)
+    strength = round(base_weight * multipliers.get(severity, 1.0), 2)
+    if cross_category_support:
+        strength = round(strength * 1.2, 2)
+    return strength
 
 def extract_key_insights(raw_data):
     ev = raw_data.get("startup_evaluation", {})
@@ -11,6 +14,31 @@ def extract_key_insights(raw_data):
     found = ev.get("founder_and_team", {})
     prod = ev.get("product_and_solution", {})
     trac = ev.get("traction_metrics", {})
+    
+    # Attempt to extract country and sector
+    country = snap.get("location", snap.get("country", ""))
+    if not country:
+        # Fallback to checking the snapshot text broadly
+        country_str = str(snap).lower()
+        for potential in ["egypt", "tunisia", "uae", "saudi arabia", "jordan", "morocco"]:
+            if potential in country_str:
+                country = potential
+                break
+                
+    sector = snap.get("industry", snap.get("sector", ""))
+    if not sector:
+        # Infer from problem definition or solution
+        combined_text = (str(prob) + " " + str(prod)).lower()
+        if "fintech" in combined_text or "finance" in combined_text or "payment" in combined_text:
+            sector = "fintech"
+        elif "health" in combined_text or "medical" in combined_text:
+            sector = "healthtech"
+        elif "ed" in combined_text and "tech" in combined_text or "education" in combined_text:
+            sector = "edtech"
+        elif "e-commerce" in combined_text or "ecommerce" in combined_text:
+            sector = "e-commerce"
+        else:
+             sector = "technology"
 
     return {
         "company_name": snap.get("company_name", "Unknown"),
@@ -26,5 +54,7 @@ def extract_key_insights(raw_data):
         "early_revenue": trac.get("early_revenue", "USD 0"),
         "five_year_vision": ev.get("vision_and_strategy", {}).get("five_year_vision", "Unknown"),
         "beachhead_market": ev.get("market_and_scope", {}).get("beachhead_market", "Unknown"),
-        "gap_analysis": prob.get("gap_analysis", "Unknown")
+        "gap_analysis": prob.get("gap_analysis", "Unknown"),
+        "country": country,
+        "sector": sector
     }
