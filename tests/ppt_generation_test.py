@@ -10,6 +10,7 @@ Sections:
   4. Draft → PPTX Model  — map_draft_to_pptx_model layouts & logo placement  (ppt_tools.py)
   5. Agent Nodes         — generator_node, recommender_node, refiner_node  (node.py)
   6. API Route           — /generate endpoint (ppt_generation.py FastAPI route)
+  7. PPTX Edit Flow      — /edit endpoint and PPTX text extraction (pptx_parser.py)
 """
 
 import os
@@ -17,6 +18,8 @@ import json
 import tempfile
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
+from pptx import Presentation
+from fastapi import UploadFile
 
 # ─── Schema ──────────────────────────────────────────────────────────────────
 from app.graph.ppt_generation_agent.schema import PPTSection, PPTDraft, Critique
@@ -42,8 +45,9 @@ from app.graph.ppt_generation_agent.node import (
     refiner_node,
 )
 
-# ─── API Route (for patching) ────────────────────────────────────────────────
+# ─── API Route & Parser ──────────────────────────────────────────────────────
 import app.api.routes.ppt_generation as _ppt_route
+from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
 import asyncio as _asyncio
 
 
@@ -271,7 +275,7 @@ class TestChartGeneration:
         path = self._run_chart("funnel", str(tmp_path), labels=["Aware", "Interest", "Convert"], values=[1000, 400, 80])
         assert path is not None and os.path.isfile(path)
 
-    def test_unknown_chart_type_falls_back_gracefully(self, tmp_path):
+    def test_unknown_chart_type_triggers_back_gracefully(self, tmp_path):
         """Unknown chart type triggers the bar fallback, still returning a file."""
         path = self._run_chart("unknown_type", str(tmp_path))
         assert path is not None and os.path.isfile(path)
@@ -595,3 +599,44 @@ def test_api_generate_no_supabase_still_returns_success(mock_graph, mock_generat
 
     assert response.status == "success"
 
+
+# ===========================================================================
+# 7. EDIT PPT ENDPOINT & PARSER
+# ===========================================================================
+
+class TestPPTXEditFlow:
+    """Tests for the /edit endpoint and PPTX parser."""
+
+    def test_pptx_parser_extracts_structured_text(self, tmp_path):
+        """The parser should identify slide numbers and titles."""
+        pptx_path = str(tmp_path / "input.pptx")
+        prs = Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = "Original Idea"
+        prs.save(pptx_path)
+
+        text = extract_text_from_pptx(pptx_path)
+        assert "--- Slide 1 ---" in text
+        assert "Original Idea" in text
+
+    @patch.object(_ppt_route, "extract_text_from_pptx")
+    @patch.object(_ppt_route, "run_ppt_generation", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_api_edit_route_initializes_correct_mode(self, mock_run, mock_extract):
+        """Verify mode='edit' is passed to the graph."""
+        mock_extract.return_value = "Extracted Text"
+        mock_run.return_value = _ppt_route.PPTGenerationResponse(
+            status="success", ppt_path="out.pptx", title="Enhanced"
+        )
+
+        mock_file = MagicMock(spec=UploadFile)
+        mock_file.filename = "test.pptx"
+        mock_file.read = AsyncMock(return_value=b"binary_data")
+
+        response = await _ppt_route.edit_ppt(
+            startup_id="uuid-123", ppt_file=mock_file, use_default_colors=True
+        )
+
+        args, _ = mock_run.call_args
+        assert args[0]["mode"] == "edit"
+        assert args[0]["research_data"] == "Extracted Text"
