@@ -81,6 +81,65 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         logger.error(f"Error in PPT generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/generate", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+async def generate_ppt(input_data: PPTInput): 
+    """Generate from JSON body."""
+    initial_state: PPTGenerationState = {
+        "research_data": input_data.research_data,
+        "logo_path": input_data.logo_path,
+        "color_palette": input_data.color_palette,
+        "use_default_colors": input_data.use_default_colors,
+        "draft": None,
+        "critique": None,
+        "iteration": 0,
+        "ppt_path": None,
+    }
+    return await run_ppt_generation(initial_state, input_data.startup_id)
+
+@router.post("/generate/upload", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
+async def generate_ppt_from_files(
+    startup_id: str = Form(..., description="The UUID of the startup"),
+    startup_info_file: UploadFile = File(..., description="Startup info JSON file"),
+    market_research_file: UploadFile = File(..., description="Market research JSON file"),
+    logo: Optional[UploadFile] = File(None),
+    use_default_colors: bool = Form(True)
+):
+    """Generate by uploading JSON files and an optional logo."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        # Load and merge JSON content
+        si_content = json.loads(await startup_info_file.read())
+        mr_content = json.loads(await market_research_file.read())
+        
+        research_data = {
+            "startup_info": si_content,
+            "market_research": mr_content
+        }
+
+        # Handle logo if provided
+        logo_path = None
+        if logo:
+            logo_path = os.path.join(temp_dir, logo.filename)
+            with open(logo_path, "wb") as f:
+                f.write(await logo.read())
+
+        initial_state: PPTGenerationState = {
+            "research_data": research_data,
+            "logo_path": logo_path,
+            "color_palette": None,
+            "use_default_colors": use_default_colors,
+            "draft": None,
+            "critique": None,
+            "iteration": 0,
+            "ppt_path": None,
+        }
+
+        return await run_ppt_generation(initial_state, startup_id)
+
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+
 @router.post("/edit", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
 async def edit_ppt(
     startup_id: str = Form(..., description="The UUID of the startup"),
