@@ -82,7 +82,7 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate", response_model=PPTGenerationResponse, tags=["Presentation Generation"])
-async def generate_ppt(input_data: PPTInput):
+async def generate_ppt(input_data: PPTInput): 
     """Generate from JSON body."""
     initial_state: PPTGenerationState = {
         "research_data": input_data.research_data,
