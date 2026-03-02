@@ -32,4 +32,4 @@ COPY . .
 EXPOSE 80
 
 # Run uvicorn directly on Port 80
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["python", "-m", "uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "80"]
