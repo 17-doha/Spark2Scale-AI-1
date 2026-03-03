@@ -68,7 +68,7 @@ def extract_swot_data(idea_name: str) -> dict:
             "strategic_verdict": ""
         }
         
-        # --- Strengths & Weaknesses (Internal / Product Validations) ---
+        # --- Strengths (Internal / Product Validations) ---
         validation = data.get("validation", {})
         if validation:
             pain_score = validation.get("pain_score", 0)
@@ -78,14 +78,40 @@ def extract_swot_data(idea_name: str) -> dict:
                 swot_context["strengths_context"].append(
                     f"Strong validation with Pain Score {pain_score}/100 and verdict '{verdict}'."
                 )
-            elif pain_score < 50:
-                swot_context["weaknesses_context"].append(
-                    f"Weak problem validation (Pain Score {pain_score}/100). The core problem may not be significant enough."
-                )
                 
-            warnings = validation.get("warnings", [])
-            for w in warnings:
-                swot_context["weaknesses_context"].append(f"Validation Warning: {w}")
+        # --- Analyzed Weaknesses → Weaknesses ---
+        # Replaces all hardcoded weakness logic.
+        # Weaknesses are now SCRAPE_BACKED, METRIC_BACKED, or BOTH — never invented.
+        clean_name = _clean_filename(idea_name)
+        weakness_path = f"data_output/{clean_name}_analyzed_weaknesses.json"
+        if os.path.exists(weakness_path):
+            try:
+                with open(weakness_path, "r", encoding="utf-8") as f:
+                    weakness_data = json.load(f)
+
+                weaknesses = weakness_data.get("weaknesses", [])
+                # Sort by severity so critical ones appear first
+                weaknesses.sort(key=lambda w: w.get("severity", 0), reverse=True)
+
+                swot_context["weaknesses_context"] = weaknesses
+
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to read analyzed weaknesses: {e}")
+        else:
+            # Fallback for backward compatibility — warns that weaknesses are incomplete
+            logger.warning(
+                f"[FALLBACK] No analyzed_weaknesses file found for '{idea_name}'. "
+                "Run scrape_weaknesses() + analyze_weaknesses() before SWOT generation."
+            )
+            if validation:
+                pain_score = validation.get("pain_score", 0)
+                if pain_score < 50:
+                    swot_context["weaknesses_context"].append(
+                        f"[METRIC][FALLBACK] Weak problem validation (Pain Score {pain_score}/100). "
+                        "Run the weakness pipeline for full evidence-backed analysis."
+                    )
+                for w in validation.get("warnings", []):
+                    swot_context["weaknesses_context"].append(f"[METRIC][FALLBACK] Validation Warning: {w}")
                 
         # Look at Finance for Strengths/Weaknesses
         finance = data.get("finance", {})

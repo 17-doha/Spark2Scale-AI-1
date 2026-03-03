@@ -5,7 +5,7 @@ import sys
 project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_dir)
 
-from app.graph.document_generator.swot.scraper import scrape_competitor_reviews
+from app.graph.document_generator.swot.scraper import scrape_competitor_reviews, analyze_weaknesses
 from app.graph.document_generator.swot.gap_analyzer import analyze_competitive_gap
 from app.graph.document_generator.swot.regulatory_and_barrier_node import scrape_regulatory_barriers
 from app.graph.document_generator.swot.synthesizer import synthesize_swot_matrix
@@ -46,6 +46,14 @@ def run_swot_pipeline(idea_name: str):
          logger.warning("No barriers file generated.")
     else:
          logger.info(f"Regulatory barriers saved to: {barriers_file}")
+         
+    # Step 3.5: Run the Weakness Analyzer
+    logger.info("\n--- STEP 3.5: Analyzing Weaknesses ---")
+    weaknesses_file = analyze_weaknesses(idea_name, description, "Global")
+    if not weaknesses_file:
+         logger.warning("No weaknesses file generated.")
+    else:
+         logger.info(f"Analyzed weaknesses saved to: {weaknesses_file}")
          
     # Step 4: Run the TOWS Synthesizer
     logger.info("\n--- STEP 4: Synthesizing TOWS Matrix Verdict ---")

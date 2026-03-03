@@ -33,6 +33,10 @@ Format Requirements:
 3. Use `##` for each quadrant (e.g., `## 🏆 Strengths (Internal)`). Use relevant emojis for headings to match the lively Market Research Document theme.
 4. For each quadrant, use bullet points with bold sub-headers (e.g., `- **Strong Market Growth:** ...`).
     - *CRITICAL*: For the **Opportunities** quadrant, explicitly highlight specific competitor flaws or user pain points provided in the context (labeled as "Competitor Weakness") as actionable gaps in the market that the new product can solve.
+    - *CRITICAL*: For the **Weaknesses** quadrant, each bullet must include:
+        - The weakness statement as the main text
+        - Severity score in parentheses e.g. (Severity: 8/10)
+        - DO NOT add, invent, or infer any weaknesses not present in the provided context
 5. Create a `## 🔄 TOWS Strategic Matrix` section containing the raw TOWS matrix mapped strategies extracted from context.
 6. Include a `## 🎯 Strategic Recommendations` section at the end, synthesizing the final `strategic_verdict` to conclude the document.
 7. The styling should match a premium business report. Use blockquotes (`>`) for key insights.
@@ -101,6 +105,60 @@ RETURN ONLY STRICT JSON in the following format (NO MARKDOWN WRAPPERS):
     ]
 }}
 """
+
+# -----------------------------------------------------------------------------
+# WEAKNESS ANALYSIS PROMPT
+# -----------------------------------------------------------------------------
+WEAKNESS_ANALYSIS_PROMPT = """
+You are a rigorous Business Analyst performing a Weakness Identification exercise for a SWOT Analysis.
+Your task is to produce ONLY real, evidence-backed weaknesses — NO speculation, NO generic filler.
+
+BUSINESS IDEA: {idea_name}
+Description: {idea_description}
+
+---
+SECTION A — SCRAPED WEB SIGNALS (real user complaints and market observations):
+{scraped_signals}
+
+---
+SECTION B — BUSINESS METRICS (from market research report, with threshold evaluations):
+{business_metrics}
+
+---
+INSTRUCTIONS (think step by step):
+
+1. Go through each item in SECTION A. For each snippet:
+   - Ask: does this reveal a real weakness in the PRODUCT CATEGORY, MARKET DYNAMICS, or BUSINESS MODEL that would affect a new entrant in this space?
+   - If yes, extract it as a weakness with source type = "SCRAPE_BACKED"
+   - Ignore snippets that are about specific competitors (those belong in Opportunities), irrelevant topics, or purely positive content
+
+2. Go through each metric in SECTION B. For each metric:
+   - If its threshold_label is anything other than HEALTHY/ACCEPTABLE/LOW_RISK/HIGH/MANAGEABLE, it signals a weakness
+   - Write a clear business statement explaining WHY this metric value is problematic for this specific idea
+   - Source type = "METRIC_BACKED"
+
+3. De-duplicate. If a scrape signal and a metric point to the same underlying weakness, merge them into one entry and set source_type = "BOTH"
+
+4. Assign a severity score 1-10:
+   - 8-10: Critical — could kill the business or block market entry
+   - 5-7: Significant — will require focused mitigation
+   - 1-4: Minor — awareness-level, low immediate impact
+
+5. DO NOT invent weaknesses. If there are no real weakness signals found, return an empty weaknesses array.
+
+RETURN ONLY STRICT JSON — NO MARKDOWN WRAPPERS, NO PREAMBLE:
+{{
+    "weaknesses": [
+        {{
+            "statement": "Clear, specific weakness statement written for a business audience.",
+            "source_type": "SCRAPE_BACKED | METRIC_BACKED | BOTH",
+            "evidence": "Brief quote or metric value that proves this weakness.",
+            "severity": 7
+        }}
+    ]
+}}
+"""
+
 
 # -----------------------------------------------------------------------------
 # TOWS MATRIX SYNTHESIS PROMPT (The Reducer)
