@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from app.core.llm import get_llm
 from .data_extractor import extract_swot_data
@@ -11,14 +12,14 @@ logger = logging.getLogger("SWOTGenerator")
 
 def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER) -> str:
     """
-    Generates a full SWOT Markdown document for a given idea name.
+    Generates a full SWOT JSON document for a given idea name.
     
     Args:
         idea_name (str): The name of the business idea to generate for.
         provider (str): LLM provider to use (default: gemini).
         
     Returns:
-        str: The generated Markdown content, or an error message.
+        str: The generated JSON content as a string, or an error message.
     """
     logger.info(f"Generating SWOT analysis for: {idea_name}")
     
@@ -64,7 +65,8 @@ def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER)
             "strategic_verdict": verdict_str
         })
         
-        markdown_content = response.content
+        json_content = response.content.replace("```json", "").replace("```", "").strip()
+        swot_data = json.loads(json_content)
         
         # 4. Save to file
         output_dir = OUTPUT_DIR
@@ -72,13 +74,13 @@ def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER)
         
         # Use clean name for filename
         clean_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
-        output_file = f"{output_dir}/{clean_name}_SWOT_Analysis.md"
+        output_file = f"{output_dir}/{clean_name}_SWOT_Analysis.json"
         
         with open(output_file, "w", encoding="utf-8") as f:
-            f.write(markdown_content)
+            json.dump(swot_data, f, indent=4)
             
         logger.info(f"SWOT Analysis generated successfully: {output_file}")
-        return markdown_content
+        return json.dumps(swot_data, indent=4)
         
     except Exception as e:
         logger.error(f"Failed during SWOT LLM generation: {e}")

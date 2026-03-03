@@ -28,20 +28,33 @@ Extracted Threats Context:
 {threats_context}
 
 Format Requirements:
-1. Start with a main title `# SWOT Analysis: [Idea Name]`
-2. Provide a brief introduction paragraph explaining the strategic position of the product/service.
-3. Use `##` for each quadrant (e.g., `## 🏆 Strengths (Internal)`). Use relevant emojis for headings to match the lively Market Research Document theme.
-4. For each quadrant, use bullet points with bold sub-headers (e.g., `- **Strong Market Growth:** ...`).
-    - *CRITICAL*: For the **Opportunities** quadrant, explicitly highlight specific competitor flaws or user pain points provided in the context (labeled as "Competitor Weakness") as actionable gaps in the market that the new product can solve.
-    - *CRITICAL*: For the **Weaknesses** quadrant, each bullet must include:
-        - The weakness statement as the main text
-        - Severity score in parentheses e.g. (Severity: 8/10)
-        - DO NOT add, invent, or infer any weaknesses not present in the provided context
-5. Create a `## 🔄 TOWS Strategic Matrix` section containing the raw TOWS matrix mapped strategies extracted from context.
-6. Include a `## 🎯 Strategic Recommendations` section at the end, synthesizing the final `strategic_verdict` to conclude the document.
-7. The styling should match a premium business report. Use blockquotes (`>`) for key insights.
+Return ONLY STRICT JSON in the following format (NO MARKDOWN WRAPPERS):
+{{
+    "idea_name": "...",
+    "title": "SWOT Analysis: [Idea Name]",
+    "introduction": "Brief introduction paragraph explaining the strategic position of the product/service.",
+    "strengths": [
+        "**Header:** description..."
+    ],
+    "weaknesses": [
+        "Weakness statement (Severity: X/10)"
+    ],
+    "opportunities": [
+        "**Gap identified:** description..."
+    ],
+    "threats": [
+        "**Threat:** description..."
+    ],
+    "tows_matrix_raw_strategies": [
+        "Strategy 1...", "Strategy 2..."
+    ],
+    "strategic_recommendations": "Crucial synthesis of the final strategic verdict."
+}}
 
-Generate the full markdown document below:
+CRITICAL INSTRUCTIONS:
+- For Opportunities, explicitly highlight specific competitor flaws or user pain points provided in the context as actionable gaps.
+- For Weaknesses, each bullet must include the severity score in parentheses. DO NOT add, invent, or infer any weaknesses not present in the provided context.
+- Embed the raw TOWS matrix mapped strategies extracted from context directly into the `tows_matrix_raw_strategies` array.
 """
 
 swot_prompt_template = ChatPromptTemplate.from_template(SWOT_GENERATION_PROMPT)
