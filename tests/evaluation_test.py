@@ -492,3 +492,411 @@ async def test_fetch_t5_deep_insight_no_client(mock_get_client):
     from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
     result = await fetch_t5_deep_insight({})
     assert "unavailable" in result.lower()
+
+
+# ==========================================
+# 3. NEW SCORING AGENT TESTS
+# ==========================================
+
+# --- VISION ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.vision_tools.get_llm")
+async def test_vision_scoring_agent(mock_get_llm):
+    """vision_scoring_agent parses score and converts to numeric."""
+    with patch(
+        "app.graph.evaluation_agent.tools.vision_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "4/5", "explanation": "Bold vision"}'
+
+        data_package = {
+            "vision_data": {"category_play": {"definition": "AI SaaS"}},
+            "market_analysis": {},
+            "contradiction_report": "None",
+            "risk_report": "None"
+        }
+        result = await vision_scoring_agent(data_package)
+
+        assert result["score"] == "4/5"
+        assert result["explanation"] == "Bold vision"
+        assert result["score_numeric"] == 80  # 4/5 * 20
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.vision_tools.get_llm")
+async def test_vision_risk_agent(mock_get_llm):
+    """vision_risk_agent returns the raw LLM string output."""
+    with patch(
+        "app.graph.evaluation_agent.tools.vision_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "Key risk: market timing."
+
+        result = await vision_risk_agent(
+            {"category_play": {"definition": "AI SaaS"}},
+            {"trend": "growing"},
+            "Analyse vision risks: {vision_data} {market_analysis}"
+        )
+
+        assert result == "Key risk: market timing."
+        mock_invoke.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.vision_tools.get_llm")
+@patch(
+    "app.graph.evaluation_agent.tools.vision_tools.get_market_signals_serper",
+    new_callable=AsyncMock
+)
+async def test_analyze_category_future(mock_signals, mock_get_llm):
+    """analyze_category_future fetches market signals then calls LLM."""
+    mock_signals.return_value = "AI SaaS market is booming."
+
+    with patch(
+        "app.graph.evaluation_agent.tools.vision_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"trend": "Bullish", "score": "5/5"}'
+
+        vision_data = {
+            "category_play": {"definition": "AI SaaS", "moat": "Data Network"},
+            "customer_obsession": {"problem_statement": "Founders lack validation tools"}
+        }
+        result = await analyze_category_future(vision_data)
+
+        assert result["trend"] == "Bullish"
+        mock_signals.assert_awaited_once_with(vision_data)
+
+
+# --- BUSINESS ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.business_tools.get_llm")
+async def test_business_scoring_agent(mock_get_llm):
+    """business_scoring_agent picks the Pre-Seed template and parses score."""
+    with patch(
+        "app.graph.evaluation_agent.tools.business_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "3/5", "explanation": "Decent model"}'
+
+        data_package = {
+            "business_data": {"context": {"stage": "Pre-Seed"}},
+            "calculator_report": {},
+            "contradiction_report": "None",
+            "risk_report": "None"
+        }
+        result = await business_scoring_agent(data_package)
+
+        assert result["score"] == "3/5"
+        assert result["score_numeric"] == 60  # 3/5 * 20
+        assert result["explanation"] == "Decent model"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.business_tools.get_llm")
+async def test_business_risk_agent(mock_get_llm):
+    """business_risk_agent returns the raw LLM risk string."""
+    with patch(
+        "app.graph.evaluation_agent.tools.business_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "Risk: High burn rate."
+
+        result = await business_risk_agent(
+            {"context": {"stage": "Pre-Seed"}},
+            "Assess business risks: {business_data}"
+        )
+
+        assert result == "Risk: High burn rate."
+        mock_invoke.assert_called_once()
+
+
+# --- GTM ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.gtm_tools.get_llm")
+async def test_gtm_scoring_agent(mock_get_llm):
+    """gtm_scoring_agent routes by stage and correctly parses score."""
+    with patch(
+        "app.graph.evaluation_agent.tools.gtm_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "4/5", "explanation": "Solid GTM"}'
+
+        gtm_data = {"context": {"stage": "Pre-Seed"}}
+        result = await gtm_scoring_agent(
+            gtm_data=gtm_data,
+            economics_report={"conversion_rate": 10.0},
+            contradiction_report="None",
+            risk_report="None"
+        )
+
+        assert result["score"] == "4/5"
+        assert result["score_numeric"] == 80
+        assert result["explanation"] == "Solid GTM"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.gtm_tools.get_llm")
+async def test_gtm_risk_agent(mock_get_llm):
+    """gtm_risk_agent returns raw LLM string for the given template."""
+    with patch(
+        "app.graph.evaluation_agent.tools.gtm_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "GTM risk: Channel saturation."
+
+        result = await gtm_risk_agent(
+            {"context": {"stage": "Pre-Seed"}},
+            "Assess GTM risks: {gtm_json}"
+        )
+
+        assert result == "GTM risk: Channel saturation."
+        mock_invoke.assert_called_once()
+
+
+# --- OPERATIONS ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.operations_tools.get_llm")
+async def test_operations_scoring_agent(mock_get_llm):
+    """operations_scoring_agent parses score and attaches score_numeric."""
+    with patch(
+        "app.graph.evaluation_agent.tools.operations_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "2/5", "explanation": "Ops needs work"}'
+
+        data_package = {
+            "operations_data": {},
+            "benchmarks": "Seed median round: $2M",
+            "contradiction_report": "None",
+            "risk_report": "None"
+        }
+        result = await operations_scoring_agent(data_package)
+
+        assert result["score"] == "2/5"
+        assert result["score_numeric"] == 40  # 2/5 * 20
+        assert result["explanation"] == "Ops needs work"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.operations_tools.get_llm")
+async def test_operations_risk_agent(mock_get_llm):
+    """operations_risk_agent returns the raw LLM risk assessment string."""
+    with patch(
+        "app.graph.evaluation_agent.tools.operations_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "Ops risk: Key-person dependency."
+
+        result = await operations_risk_agent(
+            operations_data={"context": {"stage": "Pre-Seed"}},
+            benchmarks="Seed median: $2M",
+            template="Assess ops risks: {operations_data} {benchmarks}"
+        )
+
+        assert result == "Ops risk: Key-person dependency."
+        mock_invoke.assert_called_once()
+
+
+# --- PRODUCT ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.product_tools.get_llm")
+async def test_product_scoring_agent(mock_get_llm):
+    """product_scoring_agent parses score from LLM and returns score_numeric."""
+    with patch(
+        "app.graph.evaluation_agent.tools.product_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "5/5", "explanation": "Excellent product"}'
+
+        data_package = {
+            "internal_data": {"product_and_solution": {}},
+            "contradiction_report": "None",
+            "risk_report": "None",
+            "tech_stack_report": "React, Node",
+            "visual_analysis_report": "Clean UI"
+        }
+        result = await product_scoring_agent(data_package)
+
+        assert result["score"] == "5/5"
+        assert result["score_numeric"] == 100
+        assert result["explanation"] == "Excellent product"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.product_tools.get_llm")
+async def test_local_dependency_detective(mock_get_llm):
+    """local_dependency_detective calls LLM and returns risk_level."""
+    mock_llm_instance = MagicMock()
+    mock_llm_instance.ainvoke = AsyncMock(
+        return_value=MagicMock(
+            content='{"risk_level": "Medium", "red_flags": ["Reliance on AWS"], "search_query_needed": "AWS alternatives"}'
+        )
+    )
+    mock_get_llm.return_value = mock_llm_instance
+
+    result = await local_dependency_detective(
+        tech_stack="React, AWS Lambda",
+        acquisition_channel="SEO",
+        product_desc="AI SaaS for founders"
+    )
+
+    assert result["tool"] == "Dependency_Detective"
+    assert result["risk_level"] == "Medium"
+
+
+# --- TRACTION ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.traction_tools.get_llm")
+async def test_traction_scoring_agent(mock_get_llm):
+    """traction_scoring_agent routes by stage and parses score correctly."""
+    with patch(
+        "app.graph.evaluation_agent.tools.traction_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = '{"score": "3/5", "explanation": "Early traction present"}'
+
+        data_package = {
+            "traction_data": {"context": {"stage": "Pre-Seed"}},
+            "contradiction_report": "None",
+            "risk_report": "None"
+        }
+        result = await traction_scoring_agent(data_package)
+
+        assert result["score"] == "3/5"
+        assert result["score_numeric"] == 60  # 3/5 * 20
+        assert result["explanation"] == "Early traction present"
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.traction_tools.get_llm")
+async def test_traction_risk_agent(mock_get_llm):
+    """traction_risk_agent returns the raw LLM traction risk string."""
+    with patch(
+        "app.graph.evaluation_agent.tools.traction_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "Traction risk: Concentrated in one channel."
+
+        result = await traction_risk_agent(
+            {"context": {"stage": "Pre-Seed"}, "validation_signals": {}},
+            "Assess traction risks: {traction_json}"
+        )
+
+        assert result == "Traction risk: Concentrated in one channel."
+        mock_invoke.assert_called_once()
+
+
+# --- PROBLEM (loaded risk check) ---
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.problem_tools.get_llm")
+async def test_loaded_risk_check_with_search(mock_get_llm):
+    """loaded_risk_check_with_search passes combined data to LLM and returns string."""
+    with patch(
+        "app.graph.evaluation_agent.tools.problem_tools.StrOutputParser.ainvoke",
+        new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = "Risk: Problem is not urgent enough for paid solutions."
+
+        problem_data = {"problem_statement": "Manual testing"}
+        search_results = {"pain_validation_search": [{"title": "Hit", "snippet": "Real pain."}]}
+        agent_prompt = "Assess problem risks: {internal_json} {external_search_json}"
+
+        result = await loaded_risk_check_with_search(problem_data, search_results, agent_prompt)
+
+        assert result == "Risk: Problem is not urgent enough for paid solutions."
+        mock_invoke.assert_called_once()
+
+
+# ==========================================
+# 4. FINAL SCORING AGENT TESTS
+# ==========================================
+
+def test_calculate_weighted_score_pre_seed():
+    """calculate_weighted_score applies pre-seed weights and returns correct verdict band."""
+    from app.graph.evaluation_agent.node import calculate_weighted_score
+
+    # All dimensions at 80 (4/5)
+    scores = {k: 80 for k in ["team", "problem", "product", "market", "traction", "gtm", "business", "vision", "operations"]}
+    _, weighted_total, verdict, rubric_5 = calculate_weighted_score(scores, "Pre-Seed")
+
+    # Each rubric_5 value = 80/20 = 4.0
+    assert rubric_5["team"] == 4.0
+    # Weighted total must be above 0
+    assert weighted_total > 0
+    # At 4/5 across the board, the weighted total should be well above 26 → at least "Invest"
+    assert verdict in {"Invest (Team Conviction)", "Strong Invest", "Extremely Good"}
+
+
+def test_calculate_weighted_score_low_scores():
+    """calculate_weighted_score maps very low scores to 'Pass (Not Ready)' verdict."""
+    from app.graph.evaluation_agent.node import calculate_weighted_score
+
+    scores = {k: 20 for k in ["team", "problem", "product", "market", "traction", "gtm", "business", "vision", "operations"]}
+    _, weighted_total, verdict, _ = calculate_weighted_score(scores, "Pre-Seed")
+
+    assert verdict == "Pass (Not Ready)"
+    assert weighted_total < 20
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.node.get_llm")
+async def test_final_node_builds_report(mock_get_llm):
+    """final_node assembles scores, calls LLM, and returns a final_report dict."""
+    from app.graph.evaluation_agent.node import final_node
+
+    # Build a minimal state: each *_report has score_numeric=80
+    dims = ["team", "problem", "product", "market", "traction", "gtm", "business", "vision", "operations"]
+    state = {
+        "user_data": {
+            "startup_evaluation": {
+                "company_snapshot": {"current_stage": "Pre-Seed"}
+            }
+        },
+        "t5_deep_insight": "Good startup potential.",
+        **{
+            f"{k}_report": {
+                "score_numeric": 80,
+                "explanation": f"{k} looks good",
+                "confidence_level": "High",
+                "green_flags": [],
+                "red_flags": []
+            }
+            for k in dims
+        }
+    }
+
+    # Mock the LLM chain to return a valid final JSON structure
+    mock_chain_result = {
+        "investor_output": {
+            "scorecard_grid": {},
+            "weighted_score": 40.0,
+            "verdict": "Strong Invest"
+        },
+        "founder_output": {
+            "scorecard_grid": {},
+            "weighted_score": 40.0,
+            "verdict": "Strong Invest",
+            "dimension_analysis": []
+        }
+    }
+
+    mock_llm_instance = MagicMock()
+    mock_get_llm.return_value = mock_llm_instance
+
+    with patch("app.graph.evaluation_agent.node.JsonOutputParser.ainvoke", new_callable=AsyncMock) as mock_parser:
+        mock_parser.return_value = mock_chain_result
+
+        result = await final_node(state)
+
+    assert "final_report" in result
+    final = result["final_report"]
+    # After backfill, investor_output must contain a verdict
+    assert "verdict" in final.get("investor_output", final.get("investor_output", {}))
