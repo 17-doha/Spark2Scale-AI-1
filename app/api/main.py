@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()  # must run before any module reads os.getenv()
 
 from fastapi import FastAPI
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -24,6 +24,8 @@ app.include_router(market_research.router, prefix="/api/v1/market-research", tag
 app.include_router(pdf_extraction.router, prefix="/api/v1/pdf", tags=["PDF Extraction"])
 
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["AI Chat"])
+
+app.include_router(swot_generation.router, prefix="/api/v1/swot", tags=["SWOT Generation"])
 
 
 @app.get("/")
