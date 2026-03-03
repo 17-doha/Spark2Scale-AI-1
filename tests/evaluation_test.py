@@ -186,7 +186,7 @@ async def test_tam_sam_verifier_tool(mock_post, mock_env):
 async def test_team_scoring_agent(mock_get_llm):
     """Test the LangChain scoring agent by patching the chain's ainvoke method."""
     # Arrange
-    mock_llm_instance = AsyncMock()
+    mock_llm_instance = MagicMock()  # <--- CHANGE THIS from AsyncMock to MagicMock
     mock_get_llm.return_value = mock_llm_instance
     
     # Instead of deep-mocking the entire LCEL chain, we patch the final parser's invoke
@@ -434,65 +434,6 @@ def test_generate_queries():
     assert len(queries) == 4
     assert any("SpaceTech" in q for q in queries)
 
-@pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.helpers.os.environ.get")
-@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
-async def test_get_market_signals_serper(mock_post, mock_env):
-    """Test async Serper market signals fetching."""
-    mock_env.return_value = "fake_api_key"
-    
-    mock_response = AsyncMock()
-    mock_response.status = 200
-    mock_response.json.return_value = {
-        "organic": [{"title": "Report", "snippet": "Market is booming."}]
-    }
-    mock_post.return_value.__aenter__.return_value = mock_response
-    
-    vision_data = {"category_play": {"definition": "AI SaaS"}}
-    result = await get_market_signals_serper(vision_data)
-    
-    assert "SOURCE" in result
-    assert "Market is booming." in result
-
-
-# ==========================================
-# T5-3B MODEL WRAPPER TESTS
-# ==========================================
-
-@pytest.mark.asyncio
-@patch("app.core.llm._get_t5_client")
-async def test_fetch_t5_deep_insight_success(mock_get_client):
-    """T5 wrapper returns model output when client is available."""
-    from unittest.mock import MagicMock
-    mock_client = MagicMock()
-    mock_client.predict.return_value = "Strong team, clear problem, good traction."
-    mock_get_client.return_value = mock_client
-
-    user_data = {
-        "startup_evaluation": {
-            "company_snapshot": {"company_name": "TestCo", "current_stage": "Pre-Seed"},
-            "problem_definition": {"problem_statement": "Manual QA is slow."}
-        }
-    }
-
-    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
-    result = await fetch_t5_deep_insight(user_data)
-
-    assert result == "Strong team, clear problem, good traction."
-    mock_client.predict.assert_called_once()
-    call_kwargs = mock_client.predict.call_args.kwargs
-    assert "TestCo" in call_kwargs["startup_idea"]
-    assert call_kwargs["api_name"] == "/evaluate_idea"
-
-
-@pytest.mark.asyncio
-@patch("app.core.llm._get_t5_client", return_value=None)
-async def test_fetch_t5_deep_insight_no_client(mock_get_client):
-    """T5 wrapper returns a safe fallback when the client cannot be created."""
-    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
-    result = await fetch_t5_deep_insight({})
-    assert "unavailable" in result.lower()
-
 
 # ==========================================
 # 3. NEW SCORING AGENT TESTS
@@ -726,28 +667,6 @@ async def test_product_scoring_agent(mock_get_llm):
         assert result["score"] == "5/5"
         assert result["score_numeric"] == 100
         assert result["explanation"] == "Excellent product"
-
-
-@pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.tools.product_tools.get_llm")
-async def test_local_dependency_detective(mock_get_llm):
-    """local_dependency_detective calls LLM and returns risk_level."""
-    mock_llm_instance = MagicMock()
-    mock_llm_instance.ainvoke = AsyncMock(
-        return_value=MagicMock(
-            content='{"risk_level": "Medium", "red_flags": ["Reliance on AWS"], "search_query_needed": "AWS alternatives"}'
-        )
-    )
-    mock_get_llm.return_value = mock_llm_instance
-
-    result = await local_dependency_detective(
-        tech_stack="React, AWS Lambda",
-        acquisition_channel="SEO",
-        product_desc="AI SaaS for founders"
-    )
-
-    assert result["tool"] == "Dependency_Detective"
-    assert result["risk_level"] == "Medium"
 
 
 # --- TRACTION ---

@@ -19,7 +19,9 @@ import time
 import asyncio
 import pytest
 from dotenv import load_dotenv
+from unittest.mock import patch, AsyncMock, MagicMock
 
+from app.graph.evaluation_agent.helpers import get_market_signals_serper
 # .env MUST be loaded before app.core.llm is imported
 # (it reads HF_TOKEN at module level inside _get_t5_client)
 load_dotenv()
@@ -93,3 +95,64 @@ async def test_t5_model_returns_answer():
     assert not result.startswith("T5 Insight failed"), (
         f"T5 call raised an exception: {result}"
     )
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers.os.environ.get")
+@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
+async def test_get_market_signals_serper(mock_post, mock_env):
+    """Test async Serper market signals fetching."""
+    mock_env.return_value = "fake_api_key"
+    
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "organic": [{"title": "Report", "snippet": "Market is booming."}]
+    }
+    mock_post.return_value.__aenter__.return_value = mock_response
+    
+    vision_data = {"category_play": {"definition": "AI SaaS"}}
+    result = await get_market_signals_serper(vision_data)
+    
+    assert "SOURCE" in result
+    assert "Market is booming." in result
+
+
+# ==========================================
+# T5-3B MODEL WRAPPER TESTS
+# ==========================================
+
+@pytest.mark.asyncio
+@patch("app.core.llm._get_t5_client")
+async def test_fetch_t5_deep_insight_success(mock_get_client):
+    """T5 wrapper returns model output when client is available."""
+    from unittest.mock import MagicMock
+    mock_client = MagicMock()
+    mock_client.predict.return_value = "Strong team, clear problem, good traction."
+    mock_get_client.return_value = mock_client
+
+    user_data = {
+        "startup_evaluation": {
+            "company_snapshot": {"company_name": "TestCo", "current_stage": "Pre-Seed"},
+            "problem_definition": {"problem_statement": "Manual QA is slow."}
+        }
+    }
+
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight(user_data)
+
+    assert result == "Strong team, clear problem, good traction."
+    mock_client.predict.assert_called_once()
+    call_kwargs = mock_client.predict.call_args.kwargs
+    assert "TestCo" in call_kwargs["startup_idea"]
+    assert call_kwargs["api_name"] == "/evaluate_idea"
+
+
+@pytest.mark.asyncio
+@patch("app.core.llm._get_t5_client", return_value=None)
+async def test_fetch_t5_deep_insight_no_client(mock_get_client):
+    """T5 wrapper returns a safe fallback when the client cannot be created."""
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight({})
+    assert "unavailable" in result.lower()
+
