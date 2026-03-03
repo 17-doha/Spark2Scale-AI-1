@@ -2,7 +2,7 @@ name: Build and Push to Docker Hub
 
 on:
   push:
-    branches: [ "Merging" ]  # Change this if your branch is named 'master'
+    branches: [ "Merging" ]
 
 jobs:
   build:

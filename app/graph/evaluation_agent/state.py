@@ -37,3 +37,6 @@ class AgentState(TypedDict):
     plan: Annotated[Dict[str, Any], replace_reducer]
 
     final_report: Annotated[Dict[str, Any], replace_reducer]
+
+    # --- T5-3B MODEL OUTPUT ---
+    t5_deep_insight: Annotated[str, replace_reducer]

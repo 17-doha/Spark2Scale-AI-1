@@ -5,7 +5,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.graph.evaluation_agent.prompts import PDF_EXTRACTION_PROMPT
+from app.graph.evaluation_agent.prompts.general_prompts import PDF_EXTRACTION_PROMPT
 from app.graph.evaluation_agent.helpers import TARGET_SCHEMA
 
 try:

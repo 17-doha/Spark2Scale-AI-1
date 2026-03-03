@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # must run before any module reads os.getenv()
+
 from fastapi import FastAPI
 from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat
 from fastapi.middleware.cors import CORSMiddleware

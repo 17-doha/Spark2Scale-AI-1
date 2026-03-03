@@ -2,65 +2,98 @@ import asyncio
 import json
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from app.core.llm import get_llm
+from app.core.llm import get_llm, get_t5_insight
 from .state import AgentState
-from .tools import (
-    contradiction_check, 
-    team_risk_check, 
-    team_scoring_agent,
-    verify_problem_claims, 
-    loaded_risk_check_with_search, 
-    problem_scoring_agent,
-    tech_stack_detective, 
-    product_scoring_agent,
-    tam_sam_verifier_tool,
-    regulation_trend_radar_tool,
-    local_dependency_detective,
-    market_scoring_agent,
-    traction_risk_agent,
-    traction_scoring_agent,
-    gtm_risk_agent,
-    gtm_scoring_agent,
-    calculate_economics_with_judgment,
+from .tools.business_tools import (
     business_risk_agent,
-    evaluate_business_model_with_context,
     business_scoring_agent,
-    analyze_category_future,
-    vision_risk_agent,
-    vision_scoring_agent,
-    get_funding_benchmarks,
-    operations_risk_agent,
+    evaluate_business_model_with_context,
+    calculate_economics_with_judgment
+)
+from .tools.gtm_tools import (
+    gtm_risk_agent, 
+    gtm_scoring_agent
+)
+from .tools.market_tools import (
+    market_scoring_agent, 
+    tam_sam_verifier_tool, 
+    regulation_trend_radar_tool
+)
+from .tools.operations_tools import (
+    operations_risk_agent, 
     operations_scoring_agent
 )
-from .prompts import (
+from .tools.problem_tools import (
+    problem_scoring_agent, 
+    verify_problem_claims, 
+    loaded_risk_check_with_search
+)
+from .tools.product_tools import (
+    product_scoring_agent, 
+    tech_stack_detective, 
+    local_dependency_detective
+)
+from .tools.team_tools import (
+    team_risk_check, 
+    team_scoring_agent
+)
+from .tools.general_tools import contradiction_check  
+from .tools.traction_tools import (
+    traction_risk_agent, 
+    traction_scoring_agent
+)
+from .tools.vision_tools import (
+    vision_risk_agent, 
+    vision_scoring_agent, 
+    analyze_category_future, 
+    get_funding_benchmarks
+)
+from .prompts.general_prompts import (
     PLANNER_PROMPT,
+    FINAL_SYNTHESIS_PROMPT
+)
+from .prompts.team_prompts import (
     CONTRADICTION_TEAM_PROMPT_TEMPLATE,
-    VALUATION_RISK_TEAM_PROMPT_TEMPLATE,
+    VALUATION_RISK_TEAM_PROMPT_TEMPLATE
+)
+from .prompts.problem_prompts import (
     CONTRADICTION_PROBLEM_PROMPT_TEMPLATE,
-    VALUATION_RISK_PROBLEM_PROMPT_TEMPLATE,
-    CONTRADICTION_PRODUCT_PROMPT_TEMPLATE, 
-    VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE,
-    VISUAL_VERIFICATION_PROMPT,
-    CONTRADICTION_MARKET_PROMPT_TEMPLATE,
+    VALUATION_RISK_PROBLEM_PROMPT_TEMPLATE
+)
+from .prompts.product_prompts import (
+    CONTRADICTION_PRODUCT_PROMPT_TEMPLATE,
+    VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE
+)
+from .prompts.market_prompts import (
+    CONTRADICTION_MARKET_PROMPT_TEMPLATE
+)
+from .prompts.operations_prompts import (
+    CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE,
+    VALUATION_RISK_OPS_PRE_SEED_PROMPT,
+    VALUATION_RISK_OPS_SEED_PROMPT   
+)
+from .prompts.traction_prompts import (
     CONTRADICTION_PRE_SEED_TRACTION_AGENT_PROMPT,
     CONTRADICTION_SEED_TRACTION_AGENT_PROMPT,
     VALUATION_RISK_TRACTION_PRE_SEED_PROMPT,
-    VALUATION_RISK_TRACTION_SEED_PROMPT,
-    CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT,
+    VALUATION_RISK_TRACTION_SEED_PROMPT
+)
+from .prompts.gtm_prompts import (
+    CONTRADICTION_PRE_SEED_GTM_AGENT_PROMPT,    
     CONTRADICTION_SEED_GTM_AGENT_PROMPT,
     VALUATION_RISK_GTM_PRE_SEED_PROMPT,
-    VALUATION_RISK_GTM_SEED_PROMPT,
-    CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT,
-    CONTRADICTION_SEED_BIZ_MODEL_PROMPT,
-    RISK_BIZ_MODEL_PRE_SEED_PROMPT,
-    RISK_BIZ_MODEL_SEED_PROMPT,
-    CONTRADICTION_VISION_PROMPT_TEMPLATE,
+    VALUATION_RISK_GTM_SEED_PROMPT
+)
+from .prompts.vision_prompts import (
     VALUATION_RISK_VISION_PRE_SEED_PROMPT,
     VALUATION_RISK_VISION_SEED_PROMPT,
-    CONTRADICTION_OPERATIONS_PROMPT_TEMPLATE,
-    VALUATION_RISK_OPS_PRE_SEED_PROMPT,
-    VALUATION_RISK_OPS_SEED_PROMPT,
-    FINAL_SYNTHESIS_PROMPT
+    CONTRADICTION_VISION_PROMPT_TEMPLATE
+)
+from .prompts.business_prompts import (
+    RISK_BIZ_MODEL_PRE_SEED_PROMPT,
+    RISK_BIZ_MODEL_SEED_PROMPT,
+    CONTRADICTION_PRE_SEED_BIZ_MODEL_PROMPT,
+    CONTRADICTION_SEED_BIZ_MODEL_PROMPT
 )
 from .helpers import (
     extract_team_data, 
@@ -74,7 +107,7 @@ from .helpers import (
     extract_business_pre_seed,
     extract_business_seed,
     extract_vision_data,
-    extract_operations_data
+    extract_operations_data,
 )
 from .schema import Plan
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -498,6 +531,26 @@ async def operations_node(state: AgentState):
     })
     return {"operations_report": score}
 
+async def t5_insight_node(state: AgentState):
+    """
+    Calls the T5-3B model via app.core.llm.get_t5_insight.
+    Runs in parallel with all other agents during the fan-out phase.
+    """
+    startup_eval = state.get("user_data", {}).get("startup_evaluation", {})
+    snapshot = startup_eval.get("company_snapshot", {})
+    problem  = startup_eval.get("problem_definition", {})
+
+    prompt = (
+        f"Evaluate the following startup context: "
+        f"Company: {snapshot.get('company_name', 'Unknown')}, "
+        f"Stage: {snapshot.get('current_stage', 'Unknown')}. "
+        f"Problem: {problem.get('problem_statement', 'Not provided')}"
+    )
+
+    logger.info("🧠 Triggering T5-3B Evaluation Model (Background Task)...")
+    insight_text = await get_t5_insight(prompt)
+    logger.info("🧠 T5 Insight Generation Complete. Output:\n%s", insight_text)
+    return {"t5_deep_insight": insight_text}
 
 def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, str, dict]:
     # 1. Normalize 0-100 to 0-5
@@ -552,6 +605,10 @@ async def final_node(state: AgentState):
         RISKS: {json.dumps(reds)}
         ------------------------------------------------
         """
+
+    # Inject T5-3B deep insight so Groq can synthesize it
+    t5_insight = state.get("t5_deep_insight", "No T5 insight available.")
+    agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
 
     # 4. Generate with LLM
     llm = get_llm(temperature=0, provider="groq") 

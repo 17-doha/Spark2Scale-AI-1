@@ -1,22 +1,26 @@
 import json
 import base64
 import asyncio
-import os # <--- ADD THIS
-import aiohttp # <--- ADD THIS
-from datetime import datetime # <--- ADD THIS
+import os
+import aiohttp
+from datetime import datetime
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from playwright.async_api import async_playwright
 from json_repair import repair_json
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.graph.evaluation_agent.prompts import NORMALIZER_PROMPT
+from app.graph.evaluation_agent.prompts.general_prompts import NORMALIZER_PROMPT
 try:
-    from langchain_community.tools import DuckDuckGoSearchRun # <--- ADD THIS (Ensure pip install duckduckgo-search)
+    from langchain_community.tools import DuckDuckGoSearchRun
 except ImportError:
-    DuckDuckGoSearchRun = None 
+    DuckDuckGoSearchRun = None
 
 logger = get_logger(__name__)
+
+# T5 client lives in app.core.llm — imported here so other helpers can reach it
+from app.core.llm import get_t5_insight, _get_t5_client  # noqa: E402
+t5_client = None   # kept as a module-level alias for backward-compat with tests
 
 TARGET_SCHEMA = {
   "startup_evaluation": {
@@ -791,3 +795,28 @@ async def normalize_input_data(raw_input: str) -> dict:
         logger.error(f"Normalization Failed: {e}")
         # Fallback: Return empty schema structure so pipeline doesn't crash
         return TARGET_SCHEMA
+
+
+# ---------------------------------------------------------------------------
+# T5-3B ASYNC WRAPPER  — delegates to app.core.llm.get_t5_insight
+# ---------------------------------------------------------------------------
+
+async def fetch_t5_deep_insight(user_data: dict) -> str:
+    """
+    Convenience wrapper used by t5_insight_node.
+    Builds a plain-text prompt from the startup state dict, then calls
+    the canonical get_t5_insight() from app.core.llm.
+    """
+    snapshot = user_data.get("startup_evaluation", {}).get("company_snapshot", {})
+    problem  = user_data.get("startup_evaluation", {}).get("problem_definition", {})
+
+    prompt = (
+        f"Evaluate the following startup context: "
+        f"Company: {snapshot.get('company_name', 'Unknown')}, "
+        f"Stage: {snapshot.get('current_stage', 'Unknown')}. "
+        f"Problem: {problem.get('problem_statement', 'Not provided')}"
+    )
+    logger.info("🧠 Sending prompt to T5-3B model via Gradio...")
+    result = await get_t5_insight(prompt)
+    logger.info("🧠 T5-3B response received.")
+    return result

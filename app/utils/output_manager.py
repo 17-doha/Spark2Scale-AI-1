@@ -72,7 +72,7 @@ class OutputManager:
         
     def save_recommendation(self, recommendation_text, raw_input=None, eval_output=None, 
                           insights=None, patterns=None, refined_statements=None, 
-                          request_id=None, processing_time=None):
+                          market_signals=None, request_id=None, processing_time=None):
         """
         Save recommendation output in multiple formats
         
@@ -116,6 +116,7 @@ class OutputManager:
             "insights": insights or {},
             "refined_statements": refined_statements or {},
             "patterns_detected": patterns or [],
+            "market_signals": market_signals or {},
             "evaluation_scores": eval_output.get("scores") if eval_output else None,
             "company_context": eval_output.get("company_context") if eval_output else None,
             "stage": eval_output.get("stage") if eval_output else None
@@ -131,6 +132,7 @@ class OutputManager:
             eval_output,
             patterns,
             refined_statements,
+            market_signals,
             request_id, 
             timestamp
         )
@@ -166,7 +168,7 @@ class OutputManager:
         }
         
     def _format_markdown_report(self, recommendation_text, insights, eval_output, 
-                                patterns, refined_statements, request_id, timestamp):
+                                patterns, refined_statements, market_signals, request_id, timestamp):
         """Format the recommendation as a markdown document with Spark2Scale branding and colors"""
         
         # Extract company name for header
@@ -218,6 +220,8 @@ class OutputManager:
 
 **AI-Enhanced Core Messaging** — Improved versions of your key statements for better clarity and investor appeal.
 
+| Category | Original Statement | Refined Statement | Why It's Better |
+| :--- | :--- | :--- | :--- |
 """
             
             # Map of statement types to display with readable titles
@@ -234,32 +238,11 @@ class OutputManager:
             for title, key in statement_types:
                 if key in refined_statements and isinstance(refined_statements[key], dict):
                     data = refined_statements[key]
-                    original = data.get('original', 'N/A')
-                    recommended = data.get('recommended', 'N/A')
-                    why_better = data.get('why_better', '')
+                    original = data.get('original', 'N/A').replace('\n', ' ')
+                    recommended = data.get('recommended', 'N/A').replace('\n', ' ')
+                    why_better = data.get('why_better', '').replace('\n', ' ')
                     
-                    markdown += f"""
-### <span style="color: #7b8f4a;">{title}</span>
-
-<div style="background-color: white; padding: 10px; border-radius: 5px; margin: 6px 0; border-left: 3px solid #4a5f2d;">
-
-**Original:**
-<div style="color: #666; font-style: italic; margin: 2px 0;">
-{original}
-</div>
-
-**Refined:**
-<div style="color: #2d3e1f; font-weight: 500; margin: 2px 0;">
-{recommended}
-</div>
-
-**Why Better:**
-<div style="color: #555; font-size: 0.9em; margin: 2px 0;">
-{why_better}
-</div>
-
-</div>
-"""
+                    markdown += f"| **{title}** | <span style='color: #666; font-style: italic;'>{original}</span> | <span style='color: #2d3e1f; font-weight: 500;'>{recommended}</span> | <span style='color: #555;'>{why_better}</span> |\n"
             
             markdown += """
 </div>
