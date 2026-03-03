@@ -25,6 +25,11 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.pptx
+output/ppt_generation/*
+output/market_research/*
+output/startup_info/*
+output/market_research/*
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
@@ -228,3 +233,4 @@ outputs/*
 
 .env
 second
+pytest.ini

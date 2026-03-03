@@ -24,10 +24,12 @@ class StartupData(BaseModel):
     insights: Optional[Dict[str, Any]] = None
     matched_patterns: Optional[List[Dict[str, Any]]] = None
     refined_statements: Optional[Dict[str, Any]] = None
+    market_signals: Optional[Dict[str, Any]] = None
 
 class RecommendationState(TypedDict):
     insights: Optional[Dict[str, Any]]
     matched_patterns: Optional[List[Dict[str, Any]]]
     refined_statements: Optional[Dict[str, Any]]
+    market_signals: Optional[Dict[str, Any]]
     final_report: Optional[str]
     output_paths: Optional[Dict[str, Any]]

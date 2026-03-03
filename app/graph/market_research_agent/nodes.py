@@ -17,7 +17,7 @@ from app.graph.market_research_agent.helpers.research_utils import generate_rese
 logger = get_logger("MarketResearchNodes")
 
 def plan_node(state: MarketResearchState):
-    logger.info("\n👉 Step 0: Developing Research Strategy (Consolidated Gemini Call)...")
+    logger.info("\n[STEP] Step 0: Developing Research Strategy (Consolidated Gemini Call)...")
     idea = state.get("input_idea")
     problem = state.get("input_problem")
     
@@ -26,7 +26,7 @@ def plan_node(state: MarketResearchState):
     return {"research_plan": plan}
 
 def competitors_node(state: MarketResearchState):
-    logger.info("\n👉 Step 1: Researching Competitors (Using Plan)...")
+    logger.info("\n[STEP] Step 1: Researching Competitors (Using Plan)...")
     idea = state.get("input_idea")
     plan = state.get("research_plan")
     
@@ -48,7 +48,7 @@ def competitors_node(state: MarketResearchState):
     return {"competitors_file": file_path}
 
 def validation_node(state: MarketResearchState):
-    logger.info("\n👉 Step 2: Validating Pain Points...")
+    logger.info("\n[STEP] Step 2: Validating Pain Points...")
     idea = state.get("input_idea")
     problem = state.get("input_problem")
     plan = state.get("research_plan")
@@ -57,7 +57,7 @@ def validation_node(state: MarketResearchState):
     return {"validation_file": file_path}
 
 def trends_node(state: MarketResearchState):
-    logger.info("\n👉 Step 3: Analyzing Market Trends...")
+    logger.info("\n[STEP] Step 3: Analyzing Market Trends...")
     idea = state.get("input_idea")
     plan = state.get("research_plan")
     
@@ -72,7 +72,7 @@ def trends_node(state: MarketResearchState):
     return {"trends_file": trend_csv}
 
 def finance_node(state: MarketResearchState):
-    logger.info("\n👉 Step 5: Building Financial Model...")
+    logger.info("\n[STEP] Step 5: Building Financial Model...")
     idea = state.get("input_idea")
     plan = state.get("research_plan")
     
@@ -80,7 +80,7 @@ def finance_node(state: MarketResearchState):
     return {"finance_file": finance_csv}
 
 def market_sizing_node(state: MarketResearchState):
-    logger.info("\n👉 Step 6: Calculating TAM/SAM/SOM...")
+    logger.info("\n[STEP] Step 6: Calculating TAM/SAM/SOM...")
     idea = state.get("input_idea")
     plan = state.get("research_plan")
     
@@ -92,7 +92,7 @@ def market_sizing_node(state: MarketResearchState):
     return {"market_limit_file": file_path}
 
 def report_node(state: MarketResearchState):
-    logger.info("\n👉 Step 7: Writing Strategy Report...")
+    logger.info("\n[STEP] Step 7: Writing Strategy Report...")
     idea = state.get("input_idea")
     val_file = state.get("validation_file")
     trend_file = state.get("trends_file")
@@ -105,7 +105,7 @@ def report_node(state: MarketResearchState):
     return {"report_text": "Report Generated"}
 
 def pdf_node(state: MarketResearchState):
-    logger.info("\n👉 Step 8: Compiling Final PDF & JSON Deck...")
+    logger.info("\n[STEP] Step 8: Compiling Final PDF & JSON Deck...")
     idea = state.get("input_idea")
     pdf_file = compile_final_pdf(idea)
     json_file = compile_final_json(idea)

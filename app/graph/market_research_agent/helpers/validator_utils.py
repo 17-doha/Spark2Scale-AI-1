@@ -60,12 +60,12 @@ def search_multiple_sources(queries_dict, idea):
     prob_queries = queries_dict.get("problem_queries", []) or queries_dict.get("problem", [])
     sol_queries = queries_dict.get("solution_queries", []) or queries_dict.get("solution", [])
     
-    logger.info(f"   🔍 Searching {len(prob_queries)} problem queries and {len(sol_queries)} solution queries...")
+    logger.info(f"   [SEARCH] Searching {len(prob_queries)} problem queries and {len(sol_queries)} solution queries...")
     max_queries = ResearchConfig.MAX_VALIDATION_QUERIES_PER_TYPE
     
     def process_queries(query_list, query_type):
         for q in query_list[:max_queries]:
-            logger.info(f"   📱 Executing validation search: {q}")
+            logger.info(f"   [MOBILE] Executing validation search: {q}")
             res = search_forums(q)
             if "organic" in res:
                 for item in res["organic"]:
@@ -87,7 +87,7 @@ def search_multiple_sources(queries_dict, idea):
     process_queries(prob_queries, "PROBLEM")
     process_queries(sol_queries, "SOLUTION")
     
-    logger.info(f"   ✅ Found {len(all_evidence)} pieces of evidence.")
+    logger.info(f"   [SUCCESS] Found {len(all_evidence)} pieces of evidence.")
     return all_evidence
 
 def analyze_evidence_quality(evidence_list):
@@ -309,5 +309,5 @@ def analyze_pain_points(idea, problem_statement, evidence_list):
         }
         
     except Exception as e:
-        logger.error(f"⚠️ Pain Analysis Error: {e}")
+        logger.error(f"[WARNING] Pain Analysis Error: {e}")
         return None

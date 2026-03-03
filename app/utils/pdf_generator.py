@@ -157,7 +157,7 @@ def generate_founder_report(report_data: dict, filename: str):
         if imp:
             story.append(Spacer(1, 5))
             i_text = imp if isinstance(imp, str) else "; ".join(imp)
-            story.append(Paragraph(f"<b>🚀 Fix:</b> {i_text}", ParagraphStyle('fix', parent=s_body, textColor=colors.darkgreen)))
+            story.append(Paragraph(f"<b>[LAUNCH] Fix:</b> {i_text}", ParagraphStyle('fix', parent=s_body, textColor=colors.darkgreen)))
             
         story.append(Spacer(1, 10))
         story.append(Paragraph("_"*50, ParagraphStyle('l', parent=s_body, textColor=COLOR_PRIMARY)))

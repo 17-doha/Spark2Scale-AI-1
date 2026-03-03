@@ -56,7 +56,7 @@ async def extract_from_pdf(file: UploadFile = File(...)):
     try:
         document_text = extract_text_from_pdf(file_bytes)
     except Exception as e:
-        logger.error(f"❌ PDF text extraction failed: {e}")
+        logger.error(f"[ERROR] PDF text extraction failed: {e}")
         raise HTTPException(status_code=422, detail=f"Failed to extract text from PDF: {str(e)}")
 
     if not document_text.strip():
@@ -65,7 +65,7 @@ async def extract_from_pdf(file: UploadFile = File(...)):
             detail="The PDF appears to contain no extractable text (it may be a scanned image)."
         )
 
-    logger.info(f"📄 Extracted {len(document_text)} characters from PDF: {file.filename}")
+    logger.info(f"[DOC] Extracted {len(document_text)} characters from PDF: {file.filename}")
 
     # 4. Use LLM to fill the schema from the document text
     #    Using Gemini for larger context window (PDFs can be long)
@@ -83,12 +83,12 @@ async def extract_from_pdf(file: UploadFile = File(...)):
         if "startup_evaluation" not in extracted_data:
             extracted_data = {"startup_evaluation": extracted_data}
 
-        logger.info(f"✅ Successfully extracted schema from PDF: {file.filename}")
+        logger.info(f"[SUCCESS] Successfully extracted schema from PDF: {file.filename}")
 
         return {"data": extracted_data}
 
     except Exception as e:
-        logger.error(f"❌ LLM extraction failed: {e}")
+        logger.error(f"[ERROR] LLM extraction failed: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"AI extraction failed: {str(e)}"

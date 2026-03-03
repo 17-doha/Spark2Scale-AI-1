@@ -12,7 +12,7 @@ logger = get_logger("ResearchUtils")
 SERPER_API_KEY = Config.SERPER_API_KEY
 
 def generate_research_plan(idea, problem):
-    logger.info(f"   🧠 Generating Comprehensive Research Plan for: '{idea}'...")
+    logger.info(f"   [AI] Generating Comprehensive Research Plan for: '{idea}'...")
     try:
         prompt = prompts.generate_research_plan_prompt(idea, problem)
         response = call_gemini(prompt)
@@ -23,7 +23,7 @@ def generate_research_plan(idea, problem):
 
 def generate_smart_queries(business_idea):
     # DEPRECATED: Use generate_research_plan instead
-    logger.info(f"   🧠 Brainstorming search terms for: '{business_idea}'...")
+    logger.info(f"   [AI] Brainstorming search terms for: '{business_idea}'...")
     try:
         prompt = prompts.generate_smart_queries_prompt(business_idea)
         response = call_gemini(prompt)
@@ -36,7 +36,7 @@ def extract_competitors_strict(search_data, business_idea):
     """
     STRICT MODE: Extracts only Company Names. Filters out Blog Titles.
     """
-    print(f"   🧪 Extracting Real App Names from {len(search_data)} results...")
+    print(f"   [TEST] Extracting Real App Names from {len(search_data)} results...")
     
     raw_text = ""
     for item in search_data:
@@ -48,7 +48,7 @@ def extract_competitors_strict(search_data, business_idea):
         response = call_gemini(prompt)
         return json.loads(response.text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
-        print(f"   ⚠️ Extraction Failed: {e}")
+        print(f"   [WARNING] Extraction Failed: {e}")
         return []
 
 def execute_serper_search(queries):
@@ -56,7 +56,7 @@ def execute_serper_search(queries):
     Performs Serper Google Searches for a list of queries.
     """
     all_raw_results = []
-    print(f"   🔎 executing {len(queries)} search queries...")
+    print(f"   [SEARCH] executing {len(queries)} search queries...")
     
     # The AI will now actually use the research plan it generated!
     for q in queries:
@@ -71,8 +71,8 @@ def execute_serper_search(queries):
             if "organic" in data:
                 all_raw_results.extend(data["organic"])
             else:
-                print(f"   ⚠️ Serper No Results: {data}")
+                print(f"   [WARNING] Serper No Results: {data}")
         except Exception as e:
-            print(f"   ⚠️ Serper Request Failed: {e}")
+            print(f"   [WARNING] Serper Request Failed: {e}")
     
     return all_raw_results

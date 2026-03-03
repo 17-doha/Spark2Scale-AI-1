@@ -39,7 +39,7 @@ async def main():
             print(f"\n⚠️ Finished with unexpected status: {result}")
 
     except Exception as e:
-        print(f"\n❌ ERROR during generation: {e}")
+        print(f"\n[ERROR] ERROR during generation: {e}")
         logger.error(f"Generation failed: {e}", exc_info=True)
 
 if __name__ == "__main__":

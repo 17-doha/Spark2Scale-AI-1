@@ -23,24 +23,24 @@ def _clean_filename(name: str) -> str:
 # ==========================================
 def find_competitors(business_idea: str):
     # FALLBACK for legacy calls
-    logger.info(f"\n🕵️ [Tool 3] Deep Market Research (Enhanced Mode) for: '{business_idea}'...")
+    logger.info(f"\n[AGENT] [Tool 3] Deep Market Research (Enhanced Mode) for: '{business_idea}'...")
     queries = research_utils.generate_smart_queries(business_idea)
     return _execute_competitor_search(business_idea, queries)
 
 def find_competitors_from_plan(business_idea: str, plan: dict):
-    logger.info(f"\n🕵️ [Tool 3] Deep Market Research (Plan Mode) for: '{business_idea}'...")
+    logger.info(f"\n[AGENT] [Tool 3] Deep Market Research (Plan Mode) for: '{business_idea}'...")
     queries = plan.get("competitor_queries", [f"{business_idea} alternatives"])
     return _execute_competitor_search(business_idea, queries)
 
 def _execute_competitor_search(business_idea, queries):
     # Use configured limit instead of hardcoded 2
     max_queries = ResearchConfig.MAX_COMPETITOR_QUERIES
-    logger.info(f"   📊 Using up to {max_queries} competitor queries for better coverage...")
+    logger.info(f"   [DATA] Using up to {max_queries} competitor queries for better coverage...")
     
     all_raw_results = research_utils.execute_serper_search(queries[:max_queries])
     
     if not all_raw_results: 
-        logger.warning("   ⚠️ No competitor search results found.")
+        logger.warning("   [WARNING] No competitor search results found.")
         return None
         
     # AI Extraction
@@ -55,20 +55,20 @@ def _execute_competitor_search(business_idea, queries):
             if "Features" not in df.columns: 
                 df["Features"] = "Standard Features"
             df.to_csv(filename, index=False)
-            logger.info(f"✅ Success: Extracted {len(df)} VALID competitors.")
+            logger.info(f"[SUCCESS] Success: Extracted {len(df)} VALID competitors.")
             return filename
         except Exception as e:
             logger.error(f"DataFrame Error: {e}")
             return None
     else:
-        logger.warning("   ⚠️ No competitors extracted from search results.")
+        logger.warning("   [WARNING] No competitors extracted from search results.")
     return None
 
 # ==========================================
 # 4. Problem Validator (ENHANCED)
 # ==========================================
 def validate_problem(idea, problem_statement, plan=None):
-    logger.info(f"\n😤 [Tool 6] Validating Problem with Enhanced Multi-Source Search...")
+    logger.info(f"\n[VALIDATE] [Tool 6] Validating Problem with Enhanced Multi-Source Search...")
     
     # Generate or use planned queries
     if plan and "validation_queries" in plan:
@@ -77,16 +77,16 @@ def validate_problem(idea, problem_statement, plan=None):
         queries = validator_utils.generate_validation_queries(idea, problem_statement)
         
     if not queries:
-        logger.warning("⚠️ Validation queries missing. Skipping validation.")
+        logger.warning("[WARNING] Validation queries missing. Skipping validation.")
         return None
     
-    logger.info(f"   📋 Validation Plan: {ResearchConfig.MAX_VALIDATION_QUERIES_PER_TYPE} queries per category across {len(ResearchConfig.VALIDATION_SOURCES)} sources")
+    logger.info(f"   [DATA] Validation Plan: {ResearchConfig.MAX_VALIDATION_QUERIES_PER_TYPE} queries per category across {len(ResearchConfig.VALIDATION_SOURCES)} sources")
     
     # NEW: Use multi-source search
     evidence_list = validator_utils.search_multiple_sources(queries, idea)
     
     if not evidence_list:
-        logger.warning("⚠️ No validation evidence found across any source.")
+        logger.warning("[WARNING] No validation evidence found across any source.")
         # Create minimal result indicating insufficient data
         minimal_result = {
             "verdict": "INSUFFICIENT_DATA",
@@ -110,7 +110,7 @@ def validate_problem(idea, problem_statement, plan=None):
     analysis = validator_utils.analyze_pain_points(idea, problem_statement, evidence_list)
     
     if not analysis:
-        logger.warning("⚠️ Validation analysis failed.")
+        logger.warning("[WARNING] Validation analysis failed.")
         return None
 
     # Save enhanced validation results
@@ -121,13 +121,13 @@ def validate_problem(idea, problem_statement, plan=None):
         json.dump(analysis, f, indent=4)
     
     # Enhanced logging
-    logger.info(f"   ⚖️  VERDICT: {analysis.get('verdict')}")
-    logger.info(f"   🩸 PAIN SCORE: {analysis.get('pain_score'):.1f}/100 (Raw LLM: {analysis.get('pain_score_raw')})")
-    logger.info(f"   📊 CONFIDENCE: {analysis.get('confidence')}")
-    logger.info(f"   📚 EVIDENCE: {analysis.get('evidence_quality', {}).get('total_count', 0)} sources")
+    logger.info(f"   [BALANCE]  VERDICT: {analysis.get('verdict')}")
+    logger.info(f"   [PAIN] PAIN SCORE: {analysis.get('pain_score'):.1f}/100 (Raw LLM: {analysis.get('pain_score_raw')})")
+    logger.info(f"   [DATA] CONFIDENCE: {analysis.get('confidence')}")
+    logger.info(f"   [EVIDENCE] EVIDENCE: {analysis.get('evidence_quality', {}).get('total_count', 0)} sources")
     
     if analysis.get('warnings'):
-        logger.warning(f"   ⚠️  WARNINGS:")
+        logger.warning(f"   [WARNING]  WARNINGS:")
         for warning in analysis['warnings']:
             logger.warning(f"      - {warning}")
     
@@ -137,7 +137,7 @@ def validate_problem(idea, problem_statement, plan=None):
 # 5. Market Quantifier (Trends)
 # ==========================================
 def fetch_trend_data(keywords, geo_code='EG', plan=None):
-    logger.info(f"\n📊 [Tool 7] Quantifying Market Demand...")
+    logger.info(f"\n[DATA] [Tool 7] Quantifying Market Demand...")
     
     search_term = keywords[0]
     if plan and "market_identity" in plan:
@@ -152,11 +152,11 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
         col = data.columns[0]
         growth_pct = market_utils.plot_trends(data, source_name, col)
         
-        logger.info(f"✅ Success: Growth calculated at {growth_pct:.1f}%")
+        logger.info(f"[SUCCESS] Success: Growth calculated at {growth_pct:.1f}%")
         return "data_output/market_trends.csv", "data_output/market_demand_chart.png"
     
     # Fallback to CAGR search instead of Wikipedia
-    logger.info("   ⚠️ Google Trends failed, falling back to Industry CAGR Reports via web search...")
+    logger.info("   [WARNING] Google Trends failed, falling back to Industry CAGR Reports via web search...")
     industry_term = search_term   
     if plan and "market_identity" in plan:
         industry_term = plan["market_identity"].get("industry", search_term)
@@ -164,7 +164,7 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
     cagr_pct = market_utils.fetch_industry_cagr(industry_term)
     
     if cagr_pct is not None:
-        logger.info(f"✅ Success: Market CAGR extracted at {cagr_pct}%")
+        logger.info(f"[SUCCESS] Success: Market CAGR extracted at {cagr_pct}%")
         # Save a basic stats file so pdf_utils can read it
         stats_df = pd.DataFrame({
             'metric': ['growth_pct', 'source'],
@@ -178,7 +178,7 @@ def fetch_trend_data(keywords, geo_code='EG', plan=None):
             
         return "data_output/market_stats.csv", None
 
-    logger.warning("⚠️ No trend data available.")
+    logger.warning("[WARNING] No trend data available.")
     return None, None
 
 # ==========================================
@@ -188,7 +188,7 @@ def calculate_market_size(idea, location="Global", plan=None):
     """
     FIXED VERSION: Calculate TAM/SAM/SOM with realistic validation and correction
     """
-    logger.info(f"\n📐 [Tool 11] Calculating REALISTIC TAM/SAM/SOM with Validation...")
+    logger.info(f"\n[MEASURE] [Tool 11] Calculating REALISTIC TAM/SAM/SOM with Validation...")
     
     # Get industry and location from plan
     industry = "Unknown"
@@ -206,11 +206,11 @@ def calculate_market_size(idea, location="Global", plan=None):
         try:
             df = pd.read_csv(competitors_file[0])
             competitor_count = len(df)
-            logger.info(f"   🏢 Found {competitor_count} competitors")
+            logger.info(f"   [COMPANY] Found {competitor_count} competitors")
         except:
             competitor_count = 5
     
-    logger.info(f"   🌍 Analyzing '{industry}' market in {location}...")
+    logger.info(f"   [GLOBAL] Analyzing '{industry}' market in {location}...")
     
     # Use configured limit for searches
     max_queries = ResearchConfig.MAX_MARKET_SIZE_QUERIES
@@ -223,14 +223,14 @@ def calculate_market_size(idea, location="Global", plan=None):
     
     market_data = ""
     for q in queries[:max_queries]:
-        logger.info(f"   🔍 Query: {q}")
+        logger.info(f"   [SEARCH] Query: {q}")
         market_data += market_utils.search_market_reports(q) + "\n"
 
     # Get LLM analysis (might have unrealistic numbers)
     result = market_utils.analyze_market_size(idea, industry, location, market_data)
 
     if not result:
-        logger.warning("⚠️ Market sizing analysis failed.")
+        logger.warning("[WARNING] Market sizing analysis failed.")
         return None
 
     # ========================================
@@ -242,7 +242,7 @@ def calculate_market_size(idea, location="Global", plan=None):
     raw_sam = result.get('sam_value', 'Unknown')
     raw_som = result.get('som_value', 'Unknown')
     
-    logger.info(f"   📊 LLM Raw Output:")
+    logger.info(f"   [DATA] LLM Raw Output:")
     logger.info(f"      TAM: {raw_tam}")
     logger.info(f"      SAM: {raw_sam}")
     logger.info(f"      SOM: {raw_som}")
@@ -253,7 +253,7 @@ def calculate_market_size(idea, location="Global", plan=None):
     )
     
     if tam_correction:
-        logger.warning(f"   ⚠️ TAM CORRECTED: {tam_correction}")
+        logger.warning(f"   [WARNING] TAM CORRECTED: {tam_correction}")
     
     # Step 2: Calculate realistic SAM based on geography
     sam_millions, sam_reasoning = RealisticMarketSizer.calculate_realistic_sam(
@@ -262,7 +262,7 @@ def calculate_market_size(idea, location="Global", plan=None):
     
     # Step 3: Determine market structure from competitor count
     market_structure = RealisticMarketSizer.determine_market_structure(competitor_count)
-    logger.info(f"   🏗️  Market Structure: {market_structure} ({competitor_count} competitors)")
+    logger.info(f"   [STRUCTURE]  Market Structure: {market_structure} ({competitor_count} competitors)")
     
     # Step 4: Calculate realistic SOM based on competition
     som_millions, som_reasoning = RealisticMarketSizer.calculate_realistic_som(
@@ -274,7 +274,7 @@ def calculate_market_size(idea, location="Global", plan=None):
     corrected_sam = RealisticMarketSizer.format_value(sam_millions)
     corrected_som = RealisticMarketSizer.format_value(som_millions)
     
-    logger.info(f"   ✅ CORRECTED Output:")
+    logger.info(f"   [SUCCESS] CORRECTED Output:")
     logger.info(f"      TAM: {corrected_tam}")
     logger.info(f"      SAM: {corrected_sam}")
     logger.info(f"      SOM: {corrected_som}")
@@ -308,11 +308,11 @@ def calculate_market_size(idea, location="Global", plan=None):
         json.dump(result, f, indent=4)
     
     # Final logging
-    logger.info(f"   📊 Market Type: {result.get('market_type')}")
-    logger.info(f"   ✅ Data Quality: {result.get('data_quality')}")
+    logger.info(f"   [DATA] Market Type: {result.get('market_type')}")
+    logger.info(f"   [SUCCESS] Data Quality: {result.get('data_quality')}")
     
     if result.get('corrections_applied'):
-        logger.warning(f"   ⚠️ Corrections were applied to ensure realistic numbers")
+        logger.warning(f"   [WARNING] Corrections were applied to ensure realistic numbers")
     
     return "data_output/market_sizing.json"
 
@@ -320,7 +320,7 @@ def calculate_market_size(idea, location="Global", plan=None):
 # 6. Finance Model
 # ==========================================
 def run_finance_model(idea, plan=None):
-    logger.info(f"\n💰 [Tool 8] Starting Enhanced Financial Model...")
+    logger.info(f"\n[FINANCE] [Tool 8] Starting Enhanced Financial Model...")
     
     if plan and "financial_queries" in plan:
         currency = plan["market_identity"].get("currency_code", "USD")
@@ -328,7 +328,7 @@ def run_finance_model(idea, plan=None):
         
         # Use configured limit
         max_queries = ResearchConfig.MAX_FINANCE_QUERIES
-        logger.info(f"   📊 Using up to {max_queries} finance queries...")
+        logger.info(f"   [DATA] Using up to {max_queries} finance queries...")
         
         market_data = ""
         for q in queries[:max_queries]:
@@ -341,7 +341,7 @@ def run_finance_model(idea, plan=None):
         estimates = finance_utils.get_real_world_estimates(idea, currency_context=currency_context)
         
     if not estimates:
-        logger.warning("⚠️ Financial estimation failed.")
+        logger.warning("[WARNING] Financial estimation failed.")
         return None
 
     return finance_utils.generate_financial_visuals(estimates)
@@ -362,7 +362,7 @@ def compile_final_pdf(idea_name):
     return pdf_utils.compile_final_pdf_report(idea_name)
 
 def compile_final_json(idea_name):
-    logger.info(f"\n💾 [Tool 10] Compiling JSON Data Output...")
+    logger.info(f"\n[SAVE] [Tool 10] Compiling JSON Data Output...")
     
     json_data = {
         "idea_name": idea_name,
@@ -426,8 +426,8 @@ def compile_final_json(idea_name):
         with open(output_filename, "w", encoding="utf-8") as f:
             json.dump(json_data, f, indent=4)
             
-        logger.info(f"✅ JSON GENERATED: {output_filename}")
+        logger.info(f"[SUCCESS] JSON GENERATED: {output_filename}")
         return output_filename
     except Exception as e:
-        logger.error(f"❌ JSON Compilation Failed: {e}")
+        logger.error(f"[ERROR] JSON Compilation Failed: {e}")
         return None

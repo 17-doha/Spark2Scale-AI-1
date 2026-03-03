@@ -680,7 +680,7 @@ def generate_queries(vision_data: dict) -> tuple[str, list]:
 
 async def get_market_signals_serper(vision_data: dict) -> str:
     """Runs search using Google Serper API via Async HTTP (Parallelized)."""
-    logger.info("🌐 Running Market Search (Serper/Google)...")
+    logger.info("[GLOBAL] Running Market Search (Serper/Google)...")
     
     api_key = os.environ.get("SERPER_API_KEY")
     if not api_key: return "No Serper API Key found."
@@ -741,7 +741,7 @@ def parse_and_repair_json(raw_text: str) -> dict:
         parsed = json.loads(repair_json(cleaned_text))
         return parsed
     except Exception as e:
-        logger.error(f"❌ JSON Repair Failed: {e} | Raw: {raw_text[:100]}...")
+        logger.error(f"[ERROR] JSON Repair Failed: {e} | Raw: {raw_text[:100]}...")
         # Return safe fallback to prevent pipeline crash
         return {
             "score": "0/5", 

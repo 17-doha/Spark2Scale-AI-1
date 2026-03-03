@@ -401,10 +401,10 @@ class GrowthValidator:
         FIX: Remove the +50 baseline inflation
         
         OLD formula: score = (growth_pct + 50) * 2
-        This made 0% growth = 100 score ❌
+        This made 0% growth = 100 score (wrong)
         
         NEW formula: score = growth_pct + 50
-        Now 0% growth = 50 score ✅
+        Now 0% growth = 50 score [SUCCESS]
         """
         # Map -50% growth → 0, 0% → 50, +50% → 100
         score = max(0, min(100, growth_pct + 50))
@@ -522,17 +522,17 @@ class ReportValidator:
         output = []
         
         if warnings_dict["HIGH"]:
-            output.append("## 🚨 CRITICAL WARNINGS\n")
+            output.append("## [CRITICAL] CRITICAL WARNINGS\n")
             for w in warnings_dict["HIGH"]:
                 output.append(f"- {w}\n")
         
         if warnings_dict["MEDIUM"]:
-            output.append("\n## ⚠️ IMPORTANT NOTES\n")
+            output.append("\n## [WARNING] IMPORTANT NOTES\n")
             for w in warnings_dict["MEDIUM"]:
                 output.append(f"- {w}\n")
         
         if warnings_dict["LOW"]:
-            output.append("\n## ℹ️ CONSIDERATIONS\n")
+            output.append("\n## [INFO] CONSIDERATIONS\n")
             for w in warnings_dict["LOW"]:
                 output.append(f"- {w}\n")
         

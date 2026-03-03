@@ -190,7 +190,7 @@ async def process_idea_chat(request: ChatRequest):
     Returns natural language AI reply.
     """
     if is_prompt_injection(request.user_message):
-        logger.warning(f"⚠️ Injection Blocked: {request.user_message[:50]}")
+        logger.warning(f"[WARNING] Injection Blocked: {request.user_message[:50]}")
         return {"ai_reply": "I cannot fulfill that request. How else can I help with your startup?"}
 
     user_content = (
@@ -203,7 +203,7 @@ async def process_idea_chat(request: ChatRequest):
         result = call_gemini(user_content, _CHAT_SYSTEM_PROMPT, json_mode=False)
         return {"ai_reply": result.get("ai_reply", "")}
     except Exception as e:
-        logger.error(f"❌ Gemini Chat Failed: {str(e)}")
+        logger.error(f"[ERROR] Gemini Chat Failed: {str(e)}")
         return {"ai_reply": "I'm having trouble connecting right now. Please try again."}
 
 
@@ -222,7 +222,7 @@ async def update_startup_data(request: UpdateDataRequest):
     try:
         result = call_gemini(user_content, _EXTRACTION_SYSTEM_PROMPT, json_mode=True)
     except Exception as e:
-        logger.error(f"❌ Gemini Extraction Failed: {str(e)}")
+        logger.error(f"[ERROR] Gemini Extraction Failed: {str(e)}")
         return {"updated_startup_data": request.startup_data}
 
     updates = result.get("data_updates", {})
@@ -232,5 +232,5 @@ async def update_startup_data(request: UpdateDataRequest):
         deep_merge(final_data, updates)
         return {"updated_startup_data": final_data}
     except Exception as merge_e:
-        logger.error(f"❌ Merge Failed: {str(merge_e)}")
+        logger.error(f"[ERROR] Merge Failed: {str(merge_e)}")
         return {"updated_startup_data": request.startup_data}

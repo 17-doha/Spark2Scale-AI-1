@@ -1,7 +1,9 @@
 from .schema import StartupData
 from .helpers import extract_key_insights
-from .tools import detect_patterns
+from .patterns import detect_patterns
+from .tools import run_market_intel
 from .node import AgentNodes
+from app.core.config import Config
 from app.utils.output_manager import OutputManager
 from app.utils.logger import logger
 import time
@@ -36,12 +38,17 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     # 4. AI Nodes
     agent = AgentNodes(api_key)
     replacements = agent.improve_statements(insights)
-    final_report = agent.synthesize_report(data, matched_patterns, insights, replacements)
+    
+    # Run market intelligence before synthesis
+    market_signals = run_market_intel(insights, tavily_api_key=Config.TAVILY_API_KEY)
+    
+    final_report = agent.synthesize_report(data, matched_patterns, insights, replacements, market_signals)
     
     # 5. Store intermediate results in the data object (as part of internal state)
     data.insights = insights
     data.matched_patterns = matched_patterns
     data.refined_statements = replacements
+    data.market_signals = market_signals
     
     # 6. Save output if requested
     output_paths = None
@@ -55,6 +62,7 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
             insights=insights,
             patterns=matched_patterns,
             refined_statements=replacements,  # Add refined statements
+            market_signals=market_signals,
             request_id=request_id,
             processing_time=processing_time
         )
@@ -69,6 +77,7 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
         "output_paths": output_paths,
         "insights": insights,
         "matched_patterns": matched_patterns,
-        "refined_statements": replacements
+        "refined_statements": replacements,
+        "market_signals": market_signals
     }
 

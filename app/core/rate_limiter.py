@@ -25,7 +25,7 @@ class GeminiLimiter:
         elapsed = time.time() - cls._last_call_time
         if elapsed < cls._min_interval:
             wait_time = cls._min_interval - elapsed
-            logger.info(f"⏳ Rate Limit: Waiting {wait_time:.1f}s...")
+            logger.info(f"[WAIT] Rate Limit: Waiting {wait_time:.1f}s...")
             time.sleep(wait_time)
         
         cls._last_call_time = time.time()
@@ -45,7 +45,7 @@ class GeminiLimiter:
                 # Check for quota errors (LangChain/Google might raise different exceptions, keeping checks broad)
                 if "429" in error_str or "ResourceExhausted" in error_str or "Quota exceeded" in error_str or "429" in str(type(e)):
                     wait_time = (2 ** attempt) + random.uniform(0, 1)
-                    logger.warning(f"⚠️ Quota Hit (429). Retrying in {wait_time:.1f}s...")
+                    logger.warning(f"[WARNING] Quota Hit (429). Retrying in {wait_time:.1f}s...")
                     time.sleep(wait_time)
                     cls._last_call_time = time.time() # Reset timer after wait
                 else:

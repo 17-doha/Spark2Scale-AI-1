@@ -220,7 +220,7 @@ async def generate_pptx_file(draft: PPTDraft, output_path: str) -> str:
     Generates a PPTX file from a PPTDraft object using the Presenton engine.
     """
     temp_dir = os.path.dirname(output_path)
-    if not os.path.exists(temp_dir):
+    if temp_dir and not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
 
     # 1. Resolve Theme early (to use for charts)

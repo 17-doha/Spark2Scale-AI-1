@@ -14,7 +14,7 @@ app.add_middleware(
     allow_methods=["*"], # This will allow the OPTIONS method
     allow_headers=["*"],
 )
-app.include_router(ppt_generation.router, prefix="/api/v1/ppt", tags=["PPT Generation"])
+app.include_router(ppt_generation.router, prefix="/api/v1/ppt", tags=["Presentation Generation"])
 app.include_router(evaluation.router, prefix="/api/v1/evaluation", tags=["Evaluation"])
 
 app.include_router(recommendation.router, prefix="/api/v1", tags=["Recommendation"])
