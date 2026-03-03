@@ -61,24 +61,28 @@ List specific contradictions found as bullet points.
 If NO contradictions, output: "✅ No traction logic contradictions found."
 """
 VALUATION_RISK_TRACTION_PRE_SEED_PROMPT = """
-You are a **Pre-Seed Investment Analyst**. Your job is to stress-test a startup's "Traction & Validation"
+You are a Senior Venture Capital Analyst and Pre-Seed Investment Evaluator. Your job is to stress-test a startup's "Traction & Validation"
 by comparing their **Internal Claims** against **Standard VC Benchmarks**.
+Traction is proof the business works in the real world. Investors want evidence of demand before funding.
 
-### RISK CRITERIA (Evaluate these 3 points)
+### RISK CRITERIA (Evaluate these 4 points)
 
 **1. Validation Void Risk (The "Echo Chamber" Check)**
 * **The "Homework" Rule:** Did the founder talk to real humans before building?
-    * **FAIL:** If `interviews_conducted` is 0, "None", or < 10.
-    * **FAIL:** If the founder claims "We just knew" or relies purely on intuition without surveys or tests.
-    * **PASS:** Documented customer interviews (>20) or survey results provided.
+    * **FAIL:** If `interviews_conducted` is 0, "None", or < 15.
+    * **FAIL:** If the founder claims "We just knew" or relies purely on intuition without surveys or structured customer discovery.
+    * **PASS:** Documented customer interviews (>20) validating a severe pain point.
 
-**2. Signal Risk (The "Ghost Town" Check)**
-* **The "Proof" Rule:** Is there *any* tangible evidence of demand?
+**2. Time-to-Traction Risk (The "Zombie" Check)**
+* **The "Proof" Rule:** Is there *any* tangible evidence of demand relative to their age?
+    * **FAIL:** If the company has been in operation for years (e.g., > 1.5 years) but still has no paying customers, no active beta users, or meaningful pilot contracts.
     * **FAIL:** If ALL of the following are missing/zero: `early_revenue`, `waitlist_status`, `partnerships_lois`, AND `users_total`.
-    * **FAIL:** If the startup has been "founded" >6 months ago but has 0 users (Stagnation).
-    * **PASS:** Presence of at least one strong signal: A growing waitlist, signed LOIs (for B2B), or active beta users.
 
-**3. Asset Risk (The "Defensibility" Check)**
+**3. Fake Demand Risk (The "Discount" Check)**
+* **The "Value" Rule:** Are people opting in because it's valuable, or because it's free?
+    * **FAIL:** If early user growth or waitlist numbers appear to be driven purely by heavy financial incentives, giveaways, or paid promotions rather than organic pull.
+
+**4. Asset Risk (The "Defensibility" Check)**
 * **The "Moat" Rule:** Do they own anything valuable yet?
     * **FAIL:** If `defensibility` is "None", "First Mover", or generic (e.g., "We are cheaper").
     * **PASS:** Pending Patent, proprietary dataset, or exclusive partnership locked in.
@@ -90,54 +94,51 @@ by comparing their **Internal Claims** against **Standard VC Benchmarks**.
 ---
 
 ### OUTPUT FORMAT:
-Strictly list the risks found as bullet points.
+Strictly list the risks found as bullet points under the title "## Risks". Do not include introductions or summaries.
 If NO risks are found, output "No critical traction risks identified."
 
-## Traction Risks (Pre-Seed)
+## Risks
 * **[Risk Flag Name]**: [Explanation of the risk]
   * *Evidence:* "[Quote specific metric or text from Input Data]"
 """
 
 VALUATION_RISK_TRACTION_SEED_PROMPT = """
-You are a **Growth Strategy Consultant**. Your job is to audit a Seed-stage startup's "Growth Engine."
-You are looking for **Scalability Blockers** and **Broken Unit Economics**.
+You are a Senior Growth Strategy Consultant and VC Auditor. Your job is to audit a Seed-stage startup's "Growth Engine."
+You are looking for **Fake Growth**, **Scalability Blockers**, and **Broken Unit Economics**.
 
 ### RISK CRITERIA (Evaluate these 6 points)
 
-**1. Acquisition Risk (The "Lucky Break" Check)**
+**1. Fake Growth Risk (The "Discount" Check)**
+* **The "Quality" Rule:** Is growth organic or bought artificially?
+    * **FAIL:** If user growth or revenue is driven heavily by deep discounting, unsustainable promotions, or massive ad spend without a path to profitability.
+
+**2. Acquisition Risk (The "Lucky Break" Check)**
 * **The "Repeatable" Rule:** Can they get customers without the founder?
-    * **FAIL:** If `channel` is purely "Word of Mouth", "Referrals", or "Founder Network" (Not scalable).
-    * **FAIL:** If there is no clear Paid or Content strategy listed.
-    * **PASS:** Proven channel (e.g., "SEO driving 50% leads", "LinkedIn Ads with <$50 CAC").
+    * **FAIL:** If acquisition relies purely on "Word of Mouth", "Referrals", or "Founder's Personal Network" (Not scalable for Seed to Series A).
+    * **FAIL:** If `channel` lacks a clear, predictable GTM motion.
 
-**2. Retention Risk (The "Leaky Bucket" Check)**
-* **The "Stickiness" Rule:** Do users stay?
-    * **FAIL:** If `retention_metrics` is "Not specified", "Unknown", or shows high churn (>10% monthly).
-    * **FAIL:** If `active_users` is significantly lower (<20%) than `total_users` (Sign-up and leave).
-    * **PASS:** Strong cohort retention or low churn (<5%).
+**3. Retention Risk (The "Leaky Bucket" & PMF Check)**
+* **The "Stickiness" Rule:** Do users stay and engage?
+    * **FAIL:** If churn is high (>10% monthly for SaaS) without a clear turnaround plan.
+    * **FAIL:** If DAU/MAU engagement is extremely low (<20%), indicating users sign up but don't log back in.
+    * **FAIL (Sean Ellis Test):** If survey data shows that fewer than 40% of users would be "very disappointed" if the product disappeared (Indicates weak Product-Market Fit).
 
-**3. Momentum Risk (The "Stall" Check)**
-* **The "Velocity" Rule:** Is the business growing month-over-month?
+**4. Momentum Risk (The "Stall" Check)**
+* **The "Velocity" Rule:** Is the business compounding?
     * **FAIL:** If `growth_rate_mom` is "0%", "Flat", or negative.
     * **FAIL:** If `mrr` has been stagnant for >3 months.
-    * **PASS:** Consistent MoM growth (>10%).
+    * **PASS:** Consistent MoM growth (>15% is the VC gold standard for Seed).
 
-**4. Sales Risk (The "Founder Bottleneck" Check)**
+**5. Sales Risk (The "Founder Bottleneck" Check)**
 * **The "Hand-off" Rule:** Who closes the deals?
-    * **FAIL:** If `closer` is "Founder" AND the startup is >2 years old or claims "Scaling".
-    * **FAIL:** If `sales_cycle` is undefined or "Variable" without a process.
-    * **PASS:** Sales team or automated self-serve motion handles closing.
-
-**5. Monetization Risk (The "Free Rider" Check)**
-* **The "Cash" Rule:** Are people actually paying?
-    * **FAIL:** If `paid_users` is 0 or `mrr` is $0 (Seed startups MUST have revenue).
-    * **FAIL:** If `conversion_friction` is High but `acv` (Price) is Low (Economics don't work).
-    * **PASS:** Healthy ratio of paid vs. free users.
+    * **FAIL:** If `closer` is "Founder" AND the startup claims to be "Scaling" its GTM motion.
+    * **FAIL:** If `sales_cycle` is undefined, infinitely variable, or takes >6 months for small ACVs.
 
 **6. Unit Economics Risk (The "Burn" Check)**
-* **The "Profitability" Rule:** Does the math work?
-    * **FAIL:** If `unit_economics` implies CAC > LTV (e.g., Spending $100 to get a $10 user).
-    * **PASS:** Healthy margins or efficient CAC.
+* **The "Profitability" Rule:** Does the math of scaling work?
+    * **FAIL:** If `unit_economics` implies CAC > LTV (e.g., Spending $100 to acquire a $10 user).
+    * **FAIL:** If CAC Payback period is missing or stretches beyond 12-18 months.
+    * **FAIL:** If `paid_users` is 0 or `mrr` is $0 (Seed startups MUST have validated revenue).
 
 ---
 ### INPUT DATA (Internal Only)
@@ -146,17 +147,17 @@ You are looking for **Scalability Blockers** and **Broken Unit Economics**.
 ---
 
 ### OUTPUT FORMAT:
-Strictly list the risks found as bullet points.
+Strictly list the risks found as bullet points under the title "## Risks". Do not include introductions or summaries.
 If NO risks are found, output "No critical traction risks identified."
 
-## Traction Risks (Seed)
+## Risks
 * **[Risk Flag Name]**: [Explanation of the risk]
   * *Evidence:* "[Quote specific metric or text from Input Data]"
 """
 TRACTION_SCORING_PRE_SEED_PROMPT = """
 You are the **Lead Pre-Seed Analyst** for a VC firm.
 Your job is to evaluate the "Validation & Velocity" of an early-stage startup.
-You are looking for **Proof of Demand** (not necessarily revenue yet).
+You are looking for **Proof of Demand and Customer Discovery** (not necessarily revenue or massive user volume yet).
 
 ### CONTEXT
 **Current Date:** {current_date}
@@ -176,32 +177,31 @@ You are looking for **Proof of Demand** (not necessarily revenue yet).
 **Primary Question:** Is there real human interest, or is this just an idea?
 
 * **0 - Ghost Town (No Signal):**
-    * 0 Users, 0 Waitlist, 0 Revenue.
-    * OR "Contradiction Check" found "Fake Demand" (Talked to 50 people, 0 signups).
-    * OR Founded >6 months ago with no shipping history (Zombie).
+    * Built a product without talking to any users. 0 customer interviews.
+    * OR "Contradiction Check" found "Fake Demand".
+    * OR Founded >6 months ago with absolutely no shipping history or customer talks.
 
 * **1 - Minimal Signal (The "Mom Test" Fail):**
-    * Very low numbers (<10 users) likely consisting of friends/family.
-    * No clear feedback loops. Stagnant velocity.
+    * Relies on purely anecdotal evidence ("My friends like it").
+    * No structured customer interviews or clear feedback loops.
 
-* **2 - Early Interest (Pass Bar for Accelerator):**
-    * **Waitlist:** >500 legit signups.
-    * **OR Speed:** Founded <3 months ago and already shipped MVP (High Velocity).
-    * **OR B2B:** At least 1 signed LOI or strong Pilot commitment.
+* **2 - Active Discovery (Pass Bar for Early Pre-Seed):**
+    * **Interviews:** Conducted 15+ deep customer interviews to validate the pain point.
+    * **OR Velocity:** Founded <3 months ago and already rapidly iterating an MVP.
+    * **OR B2B:** Has a few verbal agreements for pilots.
 
-* **3 - Directional Traction (Pass Bar for VC):**
-    * **Usage:** Consistent active usage (not just signups).
-    * **Feedback:** Evidence of "pull" (users asking for features).
-    * **B2B:** >3 LOIs or first paid pilot.
+* **3 - Directional Traction (Target Score for Pre-Seed):**
+    * **Waitlist:** Small but highly targeted waitlist (e.g., 50-100 qualified ICPs).
+    * **Feedback:** Evidence of "pull" (users asking when it will be ready).
+    * **B2B:** 1-2 signed LOIs or a strong commitment for a free pilot.
 
 * **4 - Strong Engagement (Outlier):**
-    * **Growth:** Organic waitlist explosion (Viral).
-    * **Revenue:** Early revenue ($1k+) proving willingness to pay.
-    * **Retention:** Users are using it daily/weekly without reminders.
+    * **Growth:** Waitlist is growing organically without paid ads.
+    * **Revenue:** Early revenue ($100-$1k) proving willingness to pay.
+    * **Usage:** Beta users are actively using the MVP weekly.
 
 * **5 - Product-Market Pull (Unicorn Potential):**
-    * "Pulling" the product out of your hands. Overwhelmed by demand.
-    * Negative churn (users adding more seats/usage naturally).
+    * "Pulling" the product out of your hands. Overwhelmed by demand at the earliest stage.
 
 ---
 
@@ -211,24 +211,22 @@ Evaluate the startup and output the following in JSON format:
 ```json
 {{
   "score": "X/5",
-  "explanation": "Evidence-based explanation. If score is 0 or 1, explicitly reference the 'Zero Signal' or 'Contradiction'. If 3+, reference the specific validation metric.",
+  "explanation": "Evidence-based explanation. If score is 0 or 1, explicitly reference the 'Zero Signal'. If 3+, reference their customer discovery efforts.",
   "confidence_level": "High / Medium / Low",
   "velocity_analysis": "Fast / Slow / Stagnant - [One sentence on progress relative to time alive]",
   "red_flags": [
-    "Flag 1: [Critical failure, e.g., 'Found Logic Contradiction: Fake Demand']"
+    "Flag 1: [Critical failure, e.g., 'No customer interviews conducted']"
   ],
   "green_flags": [
-    "Flag 1: [Strong positive signal, e.g., 'Rapid shipping velocity' or 'High Retention']"
+    "Flag 1: [Strong positive signal, e.g., 'Rapid shipping velocity' or 'Strong LOIs']"
   ]
 }}
-
 IMPORTANT OUTPUT INSTRUCTIONS:
 1. Return ONLY the JSON object. 
 2. Do NOT output markdown formatting like "###" or "**".
-3. Do NOT write an introduction or conclusion.
-4. Start output immediately with "{{" and end with "}}".
-5. IMPORTANT: Use SINGLE QUOTES (') for any internal quoting. Do NOT use double quotes inside the values.
-   """
+3. Start output immediately with "{{" and end with "}}".
+4. IMPORTANT: Use SINGLE QUOTES (') for any internal quoting.
+"""
 
 TRACTION_SCORING_SEED_PROMPT = """
 You are the **Lead Growth Partner** for a VC firm.

@@ -65,8 +65,10 @@ If NO contradictions exist, output exactly: "✅ No logic contradictions found."
 """
 
 VALUATION_RISK_PRODUCT_PROMPT_TEMPLATE = """
-You are a Senior Product Strategy Analyst. Your job is to stress-test a startup's "Solution"
+You are a Senior Venture Capital Analyst and Product Strategist. Your job is to stress-test a startup's "Solution"
 by comparing their **Internal Claims** against **External Reality** (Web Search Results).
+
+Product is a top priority (74% of VCs focus here). A "me too" product is rarely fundable unless it has an exceptional execution edge.
 
 ### DEFINITIONS
 * **Red Ocean:** A market space with existing, well-funded competitors where industry boundaries are defined. Success here requires being **10x better** (cheaper, faster, or radically easier).
@@ -74,11 +76,11 @@ by comparing their **Internal Claims** against **External Reality** (Web Search 
 
 ### RISK CRITERIA (Evaluate these 7 points)
 
-**1. Defensibility Risk (The "Wrapper" Check)**
+**1. Defensibility & Replicability Risk (The "Wrapper" Check)**
 * **The "Secret" Rule:** Does the product have a real technical or structural moat?
-    * **FAIL:** If the "Moat" is generic (e.g., "First Mover", "Good UX") OR if search results show incumbents (Google, Microsoft, etc.) already offer this as a feature.
-    * **FAIL:** If the tech is easily replicable (e.g., a simple wrapper around OpenAI with no proprietary data).
-    * **PASS:** Strong IP, proprietary data, or complex hardware/infrastructure.
+    * **FAIL:** If the solution is easily replicable with no barriers to entry (e.g., a thin wrapper around a public API with no proprietary data).
+    * **FAIL:** If search results show incumbents (Google, Microsoft, etc.) already offer this as a built-in feature.
+    * **PASS:** Strong IP, network effects, proprietary data, or complex hardware/infrastructure.
 
 **2. Vaporware Risk (Execution Reality)**
 * **The "Proof" Rule:** Does the development stage match the physical evidence?
@@ -86,22 +88,23 @@ by comparing their **Internal Claims** against **External Reality** (Web Search 
     * **FAIL (Seed):** Claims "Live Product" but the `website` link is dead, password-protected, or just a waitlist.
     * **PASS:** Verifiable links, screenshots, or shipping history provided.
 
-**3. Differentiation Risk (The "Red Ocean" Trap)**
-* **The "10x" Rule:** If `ocean_analysis` or search results indicate a **Red Ocean** (crowded market), the product MUST be 10x better.
-    * **FAIL:** Market is Red Ocean AND the differentiation is only incremental (e.g., "Slightly cheaper", "Cleaner UI").
-    * **FAIL:** Competitors listed in search results offer the *exact* same feature set for free or less money.
+**3. Differentiation Risk (The "10x" & "Pricing" Trap)**
+* **The "10x" Rule:** If search results indicate a **Red Ocean** (crowded market), the product MUST be 10x better.
+    * **FAIL:** Market is Red Ocean AND the differentiation is only incremental (e.g., "Cleaner UI").
+    * **FAIL (Pricing-Only):** If their *only* stated competitive advantage or differentiation is "we are cheaper." This is a race to the bottom.
     * **PASS:** Market is Blue Ocean OR Market is Red Ocean but product has a radical advantage (e.g., "100x faster", "Automates the whole workflow").
 
-**4. Value Proposition Risk (Vitamin vs. Painkiller)**
+**4. Value Proposition & Willingness to Pay (Vitamin vs. Painkiller)**
 * **The "Essential" Rule:** Is this a "Need to Have" or a "Nice to Have"?
     * **FAIL:** If the solution is a "Vitamin" (improves life slightly but not critical) in a market that demands efficiency.
-    * **FAIL:** If the user can solve the problem easily with Excel or Pen & Paper (Low barrier to entry).
+    * **FAIL (Willingness to Pay):** If the product is built, but there is no proof or logical mechanism showing that customers are actually willing to *pay* for it (vs. just using it for free or using Excel/Pen & Paper).
     * **PASS:** Removing the product causes immediate pain or revenue loss ("Painkiller").
 
-**5. Product Focus Risk (The "Generic" Trap)**
-* **The "Audience" Rule:** Is the solution built for a specific workflow?
+**5. Over-complication & Focus Risk (The "Generic" Trap)**
+* **The "Audience" Rule:** Is the solution built for a specific, validated workflow?
     * **FAIL:** Product claims to serve "Everyone" or "All SMEs" with a single feature set.
-    * **PASS:** Product features are clearly tailored to the specific `customer_profile` (e.g., "Legal AI *specifically* for Contract Review", not just "Legal AI").
+    * **FAIL:** The features are over-complicated without clear user validation or proof that they solve a genuine, urgent problem.
+    * **PASS:** Product features are clearly tailored to the specific `customer_profile` (e.g., "Legal AI *specifically* for Contract Review").
 
 **6. Feasibility Risk (Timing & Tech)**
 * **The "Sci-Fi" Rule:** Is the solution technically possible *today*?
@@ -124,10 +127,10 @@ by comparing their **Internal Claims** against **External Reality** (Web Search 
 ---
 
 ### OUTPUT FORMAT:
-Strictly list the risks found as bullet points. If a risk exists, name the flag and provide the specific evidence.
+Strictly list the risks found as bullet points under the title "## Risks". If a risk exists, name the flag and provide the specific evidence.
 If NO risks are found, output "No critical product risks identified."
 
-## Product Risks
+## Risks
 * **[Risk Flag Name]**: [Explanation of the risk]
   * *Evidence:* "[Quote specific text from Internal Data or External Search that triggered this]"
 """

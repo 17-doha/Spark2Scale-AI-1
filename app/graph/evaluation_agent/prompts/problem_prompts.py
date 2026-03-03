@@ -123,16 +123,20 @@ PROBLEM_SCORING_AGENT_PROMPT = """
    ### OUTPUT FORMAT (JSON ONLY):
    {{
      "score": "X.X/5",
-     "explanation": "Provide a detailed justification for this score. Reference specific search evidence or risk flags. Explicitly state point deductions (e.g., '-2 points due to Contradiction in urgency').",
+     "explanation": "Provide a detailed justification for this score. Reference specific search evidence or risk flags.",
      "confidence_level": "High / Medium / Low",
      "red_flags": [
-       "Risk 1: [Description from Risk/Contradiction Report]",
-       "Risk 2: [Description...]"
+       "Risk 1: [Description from Risk/Contradiction Report]"
      ],
      "green_flags": [
-       "Strength 1: [Positive validation from search or data]",
-       "Strength 2: [Description...]"
-     ]
+       "Strength 1: [Positive validation from search or data]"
+     ],
+     "painkiller_matrix": {{
+       "x_frequency_score": 8,
+       "y_severity_score": 9,
+       "label": "Short label e.g., Daily Workflow Bottleneck",
+       "verdict": "Painkiller / Vitamin / Mosquito Bite"
+     }}
    }}
 
    IMPORTANT OUTPUT INSTRUCTIONS:

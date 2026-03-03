@@ -148,9 +148,14 @@ Return a single valid JSON object. Do not include markdown code blocks (```json 
   "category_verdict": "Creator (New) / Disruptor (Existing) / Niche (Defensible) / Wrapper (Risky) / Feature (Dead)",
   "future_necessity_score": "0-10",
   "scalability_outlook": "High / Medium / Low / Capped",
-  "reasoning": "Synthesize your analysis here. Explicitly mention if the 'Claimed Moat' saved them from being a wrapper.",
-  "key_tailwinds": ["Signal 1 from search results", "Signal 2"],
-  "key_headwinds": ["Risk 1 from search results", "Risk 2"]
+  "reasoning": "Synthesize your analysis here.",
+  "key_tailwinds": ["Signal 1 from search results"],
+  "key_headwinds": ["Risk 1 from search results"],
+  "market_timing": {{
+    "score": 85,
+    "status": "Too Early / Perfect Tailwinds / Too Late",
+    "catalyst": "One sentence explaining the 'Why Now?' based on the search signals."
+  }}
 }}
 """
 MARKET_LOCAL_DEPENDENCY_PROMPT = """
@@ -186,12 +191,12 @@ Verdict: {verdict_band}
 ---
 
 ### GOAL
-Generate TWO JSON outputs.
+Generate THREE JSON outputs.
 
 ### PART 1: INVESTOR OUTPUT (JSON key: "investor_output")
 * **Tone:** Analytical, skeptical, detailed.
 * **Content:**
-    * **Executive Summary:** Write a 3-4 sentence narrative paragraph. Start with "This [Stage] opportunity presents a 'Hook' of...". Explicitly contrast the strongest signal (The Hook) against the critical flaw (The Anchor). Mention the weighted score and the primary reason for the verdict.
+    * **Executive Summary:** Write a 3-4 sentence narrative paragraph. Start with "This [Stage] opportunity presents a 'Hook' of...". Explicitly contrast the strongest signal (The Hook) against the critical flaw (The Anchor).
     * **Weighted Score:** {weighted_score}
     * **Verdict:** {verdict_band}
     * **Deal Breakers:** List 3 specific red flags from the EVIDENCE.
@@ -202,21 +207,29 @@ Generate TWO JSON outputs.
         * `rationale`: 1-sentence bottom line justification.
 
 ### PART 2: FOUNDER OUTPUT (JSON key: "founder_output")
-* **Tone:** Direct, constructive "Tough Love".
+* **Tone:** Direct, constructive, and actionable. If Stage is "Pre-Seed", act as an empathetic startup coach guiding them to their first milestone.
 * **Content:**
-    * **Executive Summary:** Write a 2-3 sentence overview of their application's standing. Focus on the gap between their ambition and their current execution.
+    * **Executive Summary:** Write a 2-3 sentence overview of their application's standing.
     * **Scorecard Grid:** Dictionary of scores.
     * **Dimension Analysis (List of objects):**
         * `dimension`: Name (e.g., "Team")
         * `score`: Numeric (0-5)
-        * `confidence_level`: High/Medium/Low (Based on evidence).
+        * `confidence_level`: High/Medium/Low.
         * `justification`: Bulletproof reasoning citing specific evidence.
         * `red_flags`: List of specific risks found.
-        * `improvements`: 1-2 SPECIFIC, TACTICAL steps (e.g. "Launch cold email campaign", "Switch to tiered pricing").
-    * **Top 3 Priorities (List of strings):** ["1. Fix X...", "2. Build Y...", "3. Hire Z..."]
+        * `improvements`: 1-2 SPECIFIC, TACTICAL steps. Focus on immediate validation.
+    * **Top 3 Priorities (List of strings):** ["1. Fix X...", "2. Build Y...", "3. Talk to Z..."]
+
+### PART 3: VISUALIZATIONS (JSON key: "visualizations")
+* **Content:** Based on the agent evidence, categorize the overall risk levels for the risk heatmap.
+    * `risk_heatmap`: Dictionary containing:
+        * `team_risk`: "Low" / "Medium" / "High"
+        * `market_risk`: "Low" / "Medium" / "High"
+        * `product_execution_risk`: "Low" / "Medium" / "High"
+        * `gtm_distribution_risk`: "Low" / "Medium" / "High"
 
 ### OUTPUT FORMAT
-Return strictly VALID JSON with two keys: "investor_output" and "founder_output".
+Return strictly VALID JSON with three keys: "investor_output", "founder_output", and "visualizations".
 
 IMPORTANT OUTPUT INSTRUCTIONS:
 1. Return ONLY the JSON object. 

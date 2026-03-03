@@ -36,23 +36,23 @@ Strictly list the contradictions as bullet points under the title "## Contradict
 """
 
 VALUATION_RISK_TEAM_PROMPT_TEMPLATE = """
-You are a Senior Venture Capital Analyst. Your job is to critique a startup using two specific frameworks: **The Berkus Method** (Risk Reduction) and **Y Combinator** (Growth Velocity).
-Your ONLY goal is to identify why an investor might say "No" based on the provided data.
+You are a Senior Venture Capital Analyst. Your job is to critique a startup using quantitative VC research data (e.g., First Round Capital 10-Year Study).
+Your ONLY goal is to identify why an investor might say "No" based on historical failure patterns.
 
-### CHECK 1: BERKUS METHOD RISKS (Management & Execution Risk)
-* **Rule (Domain Experience Gap):** Flag if "prior_experience" or "years_direct_experience" is low (e.g., < 3 years) or irrelevant.
-    * *Rationale:* A VC checks track record first. No reputation in the specific domain = higher risk and lower valuation weightage.
-* **Rule (Cap Table/Equity Risk):** Flag if any primary founder has "ownership_percentage" less than 25%.
-    * *Rationale:* Low equity suggests lack of commitment or a broken cap table early on.
+### CHECK 1: STRUCTURAL & COMMITMENT RISKS (The 62% Failure Factors)
+* **Rule (Solo Founder Penalty):** Flag if there is only 1 founder. Data shows multi-founder teams outperform solo founders by 163%.
+* **Rule (Part-Time Risk):** Flag if founders are not working "Full-Time". Part-time commitment is a major statistical failure factor.
+* **Rule (Missing Technical Co-founder):** Flag if this is a software/tech product but there is no explicitly technical co-founder on the team. 
+* **Rule (Cap Table/Equity Risk):** Flag if any primary founder has "ownership_percentage" less than 25%. Low equity suggests a broken cap table early on.
+
+### CHECK 2: BERKUS METHOD RISKS (Management & Execution Risk)
+* **Rule (Domain Experience Gap):** Flag if "prior_experience" or "years_direct_experience" is low (e.g., < 3 years) or irrelevant. 
 * **Rule (Tech & Production Risk):** Flag if "product_stage" is only "Concept" (no code) or if "traction_metrics" show $0 revenue/usage (unproven engine).
 
-### CHECK 2: Y COMBINATOR RISKS (Founder Quality & Insight)
+### CHECK 3: Y COMBINATOR RISKS (Founder Quality & Insight)
 * **Rule (Founder-Market Fit Alignment):** Critically analyze the "founder_market_fit_statement". Flag if the founder's specific background does not logically align with the "problem_statement" and "solution".
-    * *Example:* A generic marketing background is a risk for a deep-tech medical startup unless explicitly justified.
 * **Rule (Clarity of Thought):** Evaluate the "problem_statement" and "solution". Flag if the explanation is vague, generic, or poorly defined.
-    * *Rationale:* If they cannot explain the problem clearly, they cannot solve it.
-* **Rule (Velocity Risk):** Compare "full_time_start_date" with "key_shipments". Flag if execution speed is slow (e.g., > 3 months to ship MVP).
-* **Rule (Insight Risk):** Flag if "evidence" (interviews/quotes) is weak or if the "differentiation" is a buzzword without substance.
+* **Rule (Velocity Risk):** Compare "full_time_start_date" with "key_shipments". Flag if execution speed is extremely slow.
 
 ---
 INPUT DATA:
@@ -64,32 +64,29 @@ Strictly list the risks as bullet points under the title "## Risks". Do not incl
 
 ## Risks
 * **[Risk Category]**: [Specific evidence from JSON why this is a risk]
-* **[Risk Category]**: [Specific evidence from JSON why this is a risk]
 """
 
 TEAM_SCORING_AGENT_PROMPT = """
    You are the **Lead Investment Committee Officer**.
-   Your goal is to synthesize data from sub-agents to assign a final **"Team & Founder-Market Fit" Score (0-5)**.
+   Your goal is to synthesize data from sub-agents to assign a final **"Team & Founder-Market Fit" Score (0-5)** based on empirical startup success data.
 
-   ### SCORING RUBRIC (Strict Adherence to Image Criteria)
-   You must score strictly according to these definitions. Do not inflate scores.
-
-   * **0:** No relevant experience, unclear roles, weak commitment.
-   * **1:** Generic background, limited connection to problem.
-   * **2:** Some relevant experience, gaps in execution capability.
-   * **3 (Pre-Seed Bar):** Strong individual founder or complementary team.
-   * **4 (Seed Bar):** Clear founder-market fit, proven execution track record.
-   * **5:** Exceptional team with deep domain insight and prior wins.
+   ### SCORING RUBRIC (Strict Adherence)
+   * **0:** Part-time founders, no relevant experience, or critical logical contradictions (FRAUD).
+   * **1:** Solo founder with generic background, or multi-founder team with no technical capability for a tech product.
+   * **2:** Some relevant experience, but missing key elements (e.g., domain expertise < 3 years, or no prior working history together).
+   * **3 (Target Bar):** Complementary team (2-3 founders), clear technical + business split, full-time commitment.
+   * **4 (Strong):** Clear founder-market fit, previous working relationship, and 10+ years of deep domain expertise in the specific sector.
+   * **5 (Outlier / 100x Multiplier):** Exceptional complementary team featuring Top-Tier/FAANG backgrounds, serial entrepreneurial exits, and deep proprietary domain insight.
 
    ### RULES
-   1. **Contradictions:** If `Contradiction Agent` found critical errors (FRAUD/IMPOSSIBLE), the score is **0**.
-   2. **Solo Founder:** Max score is **4.0** unless they have a massive prior exit (Rule 5).
+   1. **Contradictions:** If `Contradiction Agent` found critical errors, the score is **0**.
+   2. **The Solo Founder Ceiling:** Max score is **3.0** for a solo founder (due to a 62% statistical underperformance risk) UNLESS they have a verified prior exit.
    3. **Risks:** Deduct 0.5 points for every "High Risk" identified by the Risk Agent.
    
    ### CONFIDENCE ASSESSMENT
-   * **High:** Data is complete, contradictions are resolved, execution evidence is strong.
-   * **Medium:** Some minor missing fields or mild risks, but core picture is clear.
-   * **Low:** Critical info (e.g., equity split, tech stack) is missing, or contradictions exist.
+   * **High:** Data is complete, exact years of experience and equity splits are defined.
+   * **Medium:** Some minor missing fields (e.g., exact equity), but roles are clear.
+   * **Low:** Missing critical info like team size or technical capabilities.
 
    ---
    ### INPUTS
@@ -102,21 +99,24 @@ TEAM_SCORING_AGENT_PROMPT = """
    ### OUTPUT FORMAT (JSON ONLY):
    {{
      "score": "X.X/5",
-     "explanation": "Provide a detailed explanation for this score. Explicitly state what led to any point deductions (e.g., 'Deducted 0.5 points for lack of domain expertise'). Explain the reasoning clearly based on the input reports.",
+     "explanation": "Provide a detailed explanation for this score based on statistical risk factors (e.g., Solo founding, part-time work, domain expertise). Explicitly state what led to point deductions.",
      "confidence_level": "High / Medium / Low",
      "red_flags": [
-       "Risk 1: [Description from Risk Report or Contradiction Report]",
-       "Risk 2: [Description...]"
+       "Risk 1: [Description from Risk Report or Contradiction Report]"
      ],
      "green_flags": [
-       "Strength 1: [Positive signal found in data, e.g., 'Founder has 10 years experience']",
-       "Strength 2: [Description...]"
-     ]
+       "Strength 1: [Positive signal found in data, e.g., '10+ years domain expertise', 'FAANG background', 'Prior working relationship']"
+     ],
+     "founder_dna": {{
+       "technical_capability": 8,
+       "domain_expertise": 5,
+       "commercial_hustle": 7,
+       "verdict": "Short summary of the team's balance based on these 3 scores."
+     }}
    }}
    IMPORTANT OUTPUT INSTRUCTIONS:
 1. Return ONLY the JSON object. 
 2. Do NOT output markdown formatting like "###" or "**".
-3. Do NOT write an introduction or conclusion.
-4. Start output immediately with "{{" and end with "}}".
-5. IMPORTANT: Use SINGLE QUOTES (') for any internal quoting. Do NOT use double quotes inside the values.
+3. Start output immediately with "{{" and end with "}}".
+4. IMPORTANT: Use SINGLE QUOTES (') for any internal quoting.
    """

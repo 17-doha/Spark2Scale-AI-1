@@ -505,6 +505,11 @@ async def vision_node(state: AgentState):
         "contradiction_report": con_res,
         "risk_report": risk_res
     })
+    
+    # Inject Market Timing visual data into the final payload
+    if isinstance(market_analysis, dict) and "market_timing" in market_analysis:
+        score["market_timing"] = market_analysis["market_timing"]
+        
     return {"vision_report": score}
 
 async def operations_node(state: AgentState):
@@ -558,7 +563,17 @@ def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, st
     
     # 2. Apply Stage Weights
     if "pre" in stage.lower():
-        weights = {"team": 1.5, "problem": 1.3, "product": 1.2, "market": 1.0, "traction": 1.0, "gtm": 1.0, "business": 1.0, "vision": 1.0, "operations": 1.0}
+        weights = {
+            "team": 2.0, 
+            "problem": 1.5, 
+            "product": 1.2, 
+            "market": 1.0, 
+            "vision": 1.0,
+            "traction": 0.5, 
+            "gtm": 0.5, 
+            "business": 0.5, 
+            "operations": 0.5
+        }
     else:
         weights = {"team": 1.0, "problem": 1.0, "product": 1.0, "market": 1.0, "traction": 1.5, "gtm": 1.3, "business": 1.2, "vision": 1.0, "operations": 1.0}
 
