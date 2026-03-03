@@ -2,6 +2,7 @@ import os
 import glob
 import json
 import logging
+from app.graph.document_generator.config import OUTPUT_DIR
 
 logger = logging.getLogger("SWOTDataExtractor")
 
@@ -20,7 +21,7 @@ def find_market_report(idea_name: str) -> str:
     clean_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
     
     # 1. Try exact match
-    exact_path = f"data_output/{clean_name}_Market_Report.json"
+    exact_path = f"{OUTPUT_DIR}/{clean_name}_Market_Report.json"
     if os.path.exists(exact_path):
         return exact_path
         
@@ -30,7 +31,7 @@ def find_market_report(idea_name: str) -> str:
     prefix = clean_name[:prefix_length]
     
     # Search for files starting with the prefix and ending with _Market_Report.json
-    pattern = f"data_output/{prefix}*_Market_Report.json"
+    pattern = f"{OUTPUT_DIR}/{prefix}*_Market_Report.json"
     matches = glob.glob(pattern)
     
     if matches:
@@ -83,7 +84,7 @@ def extract_swot_data(idea_name: str) -> dict:
         # Replaces all hardcoded weakness logic.
         # Weaknesses are now SCRAPE_BACKED, METRIC_BACKED, or BOTH — never invented.
         clean_name = _clean_filename(idea_name)
-        weakness_path = f"data_output/{clean_name}_analyzed_weaknesses.json"
+        weakness_path = f"{OUTPUT_DIR}/{clean_name}_analyzed_weaknesses.json"
         if os.path.exists(weakness_path):
             try:
                 with open(weakness_path, "r", encoding="utf-8") as f:
@@ -167,7 +168,7 @@ def extract_swot_data(idea_name: str) -> dict:
 
         # --- EXTRACT COMPETITOR REVIEWS (PHASE 2) ---
         clean_name = _clean_filename(idea_name)
-        reviews_path = f"data_output/{clean_name}_competitor_reviews.json"
+        reviews_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
         
         if os.path.exists(reviews_path):
             try:
@@ -182,7 +183,7 @@ def extract_swot_data(idea_name: str) -> dict:
                 logger.error(f"[ERROR] Failed to read competitor reviews: {e}")
 
         # --- EXTRACT COMPETITIVE GAPS (PHASE 3) ---
-        gap_path = f"data_output/{clean_name}_competitive_gap.json"
+        gap_path = f"{OUTPUT_DIR}/{clean_name}_competitive_gap.json"
         if os.path.exists(gap_path):
             try:
                 with open(gap_path, "r", encoding="utf-8") as f:
@@ -197,7 +198,7 @@ def extract_swot_data(idea_name: str) -> dict:
                 logger.error(f"[ERROR] Failed to read competitive gap data: {e}")
 
         # --- EXTRACT REGULATORY BARRIERS (PHASE 4) ---
-        barriers_path = f"data_output/{clean_name}_barriers.json"
+        barriers_path = f"{OUTPUT_DIR}/{clean_name}_barriers.json"
         if os.path.exists(barriers_path):
             try:
                 with open(barriers_path, "r", encoding="utf-8") as f:
@@ -209,7 +210,7 @@ def extract_swot_data(idea_name: str) -> dict:
                 logger.error(f"[ERROR] Failed to read regulatory barriers data: {e}")
 
         # --- EXTRACT TOWS MATRIX (PHASE 5) ---
-        tows_path = f"data_output/{clean_name}_tows_matrix.json"
+        tows_path = f"{OUTPUT_DIR}/{clean_name}_tows_matrix.json"
         if os.path.exists(tows_path):
             try:
                 with open(tows_path, "r", encoding="utf-8") as f:

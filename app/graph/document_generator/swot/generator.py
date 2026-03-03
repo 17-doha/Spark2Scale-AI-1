@@ -3,10 +3,13 @@ import logging
 from app.core.llm import get_llm
 from .data_extractor import extract_swot_data
 from app.graph.document_generator.prompts import swot_prompt_template
+from app.graph.document_generator.config import (
+    DEFAULT_LLM_PROVIDER, TEMPERATURE_GENERATOR, OUTPUT_DIR
+)
 
 logger = logging.getLogger("SWOTGenerator")
 
-def generate_swot_document(idea_name: str, provider: str = "gemini") -> str:
+def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER) -> str:
     """
     Generates a full SWOT Markdown document for a given idea name.
     
@@ -40,7 +43,7 @@ def generate_swot_document(idea_name: str, provider: str = "gemini") -> str:
     
     # 3. Get LLM instance
     try:
-        llm = get_llm(temperature=0.7, provider=provider)
+        llm = get_llm(temperature=TEMPERATURE_GENERATOR, provider=provider)
     except Exception as e:
         logger.error(f"Failed to initialize LLM: {e}")
         return f"Error initializing LLM: {str(e)}"
@@ -64,7 +67,7 @@ def generate_swot_document(idea_name: str, provider: str = "gemini") -> str:
         markdown_content = response.content
         
         # 4. Save to file
-        output_dir = "data_output"
+        output_dir = OUTPUT_DIR
         os.makedirs(output_dir, exist_ok=True)
         
         # Use clean name for filename

@@ -4,6 +4,9 @@ import logging
 from app.core.llm import get_llm
 from app.graph.document_generator.swot.data_extractor import extract_swot_data, _clean_filename
 from app.graph.document_generator.prompts import TOWS_SYNTHESIS_PROMPT
+from app.graph.document_generator.config import (
+    DEFAULT_LLM_PROVIDER, TEMPERATURE_TOWS_SYNTHESIS, OUTPUT_DIR
+)
 
 logger = logging.getLogger("TOWSSynthesizer")
 
@@ -44,8 +47,8 @@ def synthesize_swot_matrix(idea_name: str) -> str:
              
     # 2. Analyze with LLM
     try:
-        # Use a highly logical model (temperature 0.2)
-        llm = get_llm(temperature=0.2, provider="gemini")
+        # Use a highly logical model
+        llm = get_llm(temperature=TEMPERATURE_TOWS_SYNTHESIS, provider=DEFAULT_LLM_PROVIDER)
         
         prompt_text = TOWS_SYNTHESIS_PROMPT.format(
             idea_name=idea_name,
@@ -64,7 +67,7 @@ def synthesize_swot_matrix(idea_name: str) -> str:
         tows_data = json.loads(content)
         
         clean_name = _clean_filename(idea_name)
-        output_path = f"data_output/{clean_name}_tows_matrix.json"
+        output_path = f"{OUTPUT_DIR}/{clean_name}_tows_matrix.json"
         
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(tows_data, f, indent=4)

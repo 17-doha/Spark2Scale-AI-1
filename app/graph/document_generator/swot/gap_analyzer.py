@@ -4,6 +4,9 @@ import logging
 from app.core.llm import get_llm
 from app.graph.document_generator.swot.data_extractor import _clean_filename
 from app.graph.document_generator.prompts import GAP_ANALYZER_PROMPT
+from app.graph.document_generator.config import (
+    DEFAULT_LLM_PROVIDER, TEMPERATURE_GAP_ANALYZER, OUTPUT_DIR
+)
 
 logger = logging.getLogger("CompetitiveGapAnalyzer")
 
@@ -16,7 +19,7 @@ def analyze_competitive_gap(idea_name: str, idea_description: str = "A new produ
     logger.info(f"\n[ANALYZER] Running Competitive Gap Analysis for: '{idea_name}'")
     
     clean_name = _clean_filename(idea_name)
-    reviews_path = f"data_output/{clean_name}_competitor_reviews.json"
+    reviews_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
     
     if not os.path.exists(reviews_path):
         logger.warning(f"[WARNING] No reviews file found at {reviews_path}. Cannot perform Gap Analysis.")
@@ -38,7 +41,7 @@ def analyze_competitive_gap(idea_name: str, idea_description: str = "A new produ
 
     try:
         # We explicitly use a fast/reliable LLM for this logic step (Groq/Gemini contextually)
-        llm = get_llm(temperature=0.3, provider="gemini") # Lower temp for logical mapping
+        llm = get_llm(temperature=TEMPERATURE_GAP_ANALYZER, provider=DEFAULT_LLM_PROVIDER) # Lower temp for logical mapping
         
         prompt_text = GAP_ANALYZER_PROMPT.format(
             idea_name=idea_name,
@@ -55,7 +58,7 @@ def analyze_competitive_gap(idea_name: str, idea_description: str = "A new produ
         
         gap_data = json.loads(content)
         
-        output_path = f"data_output/{clean_name}_competitive_gap.json"
+        output_path = f"{OUTPUT_DIR}/{clean_name}_competitive_gap.json"
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(gap_data, f, indent=4)
             

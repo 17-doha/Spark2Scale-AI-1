@@ -5,6 +5,9 @@ from app.graph.market_research_agent.helpers.research_utils import execute_serpe
 from app.graph.document_generator.swot.data_extractor import _clean_filename
 from app.core.llm import get_llm
 from app.graph.document_generator.prompts import BARRIER_EXTRACTION_PROMPT
+from app.graph.document_generator.config import (
+    DEFAULT_LLM_PROVIDER, TEMPERATURE_BARRIER_EXTRACTION, OUTPUT_DIR, BARRIER_SNIPPETS_LIMIT
+)
 
 logger = logging.getLogger("RegulatoryBarrierNode")
 
@@ -36,7 +39,7 @@ def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> str:
             snippets.append(f"{title}: {snippet}")
             
     # Limit snippets
-    search_context = "\n".join(snippets[:15])
+    search_context = "\n".join(snippets[:BARRIER_SNIPPETS_LIMIT])
     
     if not search_context:
         logger.warning("[WARNING] No meaningful content extracted from snippets.")
@@ -44,7 +47,7 @@ def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> str:
     
     # 3. Analyze with LLM
     try:
-        llm = get_llm(temperature=0.3, provider="gemini")
+        llm = get_llm(temperature=TEMPERATURE_BARRIER_EXTRACTION, provider=DEFAULT_LLM_PROVIDER)
         
         prompt_text = BARRIER_EXTRACTION_PROMPT.format(
             idea_name=idea_name,
@@ -59,7 +62,7 @@ def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> str:
         barrier_data = json.loads(content)
         
         clean_name = _clean_filename(idea_name)
-        output_path = f"data_output/{clean_name}_barriers.json"
+        output_path = f"{OUTPUT_DIR}/{clean_name}_barriers.json"
         
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(barrier_data, f, indent=4)

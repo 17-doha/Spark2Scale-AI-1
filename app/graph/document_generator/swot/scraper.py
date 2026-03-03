@@ -7,6 +7,14 @@ from typing import List, Dict
 from app.core.llm import get_llm
 from app.graph.document_generator.swot.data_extractor import find_market_report
 from app.graph.document_generator.prompts import WEAKNESS_ANALYSIS_PROMPT
+from app.graph.document_generator.config import (
+    DEFAULT_LLM_PROVIDER, TEMPERATURE_WEAKNESS_ANALYSIS, OUTPUT_DIR, TOP_COMPETITORS_LIMIT,
+    SNIPPETS_PER_COMPETITOR_LIMIT, WEAKNESS_SNIPPETS_LIMIT, REVIEW_BASE_KEYWORDS,
+    PAIN_SCORE_CRITICAL, PAIN_SCORE_MODERATE, SEARCH_VOLUME_LOW, SEARCH_VOLUME_MODERATE,
+    CAC_VERY_HIGH, CAC_HIGH, LTV_CAC_POOR, LTV_CAC_WEAK, PAYBACK_PERIOD_DANGEROUS,
+    PAYBACK_PERIOD_LONG, MARGIN_LOW, MARGIN_MODERATE, COMPETITOR_COUNT_SATURATED,
+    COMPETITOR_COUNT_COMPETITIVE, MARKET_STRUCTURE_HIGH_RISK, MARKET_STRUCTURE_MODERATE_RISK_KEYWORD
+)
 
 logger = logging.getLogger("CompetitorReviewScraper")
 weakness_logger = logging.getLogger("WeaknessAnalyzer")
@@ -20,7 +28,7 @@ def generate_review_queries(competitor_name: str) -> List[str]:
     Generates targeted Serper API queries aiming for user pain points
     and negative reviews across Reddit, Trustpilot, and G2.
     """
-    base_keywords = '"too expensive" OR "hard to use" OR "missing feature" OR "bad support" OR "alternative"'
+    base_keywords = REVIEW_BASE_KEYWORDS
     
     return [
         f"site:reddit.com {competitor_name} {base_keywords}",
@@ -42,7 +50,7 @@ def scrape_competitor_reviews(idea_name: str) -> str:
     logger.info(f"\n[SCRAPER] Initiating Targeted Competitor Review Scrape for: '{idea_name}'")
     
     clean_name = _clean_filename(idea_name)
-    competitors_file = f"data_output/{clean_name}_competitors.csv"
+    competitors_file = f"{OUTPUT_DIR}/{clean_name}_competitors.csv"
     
     if not os.path.exists(competitors_file):
         logger.warning(f"[WARNING] No competitors file found at {competitors_file}. Run Market Research first.")
@@ -50,8 +58,8 @@ def scrape_competitor_reviews(idea_name: str) -> str:
         
     try:
         df = pd.read_csv(competitors_file)
-        # Limit to top 3 competitors to save API calls and remain focused
-        top_competitors = df['Name'].dropna().head(3).tolist()
+        # Limit to top competitors to save API calls and remain focused
+        top_competitors = df['Name'].dropna().head(TOP_COMPETITORS_LIMIT).tolist()
     except Exception as e:
         logger.error(f"[ERROR] Failed to read competitors CSV: {e}")
         return None
@@ -88,10 +96,10 @@ def scrape_competitor_reviews(idea_name: str) -> str:
                 snippets.append(f"{title}: {snippet}")
                 
         # Limit the stored context size per competitor
-        all_reviews_context[competitor] = snippets[:5]
+        all_reviews_context[competitor] = snippets[:SNIPPETS_PER_COMPETITOR_LIMIT]
         
     # Save the output
-    output_path = f"data_output/{clean_name}_competitor_reviews.json"
+    output_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(all_reviews_context, f, indent=4)
@@ -133,14 +141,14 @@ def scrape_weaknesses(idea_name: str, region: str = "Global") -> str:
         seen.add(key)
         snippets.append({"title": title, "snippet": snippet, "source": link})
 
-    snippets = snippets[:20]
+    snippets = snippets[:WEAKNESS_SNIPPETS_LIMIT]
 
     if not snippets:
         weakness_logger.warning("[WARNING] No usable snippets after deduplication.")
         return None
 
     clean_name = _clean_filename(idea_name)
-    output_path = f"data_output/{clean_name}_weakness_signals.json"
+    output_path = f"{OUTPUT_DIR}/{clean_name}_weakness_signals.json"
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump({"idea_name": idea_name, "region": region, "signals": snippets}, f, indent=4)
@@ -176,8 +184,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
             metrics["pain_score"] = {
                 "value": pain_score,
                 "threshold_label": (
-                    "CRITICAL" if pain_score < 40 else
-                    "MODERATE" if pain_score < 65 else
+                    "CRITICAL" if pain_score < PAIN_SCORE_CRITICAL else
+                    "MODERATE" if pain_score < PAIN_SCORE_MODERATE else
                     "HEALTHY"
                 )
             }
@@ -186,8 +194,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
             metrics["monthly_search_volume"] = {
                 "value": search_volume,
                 "threshold_label": (
-                    "LOW_DEMAND" if search_volume < 1000 else
-                    "MODERATE" if search_volume < 10000 else
+                    "LOW_DEMAND" if search_volume < SEARCH_VOLUME_LOW else
+                    "MODERATE" if search_volume < SEARCH_VOLUME_MODERATE else
                     "HIGH"
                 )
             }
@@ -204,8 +212,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
                 metrics["estimated_cac"] = {
                     "value": cac,
                     "threshold_label": (
-                        "VERY_HIGH" if cac_num > 500 else
-                        "HIGH" if cac_num > 150 else
+                        "VERY_HIGH" if cac_num > CAC_VERY_HIGH else
+                        "HIGH" if cac_num > CAC_HIGH else
                         "ACCEPTABLE"
                     )
                 }
@@ -223,8 +231,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
                     metrics["ltv_cac_ratio"] = {
                         "value": ltv_cac_ratio,
                         "threshold_label": (
-                            "POOR" if ltv_cac_ratio < 1.5 else
-                            "WEAK" if ltv_cac_ratio < 3.0 else
+                            "POOR" if ltv_cac_ratio < LTV_CAC_POOR else
+                            "WEAK" if ltv_cac_ratio < LTV_CAC_WEAK else
                             "HEALTHY"
                         )
                     }
@@ -238,8 +246,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
                 metrics["payback_period_months"] = {
                     "value": payback_period,
                     "threshold_label": (
-                        "DANGEROUSLY_LONG" if pb_num > 24 else
-                        "LONG" if pb_num > 12 else
+                        "DANGEROUSLY_LONG" if pb_num > PAYBACK_PERIOD_DANGEROUS else
+                        "LONG" if pb_num > PAYBACK_PERIOD_LONG else
                         "ACCEPTABLE"
                     )
                 }
@@ -253,8 +261,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
                 metrics["estimated_gross_margin"] = {
                     "value": margin,
                     "threshold_label": (
-                        "LOW" if margin_num < 30 else
-                        "MODERATE" if margin_num < 60 else
+                        "LOW" if margin_num < MARGIN_LOW else
+                        "MODERATE" if margin_num < MARGIN_MODERATE else
                         "HEALTHY"
                     )
                 }
@@ -269,8 +277,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
             metrics["market_structure"] = {
                 "value": market_structure,
                 "threshold_label": (
-                    "HIGH_RISK" if market_structure in ["Oligopoly/Monopoly", "Highly Fragmented/Red Ocean"]
-                    else "MODERATE_RISK" if "Competitive" in market_structure
+                    "HIGH_RISK" if market_structure in MARKET_STRUCTURE_HIGH_RISK
+                    else "MODERATE_RISK" if MARKET_STRUCTURE_MODERATE_RISK_KEYWORD in market_structure
                     else "LOW_RISK"
                 )
             }
@@ -282,8 +290,8 @@ def _extract_business_metrics(idea_name: str) -> dict:
         metrics["competitor_count"] = {
             "value": comp_count,
             "threshold_label": (
-                "SATURATED" if comp_count > 10 else
-                "COMPETITIVE" if comp_count > 5 else
+                "SATURATED" if comp_count > COMPETITOR_COUNT_SATURATED else
+                "COMPETITIVE" if comp_count > COMPETITOR_COUNT_COMPETITIVE else
                 "MANAGEABLE"
             )
         }
@@ -338,7 +346,7 @@ def analyze_weaknesses(idea_name: str, idea_description: str = "A new product en
 
     # 3. Invoke LLM for structured classification
     try:
-        llm = get_llm(temperature=0.2, provider="gemini")
+        llm = get_llm(temperature=TEMPERATURE_WEAKNESS_ANALYSIS, provider=DEFAULT_LLM_PROVIDER)
 
         prompt_text = WEAKNESS_ANALYSIS_PROMPT.format(
             idea_name=idea_name,
@@ -353,7 +361,7 @@ def analyze_weaknesses(idea_name: str, idea_description: str = "A new product en
         content = response.content.replace("```json", "").replace("```", "").strip()
         weakness_data = json.loads(content)
 
-        output_path = f"data_output/{clean_name}_analyzed_weaknesses.json"
+        output_path = f"{OUTPUT_DIR}/{clean_name}_analyzed_weaknesses.json"
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(weakness_data, f, indent=4)
 
