@@ -74,11 +74,18 @@ NEW BUSINESS IDEA:
 COMPETITOR REVIEWS (Raw User Complaints):
 {reviews_json}
 
+STRICT DEFINITIONS — read carefully before classifying:
+- HARD STRENGTH: An INTERNAL capability, feature, or architectural advantage that the new product inherently possesses by design. It must describe something the product *IS* or *DOES*, not something a competitor *FAILS* at. Example: "Our app is fully automated" is a strength. "Competitors are manual" is NOT a strength — it's an opportunity.
+- OPPORTUNITY: An EXTERNAL market condition, unmet user need, or competitor failure that the new product could exploit. It describes what exists *outside* the product in the market.
+
 INSTRUCTIONS (Chain of Thought):
-1. Think step-by-step about what the core complaints actually mean. What exactly are these competitors failing to do?
-2. Compare each identified failure against the inherent nature of the New Business Idea.
-3. If the New Business Idea inherently solves the competitor's failure by default (e.g. they complain about complexity, but the new idea is an "Automated AI Bot"), classify that specific gap as a "Hard Strength" for the new idea.
-4. If it's a gap the new idea could potentially fill but isn't explicitly defined as doing so yet, classify it as an "Opportunity".
+1. Group all competitor complaints by their underlying theme (e.g. pricing, usability, missing features, poor support). Do not treat each individual complaint as a separate item — merge complaints that point to the same root issue.
+2. For each distinct theme (max 5 themes total):
+   a. Ask: does the new idea inherently solve this by its core design? → Hard Strength (describe what the product does, not what competitors fail at)
+   b. Ask: is this a gap the new idea *could* fill but isn't explicitly built to yet? → Opportunity (describe the external market gap and the user need)
+   c. A theme cannot appear in BOTH lists. Pick the most accurate classification.
+3. Cap output at 3-4 hard_strengths and 4-5 opportunities. If you have more, merge the weakest/most similar ones.
+4. Each item must be a unique insight — no two items should convey the same meaning even if worded differently.
 
 RETURN ONLY STRICT JSON in the following format (NO MARKDOWN WRAPPERS):
 {{
@@ -150,8 +157,12 @@ INSTRUCTIONS (think step by step):
    - Write a clear business statement explaining WHY this metric value is problematic for this specific idea
    - Source type = "METRIC_BACKED"
 
-3. De-duplicate. If a scrape signal and a metric point to the same underlying weakness, merge them into one entry and set source_type = "BOTH"
+3. De-duplicate aggressively. If two weaknesses share the same 
+   root cause, merge them into one entry and take the higher 
+   severity score. No two items in the final output should 
+   convey the same underlying business risk.
 
+   
 4. Assign a severity score 1-10:
    - 8-10: Critical — could kill the business or block market entry
    - 5-7: Significant — will require focused mitigation

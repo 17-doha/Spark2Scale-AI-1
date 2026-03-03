@@ -11,10 +11,11 @@ from app.graph.document_generator.config import (
 
 logger = logging.getLogger("RegulatoryBarrierNode")
 
-def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> str:
+def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> dict:
     """
     Scrapes the web for legal, compliance, and economic barriers in the given region.
     Summarizes them using an LLM to feed into the SWOT Threats quadrant.
+    Returns a dict containing the barrier data.
     """
     logger.info(f"\n[PEST] Scraping Regulatory & Economic Barriers for: '{idea_name}' in Region: '{region}'")
     
@@ -61,14 +62,8 @@ def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> str:
         content = response.content.replace("```json", "").replace("```", "").strip()
         barrier_data = json.loads(content)
         
-        clean_name = _clean_filename(idea_name)
-        output_path = f"{OUTPUT_DIR}/{clean_name}_barriers.json"
-        
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(barrier_data, f, indent=4)
-            
-        logger.info(f"[SUCCESS] Saved PEST Barriers to {output_path}")
-        return output_path
+        logger.info(f"[SUCCESS] PEST Barriers parsed.")
+        return barrier_data
         
     except json.JSONDecodeError as jde:
         logger.error(f"[ERROR] Failed to parse Barrier JSON from LLM: {content}")

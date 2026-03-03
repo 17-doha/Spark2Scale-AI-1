@@ -5,7 +5,6 @@ import pandas as pd
 from app.graph.market_research_agent.helpers.research_utils import execute_serper_search
 from typing import List, Dict
 from app.core.llm import get_llm
-from app.graph.document_generator.swot.data_extractor import find_market_report
 from app.graph.document_generator.prompts import WEAKNESS_ANALYSIS_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_WEAKNESS_ANALYSIS, OUTPUT_DIR, TOP_COMPETITORS_LIMIT,
@@ -36,36 +35,34 @@ def generate_review_queries(competitor_name: str) -> List[str]:
         f"site:g2.com {competitor_name} \"dislike\" OR \"cons\""
     ]
 
-def scrape_competitor_reviews(idea_name: str) -> str:
+def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
     """
-    Reads the associated competitors CSV, extracts top competitor names, 
+    Extracts top competitor names from the market research dict, 
     and searches for targeted user pain points to feed SWOT Weaknesses/Opportunities.
     
     Args:
-        idea_name (str): The business idea name to locate the competitors CSV.
+        idea_name (str): The business idea name.
+        market_research (dict): The output of the market research workflow.
         
     Returns:
-        str: Path to the saved competitor reviews JSON.
+        dict: A dictionary of competitor reviews/snippets.
     """
     logger.info(f"\n[SCRAPER] Initiating Targeted Competitor Review Scrape for: '{idea_name}'")
     
-    clean_name = _clean_filename(idea_name)
-    competitors_file = f"{OUTPUT_DIR}/{clean_name}_competitors.csv"
-    
-    if not os.path.exists(competitors_file):
-        logger.warning(f"[WARNING] No competitors file found at {competitors_file}. Run Market Research first.")
+    if not market_research:
+        logger.warning(f"[WARNING] No market research provided. Run Market Research first.")
         return None
         
     try:
-        df = pd.read_csv(competitors_file)
+        competitors = market_research.get("competitors", [])
         # Limit to top competitors to save API calls and remain focused
-        top_competitors = df['Name'].dropna().head(TOP_COMPETITORS_LIMIT).tolist()
+        top_competitors = [c.get("Name") for c in competitors if c.get("Name")][:TOP_COMPETITORS_LIMIT]
     except Exception as e:
-        logger.error(f"[ERROR] Failed to read competitors CSV: {e}")
+        logger.error(f"[ERROR] Failed to extract competitors: {e}")
         return None
         
     if not top_competitors:
-         logger.warning("[WARNING] No valid competitor names found in CSV.")
+         logger.warning("[WARNING] No valid competitor names found in market research.")
          return None
          
     all_reviews_context = {}
@@ -99,15 +96,8 @@ def scrape_competitor_reviews(idea_name: str) -> str:
         all_reviews_context[competitor] = snippets[:SNIPPETS_PER_COMPETITOR_LIMIT]
         
     # Save the output
-    output_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(all_reviews_context, f, indent=4)
-        logger.info(f"[SUCCESS] Saved competitor review context to {output_path}")
-        return output_path
-    except Exception as e:
-        logger.error(f"[ERROR] Failed to save competitor reviews JSON: {e}")
-        return None
+    logger.info(f"[SUCCESS] Extracted competitor review context.")
+    return all_reviews_context
 
 def _generate_weakness_queries(idea_name: str, region: str = "Global") -> List[str]:
     return [
@@ -119,7 +109,7 @@ def _generate_weakness_queries(idea_name: str, region: str = "Global") -> List[s
     ]
 
 
-def scrape_weaknesses(idea_name: str, region: str = "Global") -> str:
+def scrape_weaknesses(idea_name: str, region: str = "Global") -> dict:
     weakness_logger.info(f"\n[WEAKNESS SCRAPER] Scraping weakness signals for: '{idea_name}' [{region}]")
 
     queries = _generate_weakness_queries(idea_name, region)
@@ -147,32 +137,18 @@ def scrape_weaknesses(idea_name: str, region: str = "Global") -> str:
         weakness_logger.warning("[WARNING] No usable snippets after deduplication.")
         return None
 
-    clean_name = _clean_filename(idea_name)
-    output_path = f"{OUTPUT_DIR}/{clean_name}_weakness_signals.json"
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump({"idea_name": idea_name, "region": region, "signals": snippets}, f, indent=4)
-        weakness_logger.info(f"[SUCCESS] Saved weakness signals to {output_path}")
-        return output_path
-    except Exception as e:
-        weakness_logger.error(f"[ERROR] Failed to save weakness signals: {e}")
-        return None
+    weakness_logger.info(f"[SUCCESS] Weakness signals successfully gathered.")
+    return {"idea_name": idea_name, "region": region, "signals": snippets}
 
-def _extract_business_metrics(idea_name: str) -> dict:
+def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
     """
     Pulls quantitative metrics from the market report that can signal weaknesses.
     Each metric is evaluated dynamically against thresholds — nothing is hardcoded.
     """
-    report_path = find_market_report(idea_name)
-    if not report_path:
+    if not market_research:
         return {}
 
-    try:
-        with open(report_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        weakness_logger.warning(f"[WARNING] Could not read market report for metrics: {e}")
-        return {}
+    data = market_research
 
     metrics = {}
 
@@ -299,7 +275,7 @@ def _extract_business_metrics(idea_name: str) -> dict:
     return metrics
 
 
-def analyze_weaknesses(idea_name: str, idea_description: str = "A new product entering the market.", region: str = "Global") -> str:
+def analyze_weaknesses(idea_name: str, market_research: dict, idea_description: str = "A new product entering the market.", region: str = "Global") -> dict:
     """
     Combines scraped weakness signals with live business metrics and passes
     them to the LLM to produce structured, evidence-backed weaknesses for SWOT.
@@ -310,35 +286,23 @@ def analyze_weaknesses(idea_name: str, idea_description: str = "A new product en
 
     Args:
         idea_name (str): The business idea name.
+        market_research (dict): Foundational market research data.
         idea_description (str): Short description of the idea for context.
         region (str): The target region for market analysis. Default is "Global".
 
     Returns:
-        str: Path to saved analyzed_weaknesses JSON, or None on failure.
+        dict: The structure of analyzed weaknesses.
     """
     weakness_logger.info(f"\n[WEAKNESS ANALYZER] Analyzing weaknesses for: '{idea_name}'")
 
     clean_name = _clean_filename(idea_name)
 
-    # Auto-run scraper if signals file doesn't exist yet
-    signals_path = f"data_output/{clean_name}_weakness_signals.json"
-    if not os.path.exists(signals_path):
-        weakness_logger.info("[INFO] No weakness signals found — running scraper now.")
-        scrape_weaknesses(idea_name, region)
-
-    scraped_signals = []
-    if os.path.exists(signals_path):
-        try:
-            with open(signals_path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            scraped_signals = raw.get("signals", [])
-        except Exception as e:
-            weakness_logger.warning(f"[WARNING] Could not load weakness signals: {e}")
-    else:
-        weakness_logger.warning(f"[WARNING] No weakness signals file at {signals_path}. Proceeding with metrics only.")
+    # 1. Scrape new live signals right now (instead of reading from disk)
+    scraped_signals_data = scrape_weaknesses(idea_name, region)
+    scraped_signals = scraped_signals_data.get("signals", []) if scraped_signals_data else []
 
     # 2. Extract dynamic business metrics from market report
-    business_metrics = _extract_business_metrics(idea_name)
+    business_metrics = _extract_business_metrics(idea_name, market_research)
 
     if not scraped_signals and not business_metrics:
         weakness_logger.warning("[WARNING] No data available for weakness analysis. Skipping.")
@@ -361,12 +325,8 @@ def analyze_weaknesses(idea_name: str, idea_description: str = "A new product en
         content = response.content.replace("```json", "").replace("```", "").strip()
         weakness_data = json.loads(content)
 
-        output_path = f"{OUTPUT_DIR}/{clean_name}_analyzed_weaknesses.json"
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(weakness_data, f, indent=4)
-
-        weakness_logger.info(f"[SUCCESS] Saved analyzed weaknesses to {output_path}")
-        return output_path
+        weakness_logger.info(f"[SUCCESS] Analyzed weaknesses generated.")
+        return weakness_data
 
     except json.JSONDecodeError:
         weakness_logger.error(f"[ERROR] Failed to parse weakness JSON from LLM: {content}")

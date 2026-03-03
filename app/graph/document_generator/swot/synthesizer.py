@@ -10,7 +10,7 @@ from app.graph.document_generator.config import (
 
 logger = logging.getLogger("TOWSSynthesizer")
 
-def synthesize_swot_matrix(idea_name: str) -> str:
+def synthesize_swot_matrix(idea_name: str, swot_context: dict) -> dict:
     """
     Acts as the final 'Reducer' node. 
     It pulls all SWOT context, applies the TOWS framework, and generates
@@ -18,29 +18,27 @@ def synthesize_swot_matrix(idea_name: str) -> str:
     """
     logger.info(f"\n[SYNTHESIZER] Generating TOWS Matrix and Strategic Verdict for: '{idea_name}'")
     
-    # 1. Grab all the parsed context so far
-    context = extract_swot_data(idea_name)
-    if "error" in context:
-        logger.error(f"[ERROR] Cannot synthesize TOWS: {context['error']}")
+    if not swot_context or "error" in swot_context:
+        logger.error(f"[ERROR] Cannot synthesize TOWS, invalid swot_context.")
         return None
         
     def format_list(items):
         return "\n".join([f"- {item}" for item in items]) if items else "None identified."
         
-    strengths_str = format_list(context.get("strengths_context", []))
-    weaknesses_str = format_list(context.get("weaknesses_context", []))
-    opportunities_str = format_list(context.get("opportunities_context", []))
-    threats_str = format_list(context.get("threats_context", []))
+    strengths_str = format_list(swot_context.get("strengths_context", []))
+    weaknesses_str = format_list(swot_context.get("weaknesses_context", []))
+    opportunities_str = format_list(swot_context.get("opportunities_context", []))
+    threats_str = format_list(swot_context.get("threats_context", []))
     
     # Extract Pain Score and CAGR specifically if they exist in the strings
     pain_score = "Unknown"
-    for s in context.get("strengths_context", []) + context.get("weaknesses_context", []):
+    for s in swot_context.get("strengths_context", []) + swot_context.get("weaknesses_context", []):
          if "Pain Score" in s:
              pain_score = s
              break
              
     cagr = "Unknown"
-    for o in context.get("opportunities_context", []) + context.get("threats_context", []):
+    for o in swot_context.get("opportunities_context", []) + swot_context.get("threats_context", []):
          if "CAGR" in o or "Growth" in o:
              cagr = o
              break
@@ -66,14 +64,8 @@ def synthesize_swot_matrix(idea_name: str) -> str:
         content = response.content.replace("```json", "").replace("```", "").strip()
         tows_data = json.loads(content)
         
-        clean_name = _clean_filename(idea_name)
-        output_path = f"{OUTPUT_DIR}/{clean_name}_tows_matrix.json"
-        
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(tows_data, f, indent=4)
-            
-        logger.info(f"[SUCCESS] Saved TOWS Matrix to {output_path}")
-        return output_path
+        logger.info(f"[SUCCESS] TOWS Matrix parsed.")
+        return tows_data
         
     except json.JSONDecodeError as jde:
         logger.error(f"[ERROR] Failed to parse TOWS JSON from LLM: {content}")

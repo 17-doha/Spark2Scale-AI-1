@@ -10,33 +10,22 @@ from app.graph.document_generator.config import (
 
 logger = logging.getLogger("CompetitiveGapAnalyzer")
 
-def analyze_competitive_gap(idea_name: str, idea_description: str = "A new product entering the market.") -> str:
+def analyze_competitive_gap(idea_name: str, reviews_data: dict, idea_description: str = "A new product entering the market.") -> dict:
     """
-    Reads the scraped competitor reviews, passes them to an LLM to determine
+    Reads the scraped competitor reviews dict, passes them to an LLM to determine
     Hard Strengths vs Opportunities when compared to the new business idea,
-    and saves the structured output.
+    and returns the structured output.
     """
     logger.info(f"\n[ANALYZER] Running Competitive Gap Analysis for: '{idea_name}'")
     
-    clean_name = _clean_filename(idea_name)
-    reviews_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
-    
-    if not os.path.exists(reviews_path):
-        logger.warning(f"[WARNING] No reviews file found at {reviews_path}. Cannot perform Gap Analysis.")
+    if not reviews_data:
+        logger.warning(f"[WARNING] No reviews data provided. Cannot perform Gap Analysis.")
         return None
         
-    try:
-        with open(reviews_path, "r", encoding="utf-8") as f:
-            reviews_data = json.load(f)
-            
-        # If there are no meaningful reviews, skip
-        has_data = any(v and "No major negative signals" not in v[0] for v in reviews_data.values())
-        if not has_data:
-            logger.info("[INFO] No negative signals found in reviews to analyze.")
-            return None
-            
-    except Exception as e:
-        logger.error(f"[ERROR] Failed to read competitor reviews: {e}")
+    # If there are no meaningful reviews, skip
+    has_data = any(v and "No major negative signals" not in v[0] for v in reviews_data.values())
+    if not has_data:
+        logger.info("[INFO] No negative signals found in reviews to analyze.")
         return None
 
     try:
@@ -58,12 +47,8 @@ def analyze_competitive_gap(idea_name: str, idea_description: str = "A new produ
         
         gap_data = json.loads(content)
         
-        output_path = f"{OUTPUT_DIR}/{clean_name}_competitive_gap.json"
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(gap_data, f, indent=4)
-            
-        logger.info(f"[SUCCESS] Saved Competitive Gap Analysis to {output_path}")
-        return output_path
+        logger.info(f"[SUCCESS] Gap Analysis finished.")
+        return gap_data
         
     except json.JSONDecodeError as jde:
         logger.error(f"[ERROR] Failed to parse Gap Analysis JSON output from LLM: {content}")

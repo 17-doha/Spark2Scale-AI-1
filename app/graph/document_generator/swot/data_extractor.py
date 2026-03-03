@@ -10,53 +10,28 @@ def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
     return name.replace(' ', '_').replace('"', '').replace("'", "")
 
-def find_market_report(idea_name: str) -> str:
+def extract_swot_data(
+    idea_name: str,
+    market_research: dict,
+    weaknesses_data: dict = None,
+    reviews_data: dict = None,
+    gap_data: dict = None,
+    barrier_data: dict = None,
+    tows_data: dict = None
+) -> dict:
     """
-    Robustly finds the market report JSON file, accounting for potential 
-    shortening or modification of the idea name due to length or formatting limits.
-    """
-    if not idea_name:
-        return None
-        
-    clean_name = idea_name.replace(' ', '_').replace('"', '').replace("'", "")
-    
-    # 1. Try exact match
-    exact_path = f"{OUTPUT_DIR}/{clean_name}_Market_Report.json"
-    if os.path.exists(exact_path):
-        return exact_path
-        
-    # 2. Try prefix matching if the name was truncated
-    # Use first 20-30 chars of the clean name (or whatever length is available)
-    prefix_length = min(len(clean_name), 25)
-    prefix = clean_name[:prefix_length]
-    
-    # Search for files starting with the prefix and ending with _Market_Report.json
-    pattern = f"{OUTPUT_DIR}/{prefix}*_Market_Report.json"
-    matches = glob.glob(pattern)
-    
-    if matches:
-        # If multiple matches, sort by modification time (newest first)
-        matches.sort(key=os.path.getmtime, reverse=True)
-        return matches[0]
-        
-    logger.warning(f"[WARNING] Could not find Market Report JSON for idea: {idea_name}")
-    return None
-
-def extract_swot_data(idea_name: str) -> dict:
-    """
-    Extracts baseline data for SWOT quadrants from the generated Market Research JSON.
+    Extracts baseline data for SWOT quadrants from the given Market Research JSON
+    and intermediate SWOT phase JSONs directly.
     Returns a dictionary of context structured for the SWOT LLM prompt.
     """
-    report_path = find_market_report(idea_name)
-    if not report_path:
+    if not market_research:
         return {
-            "error": f"No market report found for idea: {idea_name}. Ensure Market Research is completed first."
+            "error": f"No market research dict provided for idea: {idea_name}. Ensure Market Research is completed first."
         }
         
     try:
-        with open(report_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            
+        data = market_research
+        
         # Initialize SWOT context
         swot_context = {
             "idea_name": data.get("idea_name", idea_name),
@@ -81,27 +56,16 @@ def extract_swot_data(idea_name: str) -> dict:
                 )
                 
         # --- Analyzed Weaknesses → Weaknesses ---
-        # Replaces all hardcoded weakness logic.
-        # Weaknesses are now SCRAPE_BACKED, METRIC_BACKED, or BOTH — never invented.
-        clean_name = _clean_filename(idea_name)
-        weakness_path = f"{OUTPUT_DIR}/{clean_name}_analyzed_weaknesses.json"
-        if os.path.exists(weakness_path):
-            try:
-                with open(weakness_path, "r", encoding="utf-8") as f:
-                    weakness_data = json.load(f)
+        if weaknesses_data:
+            weaknesses = weaknesses_data.get("weaknesses", [])
+            # Sort by severity so critical ones appear first
+            weaknesses.sort(key=lambda w: w.get("severity", 0), reverse=True)
 
-                weaknesses = weakness_data.get("weaknesses", [])
-                # Sort by severity so critical ones appear first
-                weaknesses.sort(key=lambda w: w.get("severity", 0), reverse=True)
-
-                swot_context["weaknesses_context"] = weaknesses
-
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to read analyzed weaknesses: {e}")
+            swot_context["weaknesses_context"] = weaknesses
         else:
             # Fallback for backward compatibility — warns that weaknesses are incomplete
             logger.warning(
-                f"[FALLBACK] No analyzed_weaknesses file found for '{idea_name}'. "
+                f"[FALLBACK] No analyzed_weaknesses provided for '{idea_name}'. "
                 "Run scrape_weaknesses() + analyze_weaknesses() before SWOT generation."
             )
             if validation:
@@ -167,69 +131,39 @@ def extract_swot_data(idea_name: str) -> dict:
             swot_context["competitors_count"] = comp_count
 
         # --- EXTRACT COMPETITOR REVIEWS (PHASE 2) ---
-        clean_name = _clean_filename(idea_name)
-        reviews_path = f"{OUTPUT_DIR}/{clean_name}_competitor_reviews.json"
-        
-        if os.path.exists(reviews_path):
-            try:
-                with open(reviews_path, "r", encoding="utf-8") as f:
-                    reviews_data = json.load(f)
-                    
-                for comp, snippets in reviews_data.items():
-                    if snippets and "No major negative signals" not in snippets[0]:
-                        opp_str = f"Competitor Weakness ({comp}): Users are complaining. Snippets: " + " | ".join(snippets[:3])
-                        swot_context["opportunities_context"].append(f"Market Gap: {opp_str}")
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to read competitor reviews: {e}")
+        if reviews_data:
+            for comp, snippets in reviews_data.items():
+                if snippets and "No major negative signals" not in snippets[0]:
+                    opp_str = f"Competitor Weakness ({comp}): Users are complaining. Snippets: " + " | ".join(snippets[:3])
+                    swot_context["opportunities_context"].append(f"Market Gap: {opp_str}")
 
         # --- EXTRACT COMPETITIVE GAPS (PHASE 3) ---
-        gap_path = f"{OUTPUT_DIR}/{clean_name}_competitive_gap.json"
-        if os.path.exists(gap_path):
-            try:
-                with open(gap_path, "r", encoding="utf-8") as f:
-                    gap_data = json.load(f)
-                    
-                for strength in gap_data.get("hard_strengths", []):
-                     swot_context["strengths_context"].append(strength)
-                     
-                for opp in gap_data.get("opportunities", []):
-                     swot_context["opportunities_context"].append(opp)
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to read competitive gap data: {e}")
+        if gap_data:
+            for strength in gap_data.get("hard_strengths", []):
+                 swot_context["strengths_context"].append(strength)
+                 
+            for opp in gap_data.get("opportunities", []):
+                 swot_context["opportunities_context"].append(opp)
 
         # --- EXTRACT REGULATORY BARRIERS (PHASE 4) ---
-        barriers_path = f"{OUTPUT_DIR}/{clean_name}_barriers.json"
-        if os.path.exists(barriers_path):
-            try:
-                with open(barriers_path, "r", encoding="utf-8") as f:
-                    barrier_data = json.load(f)
-                    
-                for threat in barrier_data.get("regulatory_and_economic_threats", []):
-                     swot_context["threats_context"].append(threat)
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to read regulatory barriers data: {e}")
+        if barrier_data:
+            for threat in barrier_data.get("regulatory_and_economic_threats", []):
+                 swot_context["threats_context"].append(threat)
 
         # --- EXTRACT TOWS MATRIX (PHASE 5) ---
-        tows_path = f"{OUTPUT_DIR}/{clean_name}_tows_matrix.json"
-        if os.path.exists(tows_path):
-            try:
-                with open(tows_path, "r", encoding="utf-8") as f:
-                    tows_data = json.load(f)
-                    
-                matrix = tows_data.get("tows_matrix", {})
+        if tows_data:
+            matrix = tows_data.get("tows_matrix", {})
+            
+            if matrix.get("SO_Strategies"):
+                swot_context["tows_strategies"].append("**SO Strategies (Maxi-Maxi):**\n" + "\n".join([f"- {s}" for s in matrix["SO_Strategies"]]))
+            if matrix.get("ST_Strategies"):
+                swot_context["tows_strategies"].append("**ST Strategies (Maxi-Mini):**\n" + "\n".join([f"- {s}" for s in matrix["ST_Strategies"]]))
+            if matrix.get("WO_Strategies"):
+                swot_context["tows_strategies"].append("**WO Strategies (Mini-Maxi):**\n" + "\n".join([f"- {s}" for s in matrix["WO_Strategies"]]))
+            if matrix.get("WT_Strategies"):
+                swot_context["tows_strategies"].append("**WT Strategies (Mini-Mini):**\n" + "\n".join([f"- {s}" for s in matrix["WT_Strategies"]]))
                 
-                if matrix.get("SO_Strategies"):
-                    swot_context["tows_strategies"].append("**SO Strategies (Maxi-Maxi):**\n" + "\n".join([f"- {s}" for s in matrix["SO_Strategies"]]))
-                if matrix.get("ST_Strategies"):
-                    swot_context["tows_strategies"].append("**ST Strategies (Maxi-Mini):**\n" + "\n".join([f"- {s}" for s in matrix["ST_Strategies"]]))
-                if matrix.get("WO_Strategies"):
-                    swot_context["tows_strategies"].append("**WO Strategies (Mini-Maxi):**\n" + "\n".join([f"- {s}" for s in matrix["WO_Strategies"]]))
-                if matrix.get("WT_Strategies"):
-                    swot_context["tows_strategies"].append("**WT Strategies (Mini-Mini):**\n" + "\n".join([f"- {s}" for s in matrix["WT_Strategies"]]))
-                    
-                swot_context["strategic_verdict"] = tows_data.get("strategic_verdict", "No unified verdict available.")
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to read TOWS Matrix data: {e}")
+            swot_context["strategic_verdict"] = tows_data.get("strategic_verdict", "No unified verdict available.")
 
         return swot_context
         

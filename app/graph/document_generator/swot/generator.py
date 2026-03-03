@@ -10,44 +10,45 @@ from app.graph.document_generator.config import (
 
 logger = logging.getLogger("SWOTGenerator")
 
-def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER) -> str:
+def generate_swot_document(idea_name: str, swot_context: dict, provider: str = DEFAULT_LLM_PROVIDER) -> dict:
     """
     Generates a full SWOT JSON document for a given idea name.
     
     Args:
         idea_name (str): The name of the business idea to generate for.
+        swot_context (dict): The gathered SWOT context data.
         provider (str): LLM provider to use (default: gemini).
         
     Returns:
-        str: The generated JSON content as a string, or an error message.
+        dict: The generated JSON content as a dict, or an error message dict.
     """
     logger.info(f"Generating SWOT analysis for: {idea_name}")
     
-    # 1. Extract context data
-    context = extract_swot_data(idea_name)
-    if "error" in context:
-        logger.error(context["error"])
-        return context["error"]
+    # 1. Ensure context exists
+    if not swot_context or "error" in swot_context:
+        error_msg = swot_context.get("error", "Invalid swot_context provided.")
+        logger.error(error_msg)
+        return {"error": error_msg}
         
     # Format context for the prompt
     def format_list(items):
         return "\n".join([f"- {item}" for item in items]) if items else "No specific data found."
         
-    strengths_str = format_list(context["strengths_context"])
-    weaknesses_str = format_list(context["weaknesses_context"])
-    opportunities_str = format_list(context["opportunities_context"])
-    threats_str = format_list(context["threats_context"])
+    strengths_str = format_list(swot_context.get("strengths_context", []))
+    weaknesses_str = format_list(swot_context.get("weaknesses_context", []))
+    opportunities_str = format_list(swot_context.get("opportunities_context", []))
+    threats_str = format_list(swot_context.get("threats_context", []))
     
     # 2. Extract TOWS
-    tows_str = "\n\n".join(context.get("tows_strategies", [])) if context.get("tows_strategies") else "TOWS Strategies pending."
-    verdict_str = context.get("strategic_verdict", "Verdict pending.")
+    tows_str = "\n\n".join(swot_context.get("tows_strategies", [])) if swot_context.get("tows_strategies") else "TOWS Strategies pending."
+    verdict_str = swot_context.get("strategic_verdict", "Verdict pending.")
     
     # 3. Get LLM instance
     try:
         llm = get_llm(temperature=TEMPERATURE_GENERATOR, provider=provider)
     except Exception as e:
         logger.error(f"Failed to initialize LLM: {e}")
-        return f"Error initializing LLM: {str(e)}"
+        return {"error": f"Error initializing LLM: {str(e)}"}
         
     # 3. Create chain and invoke
     try:
@@ -55,8 +56,8 @@ def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER)
         
         logger.info("Invoking LLM for SWOT Generation...")
         response = chain.invoke({
-            "idea_name": context["idea_name"],
-            "executive_summary": context["executive_summary"][:1000] + "..." if len(context["executive_summary"]) > 1000 else context["executive_summary"],
+            "idea_name": swot_context.get("idea_name", idea_name),
+            "executive_summary": swot_context.get("executive_summary", "")[:1000] + "..." if len(swot_context.get("executive_summary", "")) > 1000 else swot_context.get("executive_summary", ""),
             "strengths_context": strengths_str,
             "weaknesses_context": weaknesses_str,
             "opportunities_context": opportunities_str,
@@ -80,8 +81,8 @@ def generate_swot_document(idea_name: str, provider: str = DEFAULT_LLM_PROVIDER)
             json.dump(swot_data, f, indent=4)
             
         logger.info(f"SWOT Analysis generated successfully: {output_file}")
-        return json.dumps(swot_data, indent=4)
+        return swot_data
         
     except Exception as e:
         logger.error(f"Failed during SWOT LLM generation: {e}")
-        return f"Error generating SWOT document: {str(e)}"
+        return {"error": f"Error generating SWOT document: {str(e)}"}
