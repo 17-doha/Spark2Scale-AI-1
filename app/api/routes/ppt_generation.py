@@ -4,6 +4,7 @@ import json
 import tempfile
 import shutil
 from typing import List, Optional
+import uuid
 
 from fastapi import APIRouter, HTTPException, status, File, UploadFile, Form
 from pydantic import BaseModel, Field
@@ -53,14 +54,29 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         output_dir = os.path.join("output", "ppt_generation", f"ppt{startup_id}")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{startup_id}.pptx")
-        storage_path = await generate_pptx_file(final_draft, output_path)
 
+        local_path = await generate_pptx_file(final_draft, output_path)
+
+        # ── Upload to Supabase Storage: {startup_id}/ppts/{filename} ──
+        storage_path = local_path  # fallback
         if supabase:
             try:
+                file_name = f"{uuid.uuid4().hex}.pptx"
+                supabase_storage_path = f"ppts/{startup_id}/{file_name}"
+
+                with open(local_path, "rb") as f:
+                    supabase.storage.from_("documents").upload(
+                        path=supabase_storage_path,
+                        file=f,
+                        file_options={"content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "upsert": "true"}
+                    )
+
+                storage_path = supabase.storage.from_("documents").get_public_url(supabase_storage_path)
+
                 doc_data = {
                     "startup_id": startup_id,
                     "document_name": final_draft.title,
-                    "type": "pitch_deck",
+                    "type": "PPT",          # ← fixed
                     "current_path": storage_path,
                     "json_response": final_draft.model_dump()
                 }
