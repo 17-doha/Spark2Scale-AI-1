@@ -65,13 +65,13 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
                 supabase_storage_path = f"ppts/{startup_id}/{file_name}"
 
                 with open(local_path, "rb") as f:
-                    supabase.storage.from_("documents").upload(
+                    supabase.storage.from_("ppts").upload(
                         path=supabase_storage_path,
                         file=f,
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "upsert": "true"}
                     )
 
-                storage_path = supabase.storage.from_("documents").get_public_url(supabase_storage_path)
+                storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
 
                 doc_data = {
                     "startup_id": startup_id,
