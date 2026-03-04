@@ -5,17 +5,19 @@ load_dotenv()
 
 class Config:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite").strip("'\"")
+    _raw_gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite").strip("'\"")
+    GEMINI_MODEL = _raw_gemini_model if not _raw_gemini_model.startswith("AIzaSy") else "gemini-2.5-flash-lite"
     GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0"))
     MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "2"))
     POLLINATIONS_API_KEY = os.getenv("POLLINATIONS_API_KEY")
     SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
     TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
-    GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite").strip("'\"")
+    GEMINI_MODEL_NAME = GEMINI_MODEL
     # Image generation:
     # - Provider is configured via IMAGE_PROVIDER: "pollinations" (default) or "google" (Gemini image model).
     # - IMAGE_MODEL controls the underlying model name for that provider.
-    IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gptimage-large")
+    _raw_image_model = os.getenv("IMAGE_MODEL", "gptimage-large")
+    IMAGE_MODEL = _raw_image_model if not _raw_image_model.startswith("AIzaSy") else "gptimage-large"
     IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "pollinations")  # "pollinations" | "google"
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     OLLAMA_NUM_PARALLELL = int(os.getenv("OLLAMA_NUM_PARALLEL", "1"))

@@ -49,7 +49,12 @@ def _generate_image_google(prompt: str, output_dir: str) -> Optional[str]:
 
     icon_suffix = ", premium 3D isometric illustration, modern professional render, high quality, soft lighting, clean background"
     full_prompt = (prompt.strip().rstrip(".,") + " " + icon_suffix).strip()
-    model_name = getattr(config, "IMAGE_MODEL", "gemini-2.5-flash-image") or "gemini-2.5-flash-image"
+    model_name = getattr(config, "IMAGE_MODEL", "gemini-2.5-flash-lite") or "gemini-2.5-flash-lite"
+    
+    # If the user has a Pollinations model configured but is using Google provider, 
+    # we MUST use a valid Google model name (e.g. gemini-2.5-flash-lite)
+    if "gpt" in model_name or "flux" in model_name or "imagen" not in model_name.lower() and "gemini" not in model_name.lower():
+        model_name = "gemini-2.5-flash-lite" # Default safe choice for GenAI SDK image gen
     
     logger.info(f"Generating image via Google GenAI (model={model_name}) for prompt: {full_prompt}")
     
