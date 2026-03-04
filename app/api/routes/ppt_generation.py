@@ -62,7 +62,7 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         if supabase:
             try:
                 file_name = f"{uuid.uuid4().hex}.pptx"
-                supabase_storage_path = f"ppts/{startup_id}/{file_name}"
+                supabase_storage_path = f"{startup_id}/{file_name}"
 
                 with open(local_path, "rb") as f:
                     supabase.storage.from_("ppts").upload(
