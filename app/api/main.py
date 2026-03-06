@@ -28,7 +28,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://spark2scale-client.azurewebsites.net/", "http://localhost:3000"], # For production, replace "*" with your specific frontend URL
     allow_credentials=True,
-    allow_methods=["*"], # This will allow the OPTIONS method
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(ppt_generation.router, prefix="/api/v1/ppt", tags=["Presentation Generation"])
