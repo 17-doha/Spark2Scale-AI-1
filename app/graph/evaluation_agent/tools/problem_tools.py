@@ -113,7 +113,7 @@ async def problem_scoring_agent(data_package: dict) -> dict:
         }
 
         try:
-            raw_res = await asyncio.wait_for(chain.ainvoke(inputs), timeout=30.0)
+            raw_res = await asyncio.wait_for(chain.ainvoke(inputs), timeout=120.0)
             result_dict = parse_and_repair_json(raw_res)
             result_dict["score_numeric"] = safe_score_numeric(result_dict)
             return result_dict
