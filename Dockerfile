@@ -30,4 +30,4 @@ COPY . .
 EXPOSE 80
 
 # Use Gunicorn with a high timeout to allow for T5 and LangGraph processing
-CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:80", "main:app"]
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:80", "main:app"]
