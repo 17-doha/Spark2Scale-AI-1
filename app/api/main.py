@@ -1,12 +1,29 @@
 from dotenv import load_dotenv
 load_dotenv()  # must run before any module reads os.getenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
 from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation
+from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 app = FastAPI(title="Spark2Scale AI Agent")
+
+# Configure slowapi rate limiting (per-IP).
+app.state.limiter = api_limiter
+app.add_middleware(SlowAPIMiddleware)
+
+@app.exception_handler(RateLimitExceeded)
+def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://spark2scale-client.azurewebsites.net/", "http://localhost:3000"], # For production, replace "*" with your specific frontend URL

@@ -17,6 +17,7 @@ from typing import Dict, Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.core.limiter import api_limiter
 
 # Import LangChain message types
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -184,6 +185,7 @@ class UpdateDataRequest(BaseModel):
 
 
 @router.post("/chat")
+@api_limiter.limit("20/minute")
 async def process_idea_chat(request: ChatRequest):
     """
     Conversational Endpoint (Read-Only on Data).
@@ -208,6 +210,7 @@ async def process_idea_chat(request: ChatRequest):
 
 
 @router.post("/update-startup-data")
+@api_limiter.limit("20/minute")
 async def update_startup_data(request: UpdateDataRequest):
     """
     Data Update Endpoint (Processes History).
