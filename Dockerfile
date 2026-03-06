@@ -1,15 +1,13 @@
 # Use an official Python runtime
 FROM python:3.11-slim
- 
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies required for:
-# - PDF/PPT generation (libcairo2, libpango)
-# - Image processing (libgl1)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1 \
@@ -31,5 +29,5 @@ COPY . .
 # Expose the port Azure expects
 EXPOSE 80
 
-# Run uvicorn directly on Port 80
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+# Use Gunicorn with a high timeout to allow for T5 and LangGraph processing
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:80", "main:app"]

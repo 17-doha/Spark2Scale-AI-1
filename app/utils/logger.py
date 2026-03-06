@@ -10,7 +10,7 @@ def setup_logger(name: str = "spark2scale"):
     # Create logs directory if it doesn't exist
     log_dir = "logs"
     if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
 
     logger = logging.getLogger(name)
     

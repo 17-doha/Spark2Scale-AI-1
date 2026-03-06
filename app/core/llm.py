@@ -57,7 +57,8 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
             model_name=selected_model,
             api_key=api_key,
             max_retries=6,
-            request_timeout=30 
+            request_timeout=90,
+            timeout=90 
         )
 
     # --- OPTION 2: OLLAMA (Local) ---
