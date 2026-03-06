@@ -15,15 +15,14 @@ import logging
 import copy
 from typing import Dict, Any
 
-from fastapi import APIRouter
+# 1. Added Request to the fastapi import!
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from app.core.limiter import api_limiter
 
 # Import LangChain message types
 from langchain_core.messages import SystemMessage, HumanMessage
 
-# IMPORTANT: Update this import path to point to wherever your get_llm function is saved!
-# For example: from app.core.llm_factory import get_llm
 from app.core.llm import get_llm 
 
 router = APIRouter()
@@ -134,23 +133,17 @@ GUIDELINES:
 def call_gemini(user_content: str, system_prompt: str, json_mode: bool = True) -> Dict[str, Any]:
     """Call Gemini API using the centralized LangChain factory."""
     
-    # 1. Instantiate the LLM from your factory
-    # Setting a low temperature (0.1) ensures strict adherence to JSON formatting rules
     llm = get_llm(temperature=0.1, provider="gemini")
     
-    # 2. Format the messages for LangChain
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_content)
     ]
 
-    # 3. Invoke the model
     response = llm.invoke(messages)
     text_content = response.content.strip()
 
     if json_mode:
-        # LangChain Gemini sometimes wraps JSON outputs in markdown code blocks.
-        # We must clean these tags before trying to parse the JSON.
         if text_content.startswith("```json"):
             text_content = text_content[7:]
         elif text_content.startswith("```"):
@@ -184,21 +177,23 @@ class UpdateDataRequest(BaseModel):
     startup_data: dict
 
 
+# 2. Added `request: Request` and renamed the Pydantic model to `payload`
 @router.post("/chat")
 @api_limiter.limit("20/minute")
-async def process_idea_chat(request: ChatRequest):
+async def process_idea_chat(request: Request, payload: ChatRequest):
     """
     Conversational Endpoint (Read-Only on Data).
     Returns natural language AI reply.
     """
-    if is_prompt_injection(request.user_message):
-        logger.warning(f"[WARNING] Injection Blocked: {request.user_message[:50]}")
+    # 3. Changed all `request.` to `payload.`
+    if is_prompt_injection(payload.user_message):
+        logger.warning(f"[WARNING] Injection Blocked: {payload.user_message[:50]}")
         return {"ai_reply": "I cannot fulfill that request. How else can I help with your startup?"}
 
     user_content = (
-        f"DATA:\n{json.dumps(request.startup_data)}\n\n"
-        f"HISTORY:\n{json.dumps(request.chat_history)}\n\n"
-        f"USER MESSAGE:\n{request.user_message}\n"
+        f"DATA:\n{json.dumps(payload.startup_data)}\n\n"
+        f"HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
+        f"USER MESSAGE:\n{payload.user_message}\n"
     )
 
     try:
@@ -209,16 +204,17 @@ async def process_idea_chat(request: ChatRequest):
         return {"ai_reply": "I'm having trouble connecting right now. Please try again."}
 
 
+# 4. Same fix for the update endpoint!
 @router.post("/update-startup-data")
 @api_limiter.limit("20/minute")
-async def update_startup_data(request: UpdateDataRequest):
+async def update_startup_data(request: Request, payload: UpdateDataRequest):
     """
     Data Update Endpoint (Processes History).
     Returns structured data updates (deltas).
     """
     user_content = (
-        f"CURRENT DATA:\n{json.dumps(request.startup_data)}\n\n"
-        f"CHAT HISTORY:\n{json.dumps(request.chat_history)}\n\n"
+        f"CURRENT DATA:\n{json.dumps(payload.startup_data)}\n\n"
+        f"CHAT HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
         f"TASK: Extract insights from history to update the data."
     )
 
@@ -226,14 +222,14 @@ async def update_startup_data(request: UpdateDataRequest):
         result = call_gemini(user_content, _EXTRACTION_SYSTEM_PROMPT, json_mode=True)
     except Exception as e:
         logger.error(f"[ERROR] Gemini Extraction Failed: {str(e)}")
-        return {"updated_startup_data": request.startup_data}
+        return {"updated_startup_data": payload.startup_data}
 
     updates = result.get("data_updates", {})
     
     try:
-        final_data = copy.deepcopy(request.startup_data)
+        final_data = copy.deepcopy(payload.startup_data)
         deep_merge(final_data, updates)
         return {"updated_startup_data": final_data}
     except Exception as merge_e:
         logger.error(f"[ERROR] Merge Failed: {str(merge_e)}")
-        return {"updated_startup_data": request.startup_data}
+        return {"updated_startup_data": payload.startup_data}
