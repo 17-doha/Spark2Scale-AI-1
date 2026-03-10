@@ -1,5 +1,6 @@
 import logging
 from langgraph.graph import StateGraph, START, END
+from app.core.logger import get_logger
 from .state import DocumentGeneratorState
 from .nodes import (
     scrape_competitors_node,
@@ -11,7 +12,7 @@ from .nodes import (
     generate_swot_node
 )
 
-logger = logging.getLogger("DocumentGeneratorWorkflow")
+logger = get_logger("DocumentGeneratorWorkflow")
 
 def create_document_generator_workflow():
     """

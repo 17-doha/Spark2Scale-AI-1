@@ -1,10 +1,10 @@
 import os
 import glob
 import json
-import logging
+from app.core.logger import get_logger
 from app.graph.document_generator.config import OUTPUT_DIR
 
-logger = logging.getLogger("SWOTDataExtractor")
+logger = get_logger("SWOTDataExtractor")
 
 def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
@@ -30,7 +30,7 @@ def extract_swot_data(
         }
         
     try:
-        data = market_research
+        data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
         
         # Initialize SWOT context
         swot_context = {

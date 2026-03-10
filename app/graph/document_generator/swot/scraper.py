@@ -5,6 +5,7 @@ import pandas as pd
 from app.graph.market_research_agent.helpers.research_utils import execute_serper_search
 from typing import List, Dict
 from app.core.llm import get_llm
+from app.core.logger import get_logger
 from app.graph.document_generator.prompts import WEAKNESS_ANALYSIS_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_WEAKNESS_ANALYSIS, OUTPUT_DIR, TOP_COMPETITORS_LIMIT,
@@ -15,8 +16,8 @@ from app.graph.document_generator.config import (
     COMPETITOR_COUNT_COMPETITIVE, MARKET_STRUCTURE_HIGH_RISK, MARKET_STRUCTURE_MODERATE_RISK_KEYWORD
 )
 
-logger = logging.getLogger("CompetitorReviewScraper")
-weakness_logger = logging.getLogger("WeaknessAnalyzer")
+logger = get_logger("CompetitorReviewScraper")
+weakness_logger = get_logger("WeaknessAnalyzer")
 
 def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
@@ -54,7 +55,8 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
         return None
         
     try:
-        competitors = market_research.get("competitors", [])
+        data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+        competitors = data.get("competitors", [])
         # Limit to top competitors to save API calls and remain focused
         top_competitors = [c.get("Name") for c in competitors if c.get("Name")][:TOP_COMPETITORS_LIMIT]
     except Exception as e:
@@ -148,7 +150,7 @@ def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
     if not market_research:
         return {}
 
-    data = market_research
+    data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
 
     metrics = {}
 

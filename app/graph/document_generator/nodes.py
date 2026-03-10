@@ -1,4 +1,4 @@
-import logging
+from app.core.logger import get_logger
 from .state import DocumentGeneratorState
 from .swot.scraper import scrape_competitor_reviews, analyze_weaknesses
 from .swot.regulatory_and_barrier_node import scrape_regulatory_barriers
@@ -7,7 +7,7 @@ from .swot.data_extractor import extract_swot_data
 from .swot.synthesizer import synthesize_swot_matrix
 from .swot.generator import generate_swot_document
 
-logger = logging.getLogger("DocumentGeneratorNodes")
+logger = get_logger("DocumentGeneratorNodes")
 
 def scrape_competitors_node(state: DocumentGeneratorState) -> dict:
     logger.info("--- Node: scrape_competitors_node ---")
