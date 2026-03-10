@@ -83,18 +83,17 @@ def _generate_image_google(prompt: str, output_dir: str) -> Optional[str]:
 
 def generate_image(prompt: str, output_dir: str) -> Optional[str]:
     """
-    Generates an image for the slide. Uses Google GenAI (Gemini image) when
-    IMAGE_PROVIDER=google; otherwise uses Pollinations.
+    Generates an image for the slide. Uses the configured IMAGE_PROVIDER.
+    If the provider fails or is unavailable on the first attempt, it does not fallback.
     """
     try:
         provider = getattr(config, "IMAGE_PROVIDER", "pollinations") or "pollinations"
         
         if provider.lower() == "google":
-            out = _generate_image_google(prompt, output_dir)
-            if out: return out
-            logger.info("Google GenAI failed; falling back to Pollinations.")
-
-        return _generate_image_pollinations(prompt, output_dir)
+            return _generate_image_google(prompt, output_dir)
+        else:
+            return _generate_image_pollinations(prompt, output_dir)
+            
     except Exception as e:
         logger.error(f"Error generating image: {e}")
         return None
