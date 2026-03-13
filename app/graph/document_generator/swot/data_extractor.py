@@ -30,7 +30,16 @@ def extract_swot_data(
         }
         
     try:
+        if isinstance(market_research, list):
+            market_research = market_research[0] if len(market_research) > 0 else {}
+            
         data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+        
+        if isinstance(data, list):
+            data = data[0] if len(data) > 0 else {}
+            
+        if not isinstance(data, dict):
+            data = {}
         
         # Initialize SWOT context
         swot_context = {

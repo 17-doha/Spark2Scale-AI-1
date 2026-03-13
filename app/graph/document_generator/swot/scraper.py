@@ -82,7 +82,7 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
             c.get("Name") for c in competitors 
             if isinstance(c, dict) and c.get("Name")
         ][:TOP_COMPETITORS_LIMIT]
-        
+
     except Exception as e:
         logger.error(f"[ERROR] Failed to extract competitors: {e}")
         return None
@@ -174,7 +174,18 @@ def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
     if not market_research:
         return {}
 
+    # --- DEFENSIVE DATA EXTRACTION ---
+    if isinstance(market_research, list):
+        market_research = market_research[0] if len(market_research) > 0 else {}
+        
     data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+    
+    if isinstance(data, list):
+        data = data[0] if len(data) > 0 else {}
+        
+    if not isinstance(data, dict):
+        logger.warning("[WARNING] 'data' is not a dictionary. Cannot extract business metrics.")
+        return {}
 
     metrics = {}
 
