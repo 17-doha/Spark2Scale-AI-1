@@ -57,10 +57,13 @@ def extract_swot_data(
                 
         # --- Analyzed Weaknesses → Weaknesses ---
         if weaknesses_data:
-            weaknesses = weaknesses_data.get("weaknesses", [])
+            if isinstance(weaknesses_data, list):
+                weaknesses = weaknesses_data
+            else:
+                weaknesses = weaknesses_data.get("weaknesses", [])
+            
             # Sort by severity so critical ones appear first
-            weaknesses.sort(key=lambda w: w.get("severity", 0), reverse=True)
-
+            weaknesses.sort(key=lambda w: w.get("severity", 0) if isinstance(w, dict) else 0, reverse=True)
             swot_context["weaknesses_context"] = weaknesses
         else:
             # Fallback for backward compatibility — warns that weaknesses are incomplete
@@ -138,7 +141,7 @@ def extract_swot_data(
                     swot_context["opportunities_context"].append(f"Market Gap: {opp_str}")
 
         # --- EXTRACT COMPETITIVE GAPS (PHASE 3) ---
-        if gap_data:
+        if gap_data and isinstance(gap_data, dict): # FIX: Ensure it's a dict
             for strength in gap_data.get("hard_strengths", []):
                  swot_context["strengths_context"].append(strength)
                  
@@ -146,12 +149,12 @@ def extract_swot_data(
                  swot_context["opportunities_context"].append(opp)
 
         # --- EXTRACT REGULATORY BARRIERS (PHASE 4) ---
-        if barrier_data:
+        if barrier_data and isinstance(barrier_data, dict): # FIX: Ensure it's a dict
             for threat in barrier_data.get("regulatory_and_economic_threats", []):
                  swot_context["threats_context"].append(threat)
 
         # --- EXTRACT TOWS MATRIX (PHASE 5) ---
-        if tows_data:
+        if tows_data and isinstance(tows_data, dict): # FIX: Ensure it's a dict
             matrix = tows_data.get("tows_matrix", {})
             
             if matrix.get("SO_Strategies"):
