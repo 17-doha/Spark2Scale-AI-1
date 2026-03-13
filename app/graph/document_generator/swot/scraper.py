@@ -55,10 +55,34 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
         return None
         
     try:
+
+        # 1. Defensively handle if market_research is accidentally a list
+        if isinstance(market_research, list):
+            market_research = market_research[0] if len(market_research) > 0 else {}
+            
         data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+        
+        # 2. Defensively handle if data is accidentally a list
+        if isinstance(data, list):
+            data = data[0] if len(data) > 0 else {}
+            
+        # Ensure data is actually a dictionary before proceeding
+        if not isinstance(data, dict):
+            logger.warning("[WARNING] 'data' is not a dictionary. Cannot extract competitors.")
+            return None
+
         competitors = data.get("competitors", [])
-        # Limit to top competitors to save API calls and remain focused
-        top_competitors = [c.get("Name") for c in competitors if c.get("Name")][:TOP_COMPETITORS_LIMIT]
+        
+        # 3. Defensively handle if competitors is not a list
+        if not isinstance(competitors, list):
+            competitors = [competitors] if competitors else []
+
+        # 4. Defensively check that 'c' is a dict before calling .get()
+        top_competitors = [
+            c.get("Name") for c in competitors 
+            if isinstance(c, dict) and c.get("Name")
+        ][:TOP_COMPETITORS_LIMIT]
+        
     except Exception as e:
         logger.error(f"[ERROR] Failed to extract competitors: {e}")
         return None
