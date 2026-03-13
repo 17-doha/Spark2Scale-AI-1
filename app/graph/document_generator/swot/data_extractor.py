@@ -24,6 +24,16 @@ def extract_swot_data(
     and intermediate SWOT phase JSONs directly.
     Returns a dictionary of context structured for the SWOT LLM prompt.
     """
+    if isinstance(weaknesses_data, list):
+        weaknesses_data = {"weaknesses": weaknesses_data}
+        
+    if isinstance(gap_data, list):
+        gap_data = {"opportunities": gap_data, "hard_strengths": []}
+        
+    if isinstance(barrier_data, list):
+        barrier_data = {"regulatory_and_economic_threats": barrier_data}
+
+
     if not market_research:
         return {
             "error": f"No market research dict provided for idea: {idea_name}. Ensure Market Research is completed first."

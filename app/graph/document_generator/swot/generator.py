@@ -10,6 +10,8 @@ from app.graph.document_generator.config import (
 
 logger = get_logger("SWOTGenerator")
 
+
+
 def generate_swot_document(idea_name: str, swot_context: dict, provider: str = DEFAULT_LLM_PROVIDER) -> dict:
     """
     Generates a full SWOT JSON document for a given idea name.
