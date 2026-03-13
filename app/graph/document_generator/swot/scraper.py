@@ -60,7 +60,8 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
         if isinstance(market_research, list):
             market_research = market_research[0] if len(market_research) > 0 else {}
             
-        data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+        raw = market_research.get("data") or market_research.get("items") or market_research
+        data = raw[0] if isinstance(raw, list) and len(raw) > 0 else raw
         
         # 2. Defensively handle if data is accidentally a list
         if isinstance(data, list):

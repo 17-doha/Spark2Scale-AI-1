@@ -32,6 +32,11 @@ def extract_swot_data(
         
     if isinstance(barrier_data, list):
         barrier_data = {"regulatory_and_economic_threats": barrier_data}
+        
+    if isinstance(tows_data, list):
+        tows_data = {"tows_matrix": {}, "strategic_verdict": ""}
+    # --------------------------------------------------------------
+
 
 
     if not market_research:
@@ -43,7 +48,8 @@ def extract_swot_data(
         if isinstance(market_research, list):
             market_research = market_research[0] if len(market_research) > 0 else {}
             
-        data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+        raw = market_research.get("data") or market_research.get("items") or market_research
+        data = raw[0] if isinstance(raw, list) and len(raw) > 0 else raw
         
         if isinstance(data, list):
             data = data[0] if len(data) > 0 else {}
