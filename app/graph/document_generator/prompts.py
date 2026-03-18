@@ -227,3 +227,27 @@ RETURN ONLY STRICT JSON in the following format (NO MARKDOWN WRAPPERS):
     "strategic_verdict": "Comprehensive paragraph detailing the final strategic recommendation."
 }}
 """
+
+# -----------------------------------------------------------------------------
+# COMPETITOR ANALYSIS PROMPTS
+# -----------------------------------------------------------------------------
+def classify_competitors_prompt(idea_description: str, comps_listing: str) -> str:
+    return f"""You are a startup market analyst.
+
+Our product:
+{idea_description}
+
+Here is a list of competitors:
+{comps_listing}
+
+Classify EACH competitor as exactly ONE of:
+  - direct   (targets the same customer segment with the same core value proposition)
+  - indirect (addresses a related need or a different customer segment)
+
+Reply ONLY with a strictly valid JSON object mapping the competitor name to the classification.
+Example format:
+{{
+   "Notion": "direct",
+   "Coda": "indirect"
+}}
+"""
