@@ -251,3 +251,50 @@ Example format:
    "Coda": "indirect"
 }}
 """
+
+def enrich_market_intelligence_prompt(batched_evidence_text: str) -> str:
+    return f"""You are a senior competitive intelligence analyst writing a startup competitor analysis.
+
+## Raw Evidence for Multiple Competitors (web snippets — treat these as ground truth)
+{batched_evidence_text}
+
+## Task
+Using ONLY the evidence above, extract the following three fields for EACH competitor presented in the evidence.
+Do NOT use your training knowledge if it contradicts the evidence. If the evidence is insufficient, write "Not enough data".
+
+Reply ONLY with a STRICT JSON object mapping the competitor name to their fields. Example format:
+{{
+  "Competitor A": {{
+    "target_audience": "<1–2 sentences: who they explicitly sell to>",
+    "value_proposition": "<1 sentence: their core marketing promise or tagline>",
+    "pricing_model": "<1–2 sentences: how they monetise>"
+  }}
+}}
+"""
+
+def enrich_product_reality_prompt(batched_evidence_text: str) -> str:
+    return f"""You are a senior competitive intelligence analyst preparing a startup competitor analysis.
+
+## Raw Evidence for Multiple Competitors (web snippets — treat these as ground truth)
+{batched_evidence_text}
+
+## Task
+Using ONLY the evidence above, fill in the three fields below for EACH competitor presented in the evidence.
+Be specific and concrete. Avoid vague marketing language.
+
+Fields to extract:
+- core_features: Describe actual technical capabilities (e.g. API accessibility, sync mechanisms, self-hosting). NOT a marketing feature list.
+- strengths: Describe durable competitive advantages (moat) like deep ecosystem lock-in, dominant community, brand trust.
+- weaknesses: Describe specific, concrete pain points from users (e.g. performance issues, missing features, poor mobile, confusing pricing).
+
+If the evidence does not support a field, write exactly: "Not enough data".
+
+Reply ONLY with a STRICT JSON object mapping the competitor name to their fields. Example format:
+{{
+  "Competitor A": {{
+    "core_features": "<2–4 sentences on most technically significant capabilities>",
+    "strengths": "<2–3 sentences on durable moat>",
+    "weaknesses": "<2–3 sentences on real documented gaps / complaints>"
+  }}
+}}
+"""

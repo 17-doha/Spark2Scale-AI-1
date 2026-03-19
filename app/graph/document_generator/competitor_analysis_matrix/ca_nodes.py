@@ -6,7 +6,11 @@ from app.core.logger import get_logger
 from app.graph.document_generator.state import DocumentGeneratorState
 from app.core.rate_limiter import call_gemini
 from app.graph.market_research_agent.helpers.research_utils import execute_serper_search
-from app.graph.document_generator.prompts import classify_competitors_prompt
+from app.graph.document_generator.prompts import (
+    classify_competitors_prompt, 
+    enrich_market_intelligence_prompt,
+    enrich_product_reality_prompt
+)
 from app.graph.document_generator.config import OUTPUT_DIR
 
 logger = get_logger("CompetitorAnalysisNodes")
@@ -32,6 +36,9 @@ def extract_competitors_from_market_research(state: DocumentGeneratorState) -> d
         elif isinstance(c, str):
             names.append(c)
             
+    # Limit the competitors to 5 max
+    names = names[:5]
+            
     profiles = []
     for name in names:
         profiles.append({
@@ -41,6 +48,12 @@ def extract_competitors_from_market_research(state: DocumentGeneratorState) -> d
             "linkedin_url": None,
             "physical_location": None,
             "competitor_type": None,
+            "target_audience": None,
+            "value_proposition": None,
+            "pricing_model": None,
+            "core_features": None,
+            "strengths": None,
+            "weaknesses": None,
         })
         
     return {"competitor_names": names, "competitors": profiles}
@@ -71,44 +84,175 @@ def enrich_competitor_links(state: DocumentGeneratorState) -> dict:
     for profile in profiles:
         name = profile["name"]
         
+        # ── Call 1: official website
         q_site = f"{name} official website"
-        q_g2 = f"{name} site:g2.com OR site:capterra.com OR site:producthunt.com"
+        # ── Call 2: software review profiles (separate to prevent dilution)
+        q_g2 = f"{name} site:g2.com"
+        q_capterra = f"{name} site:capterra.com"
+        q_ph = f"{name} site:producthunt.com"
+        # ── Call 3: LinkedIn company page
         q_li = f"{name} company LinkedIn"
+        # ── Call 4: HQ location (triggers knowledge panel)
         q_hq = f"{name} company headquarters location"
         
-        queries = [q_site, q_g2, q_li, q_hq]
+        queries = [q_site, q_g2, q_capterra, q_ph, q_li, q_hq]
         raw_results = execute_serper_search(queries)
         
-        exclude = ("linkedin.", "g2.com", "capterra.", "producthunt.", "crunchbase.")
+        exclude_from_site = ("linkedin.", "g2.com", "capterra.", "producthunt.", "crunchbase.")
+        
         for r in raw_results:
             link = r.get("link", "")
-            if not any(ex in r.get("link", "").lower() for ex in exclude):
-                profile["company_website"] = profile.get("company_website") or link
-        
-        link_sw = _first_link(raw_results, domain_hints=["g2.com", "capterra.com", "producthunt.com"])
-        if link_sw:
-            profile["sw_profile"] = link_sw
-            
-        link_li = _first_link(raw_results, domain_hints=["linkedin.com/company"])
-        if link_li:
-            profile["linkedin_url"] = link_li
-            
-        location_text = None
-        for r in raw_results:
             snippet = r.get("snippet", "")
-            match = re.search(
-                r"(?:headquartered|based|located|hq)\s+in\s+([A-Z][^,.]+(?:,\s*[A-Z][^,.]+)?)",
-                snippet,
-                re.IGNORECASE,
-            )
-            if match:
-                location_text = match.group(1).strip()
-                break
-        profile["physical_location"] = location_text
+            
+            # Official website
+            if not profile.get("company_website") and not any(ex in link.lower() for ex in exclude_from_site):
+                profile["company_website"] = link
+                
+            # LinkedIn
+            if not profile.get("linkedin_url") and "linkedin.com/company" in link.lower():
+                profile["linkedin_url"] = link
+                
+            # Review Profile (Grab first one found from the review queries)
+            if not profile.get("sw_profile") and any(domain in link.lower() for domain in ("g2.com", "capterra.com", "producthunt.com")):
+                profile["sw_profile"] = link
+                
+            # Physical Location
+            if not profile.get("physical_location") and snippet:
+                match = re.search(
+                    r"(?:headquartered|based|located|hq)\s+in\s+([A-Z][^,.]{2,40}(?:,\s*[A-Z][^,.]{2,30})?)",
+                    snippet,
+                    re.IGNORECASE,
+                )
+                if match:
+                    profile["physical_location"] = match.group(1).strip()
 
         updated_profiles.append(profile)
 
     return {"competitors": updated_profiles}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NODE 2b — Enrich market intelligence: audience, value prop, pricing
+# ══════════════════════════════════════════════════════════════════════════════
+def enrich_market_intelligence(state: DocumentGeneratorState) -> dict:
+    logger.info("--- Node: enrich_market_intelligence ---")
+    profiles = state.get("competitors", [])
+    if not profiles:
+        return {"competitors": []}
+
+    batched_evidence = []
+    
+    for profile in profiles:
+        name = profile["name"]
+        site = profile.get("company_website") or ""
+        sw   = profile.get("sw_profile") or ""
+
+        evidence_blocks = []
+
+        q_broad = f"{name} pricing plans who is it for target customers review"
+        raw_results = execute_serper_search([q_broad])
+        
+        # Keep top 8 roughly
+        for r in raw_results[:8]:
+            snippet = r.get("snippet", "")
+            title = r.get("title", "")
+            link = r.get("link", "")
+            if snippet:
+                evidence_blocks.append(f"[{title}] ({link})\n{snippet}")
+                
+        evidence_text = "\n\n".join(evidence_blocks) if evidence_blocks else "No evidence found."
+        batched_evidence.append(f"### Competitor: {name}\nWebsite: {site}\n{evidence_text}")
+        
+    batched_evidence_text = "\n\n---\n\n".join(batched_evidence)
+    prompt = enrich_market_intelligence_prompt(batched_evidence_text)
+    
+    try:
+        response = call_gemini(prompt)
+        raw = response.text.strip()
+        raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("```").strip()
+        data = json.loads(raw)
+
+        for profile in profiles:
+            c_name = profile["name"]
+            # Try exact match, then case-insensitive match
+            c_data = data.get(c_name, data.get(c_name.lower(), {}))
+            profile["target_audience"]   = c_data.get("target_audience", "Not enough data")
+            profile["value_proposition"] = c_data.get("value_proposition", "Not enough data")
+            profile["pricing_model"]     = c_data.get("pricing_model", "Not enough data")
+            
+    except Exception as exc:
+        logger.warning(f"[enrich_market_intelligence] Warning: {exc}")
+        for profile in profiles:
+            profile["target_audience"]   = "Not enough data"
+            profile["value_proposition"] = "Not enough data"
+            profile["pricing_model"]     = "Not enough data"
+
+    return {"competitors": profiles}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NODE 2c — Enrich product reality: features, strengths, weaknesses
+# ══════════════════════════════════════════════════════════════════════════════
+def enrich_product_reality(state: DocumentGeneratorState) -> dict:
+    logger.info("--- Node: enrich_product_reality ---")
+    profiles = state.get("competitors", [])
+    if not profiles:
+        return {"competitors": []}
+
+    batched_evidence = []
+
+    for profile in profiles:
+        name = profile["name"]
+        sw   = profile.get("sw_profile") or ""
+
+        evidence_blocks = []
+
+        q_api = f"{name} API documentation technical capabilities integrations"
+        
+        review_domain = sw.split("/")[2] if "//" in sw else ""
+        if review_domain:
+            q_pros = f"{name} pros strengths site:{review_domain}"
+        else:
+            q_pros = f"{name} pros strengths (site:g2.com OR site:capterra.com)"
+            
+        q_cons = f"{name} cons problems limitations complaints alternatives why switched"
+        
+        queries = [q_api, q_pros, q_cons]
+        raw_results = execute_serper_search(queries)
+        
+        # Roughly top 17 results to match the original constraints
+        for r in raw_results[:17]:
+            snippet = r.get("snippet", "")
+            title = r.get("title", "")
+            link = r.get("link", "")
+            if snippet:
+                evidence_blocks.append(f"[{title}] ({link})\n{snippet}")
+
+        evidence_text = "\n\n".join(evidence_blocks) if evidence_blocks else "No evidence found."
+        batched_evidence.append(f"### Competitor: {name}\n{evidence_text}")
+        
+    batched_evidence_text = "\n\n---\n\n".join(batched_evidence)
+    prompt = enrich_product_reality_prompt(batched_evidence_text)
+    
+    try:
+        response = call_gemini(prompt)
+        raw = response.text.strip()
+        raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("```").strip()
+        data = json.loads(raw)
+
+        for profile in profiles:
+            c_name = profile["name"]
+            c_data = data.get(c_name, data.get(c_name.lower(), {}))
+            profile["core_features"] = c_data.get("core_features", "Not enough data")
+            profile["strengths"]     = c_data.get("strengths", "Not enough data")
+            profile["weaknesses"]    = c_data.get("weaknesses", "Not enough data")
+            
+    except Exception as exc:
+        logger.warning(f"[enrich_product_reality] Warning: {exc}")
+        for profile in profiles:
+            profile["core_features"] = "Not enough data"
+            profile["strengths"]     = "Not enough data"
+            profile["weaknesses"]    = "Not enough data"
+
+    return {"competitors": profiles}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # NODE 3 — Classify each competitor as direct or indirect (Gemini LLM)
@@ -170,13 +314,19 @@ def build_competitor_matrix(state: DocumentGeneratorState) -> dict:
         
     # Generate Markdown Table
     md = "## Competitor Analysis Matrix\n\n"
-    md += "| Competitor | Type | HQ Location | Website | Review Profile | LinkedIn |\n"
-    md += "|---|---|---|---|---|---|\n"
+    md += "| Competitor | Type | HQ Location | Target Audience | Value Proposition | Pricing Model | Core Features | Strengths | Weaknesses | Website | Review Profile | LinkedIn |\n"
+    md += "|---|---|---|---|---|---|---|---|---|---|---|---|\n"
     
     for p in sorted_profiles:
         name = p.get("name", "N/A")
         ctype = str(p.get("competitor_type", "N/A")).capitalize()
         hq = p.get("physical_location") or "Unknown"
+        aud = p.get("target_audience", "N/A").replace("|", "-").replace("\n", " ")
+        val_prop = p.get("value_proposition", "N/A").replace("|", "-").replace("\n", " ")
+        pricing = p.get("pricing_model", "N/A").replace("|", "-").replace("\n", " ")
+        feats = p.get("core_features", "N/A").replace("|", "-").replace("\n", " ")
+        strn = p.get("strengths", "N/A").replace("|", "-").replace("\n", " ")
+        weak = p.get("weaknesses", "N/A").replace("|", "-").replace("\n", " ")
         
         web = p.get("company_website")
         web_link = f"[Website]({web})" if web else "N/A"
@@ -187,7 +337,7 @@ def build_competitor_matrix(state: DocumentGeneratorState) -> dict:
         li = p.get("linkedin_url")
         li_link = f"[LinkedIn]({li})" if li else "N/A"
         
-        md += f"| {name} | **{ctype}** | {hq} | {web_link} | {sw_link} | {li_link} |\n"
+        md += f"| {name} | **{ctype}** | {hq} | {aud} | {val_prop} | {pricing} | {feats} | {strn} | {weak} | {web_link} | {sw_link} | {li_link} |\n"
         
     # Save the file
     try:

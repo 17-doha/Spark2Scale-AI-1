@@ -14,6 +14,8 @@ from .nodes import (
 from .competitor_analysis_matrix.ca_nodes import (
     extract_competitors_from_market_research,
     enrich_competitor_links,
+    enrich_market_intelligence,
+    enrich_product_reality,
     classify_competitor_type,
     build_competitor_matrix
 )
@@ -46,6 +48,8 @@ def create_document_generator_workflow():
     # 1. Add Nodes: Competitor Analysis Pipeline
     workflow.add_node("extract_competitors", extract_competitors_from_market_research)
     workflow.add_node("enrich_competitor_links", enrich_competitor_links)
+    workflow.add_node("enrich_market_intelligence", enrich_market_intelligence)
+    workflow.add_node("enrich_product_reality", enrich_product_reality)
     workflow.add_node("classify_competitor_type", classify_competitor_type)
     workflow.add_node("build_competitor_matrix", build_competitor_matrix)
 
@@ -65,7 +69,9 @@ def create_document_generator_workflow():
 
     # --- Competitor Analysis Edges ---
     workflow.add_edge("extract_competitors", "enrich_competitor_links")
-    workflow.add_edge("enrich_competitor_links", "classify_competitor_type")
+    workflow.add_edge("enrich_competitor_links", "enrich_market_intelligence")
+    workflow.add_edge("enrich_market_intelligence", "enrich_product_reality")
+    workflow.add_edge("enrich_product_reality", "classify_competitor_type")
     workflow.add_edge("classify_competitor_type", "build_competitor_matrix")
     workflow.add_edge("build_competitor_matrix", END)
 
