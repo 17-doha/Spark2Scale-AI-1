@@ -422,5 +422,5 @@ def build_competitor_matrix(state: DocumentGeneratorState) -> dict:
  
     return {
         "competitors": sorted_profiles,
-        "competitor_analysis_document": {"markdown": md, "status": "completed"}
+        "competitor_analysis_document": {"json_data": sorted_profiles, "status": "completed"}
     }
