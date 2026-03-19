@@ -287,6 +287,10 @@ Fields to extract:
 - strengths: Describe durable competitive advantages (moat) like deep ecosystem lock-in, dominant community, brand trust.
 - weaknesses: Describe specific, concrete pain points from users (e.g. performance issues, missing features, poor mobile, confusing pricing).
 
+CRITICAL: Each competitor's fields must be unique and based solely on 
+their own evidence section. Do not copy or repeat content from one 
+competitor to another, even if their evidence appears similar.
+
 If the evidence does not support a field, write exactly: "Not enough data".
 
 Reply ONLY with a STRICT JSON object mapping the competitor name to their fields. Example format:
