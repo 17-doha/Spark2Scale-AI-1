@@ -2,13 +2,13 @@ import json
 import os
 from fastapi import APIRouter, HTTPException
 from app.graph.document_generator.workflow import document_generator_app
-from app.api.schemas import SWOTRequest, SWOTResponse
+from app.api.schemas import CompetitorAnalysisRequest, CompetitorAnalysisResponse
 from app.core.logger import get_logger
 
 router = APIRouter()
-logger = get_logger("SWOTAPI")
+logger = get_logger("CompetitorMatrixAPI")
 
-DEBUG_DUMP_PATH = "data_output/debug_swot_input.json"
+DEBUG_DUMP_PATH = "data_output/debug_ca_input.json"
 
 def _dump_debug(payload: dict):
     """Saves the full incoming request payload to a JSON file for inspection."""
@@ -21,12 +21,12 @@ def _dump_debug(payload: dict):
         logger.warning(f"[DEBUG] Could not save debug dump: {e}")
 
 
-@router.post("/generate", response_model=SWOTResponse)
-async def generate_swot(request: SWOTRequest):
+@router.post("/generate", response_model=CompetitorAnalysisResponse)
+async def generate_competitor_matrix(request: CompetitorAnalysisRequest):
     """
-    Triggers the Document Generator Agent to generate a SWOT analysis.
+    Triggers the Document Generator Agent to generate a Competitor Analysis Matrix.
     """
-    logger.info(f"[LAUNCH] Received SWOT Generation Request: {request.idea_name}")
+    logger.info(f"[LAUNCH] Received Competitor Analysis Generation Request: {request.idea_name}")
 
     try:
         # ── STEP 1: Raw receipt ───────────────────────────────────────────────
@@ -73,7 +73,7 @@ async def generate_swot(request: SWOTRequest):
                         if isinstance(inner[0], dict):
                             logger.info(f"[DEBUG] First element keys: {list(inner[0].keys())}")
             else:
-                logger.warning(f"[DEBUG] No 'data' key found inside market_research. This is the bug.")
+                logger.warning(f"[DEBUG] No 'data' key found inside market_research.")
         else:
             logger.warning(f"[DEBUG] After all unwrapping, market_research is STILL not a dict. Type: {type(mr_data).__name__}")
 
@@ -88,7 +88,7 @@ async def generate_swot(request: SWOTRequest):
 
         # ── STEP 7: Build state and run graph ─────────────────────────────────
         initial_state = {
-            "document_type": "swot",
+            "document_type": "competitor_analysis",
             "idea_name": request.idea_name,
             "idea_description": request.idea_description,
             "region": request.region or "Global",
@@ -97,17 +97,17 @@ async def generate_swot(request: SWOTRequest):
 
         result = await document_generator_app.ainvoke(initial_state)
 
-        swot_doc = result.get("swot_document")
+        ca_doc = result.get("competitor_analysis_document")
         errors = result.get("errors", [])
 
-        message = "SWOT generation completed successfully." if not errors else "SWOT generation completed with errors."
+        message = "Competitor Matrix generation completed successfully." if not errors else "Competitor Matrix generation completed with errors."
 
-        return SWOTResponse(
+        return CompetitorAnalysisResponse(
             message=message,
-            swot_document=swot_doc,
+            competitor_analysis_document=ca_doc,
             errors=errors
         )
 
     except Exception as e:
-        logger.error(f"[ERROR] SWOT Generation Failed: {e}")
+        logger.error(f"[ERROR] Competitor Matrix Generation Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
