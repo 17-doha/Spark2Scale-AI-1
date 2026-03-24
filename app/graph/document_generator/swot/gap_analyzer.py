@@ -1,14 +1,15 @@
 import os
 import json
-import logging
-from app.core.llm import get_llm
+from typing import Dict, List
 from app.graph.document_generator.swot.data_extractor import _clean_filename
+from app.core.llm import get_llm
+from app.core.logger import get_logger
 from app.graph.document_generator.prompts import GAP_ANALYZER_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_GAP_ANALYZER, OUTPUT_DIR
 )
 
-logger = logging.getLogger("CompetitiveGapAnalyzer")
+logger = get_logger("CompetitiveGapAnalyzer")
 
 def analyze_competitive_gap(idea_name: str, reviews_data: dict, idea_description: str = "A new product entering the market.") -> dict:
     """

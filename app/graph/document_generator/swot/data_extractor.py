@@ -1,10 +1,10 @@
 import os
 import glob
 import json
-import logging
+from app.core.logger import get_logger
 from app.graph.document_generator.config import OUTPUT_DIR
 
-logger = logging.getLogger("SWOTDataExtractor")
+logger = get_logger("SWOTDataExtractor")
 
 def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
@@ -24,13 +24,38 @@ def extract_swot_data(
     and intermediate SWOT phase JSONs directly.
     Returns a dictionary of context structured for the SWOT LLM prompt.
     """
+    if isinstance(weaknesses_data, list):
+        weaknesses_data = {"weaknesses": weaknesses_data}
+        
+    if isinstance(gap_data, list):
+        gap_data = {"opportunities": gap_data, "hard_strengths": []}
+        
+    if isinstance(barrier_data, list):
+        barrier_data = {"regulatory_and_economic_threats": barrier_data}
+        
+    if isinstance(tows_data, list):
+        tows_data = {"tows_matrix": {}, "strategic_verdict": ""}
+    # --------------------------------------------------------------
+
+
+
     if not market_research:
         return {
             "error": f"No market research dict provided for idea: {idea_name}. Ensure Market Research is completed first."
         }
         
     try:
-        data = market_research
+        if isinstance(market_research, list):
+            market_research = market_research[0] if len(market_research) > 0 else {}
+            
+        raw = market_research.get("data") or market_research.get("items") or market_research
+        data = raw[0] if isinstance(raw, list) and len(raw) > 0 else raw
+        
+        if isinstance(data, list):
+            data = data[0] if len(data) > 0 else {}
+            
+        if not isinstance(data, dict):
+            data = {}
         
         # Initialize SWOT context
         swot_context = {
@@ -57,10 +82,13 @@ def extract_swot_data(
                 
         # --- Analyzed Weaknesses → Weaknesses ---
         if weaknesses_data:
-            weaknesses = weaknesses_data.get("weaknesses", [])
+            if isinstance(weaknesses_data, list):
+                weaknesses = weaknesses_data
+            else:
+                weaknesses = weaknesses_data.get("weaknesses", [])
+            
             # Sort by severity so critical ones appear first
-            weaknesses.sort(key=lambda w: w.get("severity", 0), reverse=True)
-
+            weaknesses.sort(key=lambda w: w.get("severity", 0) if isinstance(w, dict) else 0, reverse=True)
             swot_context["weaknesses_context"] = weaknesses
         else:
             # Fallback for backward compatibility — warns that weaknesses are incomplete
@@ -138,7 +166,7 @@ def extract_swot_data(
                     swot_context["opportunities_context"].append(f"Market Gap: {opp_str}")
 
         # --- EXTRACT COMPETITIVE GAPS (PHASE 3) ---
-        if gap_data:
+        if gap_data and isinstance(gap_data, dict): # FIX: Ensure it's a dict
             for strength in gap_data.get("hard_strengths", []):
                  swot_context["strengths_context"].append(strength)
                  
@@ -146,12 +174,12 @@ def extract_swot_data(
                  swot_context["opportunities_context"].append(opp)
 
         # --- EXTRACT REGULATORY BARRIERS (PHASE 4) ---
-        if barrier_data:
+        if barrier_data and isinstance(barrier_data, dict): # FIX: Ensure it's a dict
             for threat in barrier_data.get("regulatory_and_economic_threats", []):
                  swot_context["threats_context"].append(threat)
 
         # --- EXTRACT TOWS MATRIX (PHASE 5) ---
-        if tows_data:
+        if tows_data and isinstance(tows_data, dict): # FIX: Ensure it's a dict
             matrix = tows_data.get("tows_matrix", {})
             
             if matrix.get("SO_Strategies"):

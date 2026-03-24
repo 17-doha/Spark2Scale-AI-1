@@ -5,6 +5,7 @@ import pandas as pd
 from app.graph.market_research_agent.helpers.research_utils import execute_serper_search
 from typing import List, Dict
 from app.core.llm import get_llm
+from app.core.logger import get_logger
 from app.graph.document_generator.prompts import WEAKNESS_ANALYSIS_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_WEAKNESS_ANALYSIS, OUTPUT_DIR, TOP_COMPETITORS_LIMIT,
@@ -15,8 +16,8 @@ from app.graph.document_generator.config import (
     COMPETITOR_COUNT_COMPETITIVE, MARKET_STRUCTURE_HIGH_RISK, MARKET_STRUCTURE_MODERATE_RISK_KEYWORD
 )
 
-logger = logging.getLogger("CompetitorReviewScraper")
-weakness_logger = logging.getLogger("WeaknessAnalyzer")
+logger = get_logger("CompetitorReviewScraper")
+weakness_logger = get_logger("WeaknessAnalyzer")
 
 def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
@@ -54,9 +55,35 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
         return None
         
     try:
-        competitors = market_research.get("competitors", [])
-        # Limit to top competitors to save API calls and remain focused
-        top_competitors = [c.get("Name") for c in competitors if c.get("Name")][:TOP_COMPETITORS_LIMIT]
+
+        # 1. Defensively handle if market_research is accidentally a list
+        if isinstance(market_research, list):
+            market_research = market_research[0] if len(market_research) > 0 else {}
+            
+        raw = market_research.get("data") or market_research.get("items") or market_research
+        data = raw[0] if isinstance(raw, list) and len(raw) > 0 else raw
+        
+        # 2. Defensively handle if data is accidentally a list
+        if isinstance(data, list):
+            data = data[0] if len(data) > 0 else {}
+            
+        # Ensure data is actually a dictionary before proceeding
+        if not isinstance(data, dict):
+            logger.warning("[WARNING] 'data' is not a dictionary. Cannot extract competitors.")
+            return None
+
+        competitors = data.get("competitors", [])
+        
+        # 3. Defensively handle if competitors is not a list
+        if not isinstance(competitors, list):
+            competitors = [competitors] if competitors else []
+
+        # 4. Defensively check that 'c' is a dict before calling .get()
+        top_competitors = [
+            c.get("Name") for c in competitors 
+            if isinstance(c, dict) and c.get("Name")
+        ][:TOP_COMPETITORS_LIMIT]
+
     except Exception as e:
         logger.error(f"[ERROR] Failed to extract competitors: {e}")
         return None
@@ -148,7 +175,18 @@ def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
     if not market_research:
         return {}
 
-    data = market_research
+    # --- DEFENSIVE DATA EXTRACTION ---
+    if isinstance(market_research, list):
+        market_research = market_research[0] if len(market_research) > 0 else {}
+        
+    data = market_research.get("data", market_research) if isinstance(market_research, dict) else market_research
+    
+    if isinstance(data, list):
+        data = data[0] if len(data) > 0 else {}
+        
+    if not isinstance(data, dict):
+        logger.warning("[WARNING] 'data' is not a dictionary. Cannot extract business metrics.")
+        return {}
 
     metrics = {}
 

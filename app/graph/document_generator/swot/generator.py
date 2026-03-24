@@ -1,14 +1,16 @@
 import os
 import json
-import logging
 from app.core.llm import get_llm
+from app.core.logger import get_logger
 from .data_extractor import extract_swot_data
 from app.graph.document_generator.prompts import swot_prompt_template
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_GENERATOR, OUTPUT_DIR
 )
 
-logger = logging.getLogger("SWOTGenerator")
+logger = get_logger("SWOTGenerator")
+
+
 
 def generate_swot_document(idea_name: str, swot_context: dict, provider: str = DEFAULT_LLM_PROVIDER) -> dict:
     """

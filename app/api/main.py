@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -44,7 +44,8 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["AI Chat"])
 
 app.include_router(swot_generation.router, prefix="/api/v1/swot", tags=["SWOT Generation"])
 
+app.include_router(competitor_matrix.router, prefix="/api/v1/competitor-matrix", tags=["Competitor Analysis"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Spark2Scale AI Agent Service is Running"}
+    return {"message": "Spark2Scale AI Agent Service is Running now ..."}

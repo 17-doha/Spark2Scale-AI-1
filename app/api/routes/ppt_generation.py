@@ -75,7 +75,15 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
             logger.info(f"Supabase upload result: {upload_result}")
             storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
             logger.info(f"PPT uploaded to Supabase: {storage_path}")
-            # ← DB insert removed: .NET handles document record
+            doc_payload = {
+                "startup_id": startup_id,
+                "document_name": final_draft.title or "Pitch Deck",
+                "type": "ppt",
+                "current_path": storage_path,
+                "json_response": final_draft.model_dump(),
+            }
+            insert_result = supabase.table("documents").insert(doc_payload).execute()
+            logger.info(f"Document record inserted: {insert_result}")
 
         return PPTGenerationResponse(
             status="success",

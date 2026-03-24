@@ -22,3 +22,14 @@ class SWOTResponse(BaseModel):
     message: str
     swot_document: Optional[dict] = None
     errors: Optional[list] = None
+
+class CompetitorAnalysisRequest(BaseModel):
+    idea_name: str
+    idea_description: str
+    region: Optional[str] = "Global"
+    market_research: dict
+
+class CompetitorAnalysisResponse(BaseModel):
+    message: str
+    competitor_analysis_document: Optional[dict] = None
+    errors: Optional[list] = None

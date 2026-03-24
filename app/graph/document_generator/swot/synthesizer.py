@@ -1,14 +1,14 @@
 import os
 import json
-import logging
 from app.core.llm import get_llm
+from app.core.logger import get_logger
 from app.graph.document_generator.swot.data_extractor import extract_swot_data, _clean_filename
 from app.graph.document_generator.prompts import TOWS_SYNTHESIS_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_TOWS_SYNTHESIS, OUTPUT_DIR
 )
 
-logger = logging.getLogger("TOWSSynthesizer")
+logger = get_logger("TOWSSynthesizer")
 
 def synthesize_swot_matrix(idea_name: str, swot_context: dict) -> dict:
     """

@@ -1,15 +1,15 @@
 import os
 import json
-import logging
 from app.graph.market_research_agent.helpers.research_utils import execute_serper_search
 from app.graph.document_generator.swot.data_extractor import _clean_filename
 from app.core.llm import get_llm
+from app.core.logger import get_logger
 from app.graph.document_generator.prompts import BARRIER_EXTRACTION_PROMPT
 from app.graph.document_generator.config import (
     DEFAULT_LLM_PROVIDER, TEMPERATURE_BARRIER_EXTRACTION, OUTPUT_DIR, BARRIER_SNIPPETS_LIMIT
 )
 
-logger = logging.getLogger("RegulatoryBarrierNode")
+logger = get_logger("RegulatoryBarrierMiner")
 
 def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> dict:
     """
