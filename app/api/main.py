@@ -48,4 +48,4 @@ app.include_router(competitor_matrix.router, prefix="/api/v1/competitor-matrix",
 
 @app.get("/")
 def read_root():
-    return {"message": "Spark2Scale AI Agent Service is Running"}
+    return {"message": "Spark2Scale AI Agent Service is Running now ..."}
