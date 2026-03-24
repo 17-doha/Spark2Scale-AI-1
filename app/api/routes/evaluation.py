@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 import zipfile
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
@@ -17,41 +17,29 @@ from app.graph.evaluation_agent import evaluation_graph
 router = APIRouter()
 logger = get_logger(__name__)
 
+# --- In-Memory Job Store ---
+# Note: In production, consider using Redis if you scale to multiple server instances.
+JOBS = {}
+
 class RawInput(BaseModel):
     data: Any
 
-# --- Helper to Save JSON (Optional Debugging) ---
-def save_agent_output(agent_id: str, data: dict):
-    directory = "outputs"
-    os.makedirs(directory, exist_ok=True)
-    filepath = os.path.join(directory, f"report_{agent_id}.json")
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
 # =========================================================
-# 1. EVALUATE ALL (Blocking Version)
+# 1. BACKGROUND WORKER LOGIC
 # =========================================================
 
-@router.post("/evaluate/all")
-async def evaluate_all(raw_payload: RawInput):
+async def run_evaluation_task(job_id: str, normalized_data: dict):
     """
-    Performs the full AI evaluation synchronously.
-    The response is only sent once the AI work is finished.
+    Handles the heavy lifting in the background.
     """
     start_time = time.time()
-    
-    # 1. Normalize Data
-    raw_str = json.dumps(raw_payload.data) if isinstance(raw_payload.data, dict) else str(raw_payload.data)
-    
     try:
-        normalized_data = await normalize_input_data(raw_str)
+        logger.info(f"[JOB {job_id}] Starting LangGraph execution...")
         
-        logger.info("[START] Starting Synchronous Evaluation...")
-        
-        # 2. Run the LangGraph (Awaited directly)
+        # Execute the AI Graph
         state = await evaluation_graph.ainvoke({"user_data": normalized_data})
         
-        # 3. Format the result
+        # Extract the reports from the final state
         full_report = {
             "team_report": state.get("team_report"),
             "problem_report": state.get("problem_report"),
@@ -66,46 +54,80 @@ async def evaluate_all(raw_payload: RawInput):
         }
         
         duration = time.time() - start_time
-        logger.info(f"[SUCCESS] Evaluation COMPLETED in {duration:.2f}s")
+        logger.info(f"[JOB {job_id}] COMPLETED in {duration:.2f}s")
 
-        return {
+        JOBS[job_id] = {
             "status": "completed",
-            "duration": f"{duration:.2f}s",
-            "result": full_report
+            "result": full_report,
+            "duration": f"{duration:.2f}s"
         }
 
     except Exception as e:
-        logger.error(f"[ERROR] Evaluation Failed: {e}")
+        logger.error(f"[JOB {job_id}] FAILED: {str(e)}")
+        JOBS[job_id] = {
+            "status": "failed",
+            "error": str(e)
+        }
+
+# =========================================================
+# 2. ENDPOINTS
+# =========================================================
+
+@router.post("/evaluate/all")
+async def evaluate_all(raw_payload: RawInput, background_tasks: BackgroundTasks):
+    """
+    Starts evaluation and returns a Job ID immediately.
+    """
+    # 1. Normalize (keep this fast)
+    raw_str = json.dumps(raw_payload.data) if isinstance(raw_payload.data, dict) else str(raw_payload.data)
+    
+    try:
+        # We normalize here to catch immediate schema errors before backgrounding
+        normalized_data = await normalize_input_data(raw_str)
+        
+        job_id = str(uuid.uuid4())
+        JOBS[job_id] = {"status": "running"}
+        
+        # 2. Offload to background
+        background_tasks.add_task(run_evaluation_task, job_id, normalized_data)
+        
+        return {
+            "job_id": job_id,
+            "status": "accepted",
+            "message": "Evaluation started in background"
+        }
+
+    except Exception as e:
+        logger.error(f"[ERROR] Launch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# =========================================================
-# 2. GENERATE REPORT (Unchanged)
-# =========================================================
+@router.get("/evaluate/status/{job_id}")
+async def get_status(job_id: str):
+    """
+    Polling endpoint for the frontend.
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job ID not found")
+    
+    return job
 
 @router.post("/generate-report")
 async def generate_reports_endpoint(report_data: Dict[str, Any]):
+    # (Same as your previous PDF logic)
     try:
         os.makedirs("outputs", exist_ok=True)
         base_id = uuid.uuid4().hex[:6]
+        f_path, i_path = f"outputs/F_{base_id}.pdf", f"outputs/I_{base_id}.pdf"
         
-        f_path = f"outputs/Founder_Report_{base_id}.pdf"
         generate_founder_report(report_data, f_path)
-        
-        i_path = f"outputs/Investor_Memo_{base_id}.pdf"
         generate_investor_report(report_data, i_path)
         
-        zip_filename = f"outputs/Evaluation_Package_{base_id}.zip"
+        zip_filename = f"outputs/Eval_{base_id}.zip"
         with zipfile.ZipFile(zip_filename, 'w') as zipf:
             zipf.write(f_path, os.path.basename(f_path))
             zipf.write(i_path, os.path.basename(i_path))
             
-        return FileResponse(
-            path=zip_filename, 
-            filename="Spark2Scale_Evaluation_Package.zip", 
-            media_type='application/zip'
-        )
-        
+        return FileResponse(path=zip_filename, filename="Spark2Scale_Package.zip")
     except Exception as e:
-        logger.error(f"[ERROR] PDF Generation Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
