@@ -1,5 +1,6 @@
 import json
 import io
+import re
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -16,80 +17,91 @@ except ImportError:
 router = APIRouter()
 logger = get_logger(__name__)
 
+# --- Helper: Data Sanitizer ---
+def force_numeric_types(data: any):
+    """
+    Recursively ensures fields that should be numbers are actually numbers.
+    Prevents '>' errors between str and int.
+    """
+    numeric_fields = {
+        "amount_raised_to_date", "target_amount", "ownership_percentage", 
+        "years_direct_experience", "interviews_conducted", "user_count", 
+        "active_users_monthly", "early_revenue", "growth_rate", 
+        "average_price_per_customer", "gross_margin", "monthly_burn", "runway_months"
+    }
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key in numeric_fields:
+                if isinstance(value, str):
+                    # Remove everything except digits and decimal points
+                    clean_val = re.sub(r'[^0-9.]', '', value)
+                    try:
+                        data[key] = float(clean_val) if '.' in clean_val else int(clean_val)
+                    except ValueError:
+                        data[key] = 0
+                elif value is None:
+                    data[key] = 0
+            else:
+                force_numeric_types(value)
+    elif isinstance(data, list):
+        for item in data:
+            force_numeric_types(item)
+    return data
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """
-    Extracts all text from a PDF file given its raw bytes.
-    """
     if PdfReader is None:
         raise ImportError("PyPDF2 is not installed. Run: pip install PyPDF2")
-
     reader = PdfReader(io.BytesIO(file_bytes))
-    pages_text = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages_text.append(text)
-
+    pages_text = [p.extract_text() for p in reader.pages if p.extract_text()]
     return "\n\n".join(pages_text)
+
+# =========================================================
+# PDF EXTRACTION ENDPOINT
+# =========================================================
 
 @router.post("/extract-from-pdf")
 async def extract_from_pdf(file: UploadFile = File(...)):
     """
-    Accepts a PDF document and returns the startup evaluation schema
-    filled ONLY with information explicitly found in the document.
+    Extracts startup data from PDF and ensures numeric fields are integers/floats.
     """
-    # 1. Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are accepted. Please upload a .pdf file."
-        )
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
 
-    # 2. Read PDF bytes
+    # 1. Read & Extract
     try:
         file_bytes = await file.read()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
-
-    # 3. Extract text from PDF
-    try:
         document_text = extract_text_from_pdf(file_bytes)
     except Exception as e:
-        logger.error(f"[ERROR] PDF text extraction failed: {e}")
-        raise HTTPException(status_code=422, detail=f"Failed to extract text from PDF: {str(e)}")
+        logger.error(f"[ERROR] PDF processing failed: {e}")
+        raise HTTPException(status_code=422, detail="Could not read PDF text.")
 
     if not document_text.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="The PDF appears to contain no extractable text (it may be a scanned image)."
-        )
+        raise HTTPException(status_code=422, detail="PDF contains no extractable text.")
 
-    logger.info(f"[DOC] Extracted {len(document_text)} characters from PDF: {file.filename}")
-
-    # 4. Use LLM to fill the schema from the document text
-    #    Using Gemini for larger context window (PDFs can be long)
+    # 2. Prepare LLM Chain
+    # We use Gemini for the large context window
     llm = get_llm(temperature=0, provider="gemini")
-
     chain = PromptTemplate.from_template(PDF_EXTRACTION_PROMPT) | llm | JsonOutputParser()
 
     try:
-        extracted_data = await chain.ainvoke({
+        # 3. Invoke LLM
+        # Note: We pass the TARGET_SCHEMA as a string for context
+        raw_extracted = await chain.ainvoke({
             "target_schema": json.dumps(TARGET_SCHEMA, indent=2),
             "document_text": document_text
         })
 
-        # Ensure proper wrapping
-        if "startup_evaluation" not in extracted_data:
-            extracted_data = {"startup_evaluation": extracted_data}
+        # 4. Post-Process & Sanitize
+        # Ensure the top-level key exists
+        extracted_data = raw_extracted if "startup_evaluation" in raw_extracted else {"startup_evaluation": raw_extracted}
+        
+        # CRITICAL: Convert "USD 0" -> 0 to prevent downstream crashes
+        sanitized_data = force_numeric_types(extracted_data)
 
-        logger.info(f"[SUCCESS] Successfully extracted schema from PDF: {file.filename}")
-
-        return {"data": extracted_data}
+        logger.info(f"[SUCCESS] Extracted and sanitized data from: {file.filename}")
+        return {"data": sanitized_data}
 
     except Exception as e:
         logger.error(f"[ERROR] LLM extraction failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI extraction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"AI extraction failed: {str(e)}")
