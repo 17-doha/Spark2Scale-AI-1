@@ -1,72 +1,126 @@
+import os
+import json  # <-- Added this to handle stringified data!
+from supabase import create_client, Client
 from neo4j import GraphDatabase
 
-class RecommendationGraph:
-    def __init__(self, uri, user, password):
-        # Establish the connection to your AuraDB cluster
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+# ==========================================
+# 1. CREDENTIALS (UPDATE THESE)
+# ==========================================
+# Supabase
+SUPABASE_URL="https://xdkxbibtoggcjvgtktaf.supabase.co"
+SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhka3hiaWJ0b2dnY2p2Z3RrdGFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDA3OTY0MywiZXhwIjoyMDc5NjU1NjQzfQ.Cy90Npb42y4xaLkzg5Tjz1z2Qc6XwRxPPos-NAxZqHA"
 
-    def close(self):
-        # Always good practice to close the connection when done
-        self.driver.close()
 
-    # --- WRITING DATA TO NEO4J ---
+# Neo4j
+NEO4J_URI = "neo4j+s://ae2b5466.databases.neo4j.io"
+NEO4J_USER = "ae2b5466"
+NEO4J_PASSWORD = "6heq_R40e5nOPkVpsGlOMu-Nfz-h6LY_ZZLjQhAj6wk"
 
-    def add_pitch_tags(self, pitch_id, tags_dict):
-        """
-        Takes the tags and sub-tags from a pitch and adds them to the graph.
-        tags_dict format: {"Consumer & Commerce": ["Marketplace"], "Specialized Industry Tech": ["Proptech"]}
-        """
-        def _create_tags(tx, parent_tag, sub_tags):
-            query = """
-            MERGE (t:Tag {name: $parent_tag})
-            WITH t
-            UNWIND $sub_tags AS sub_tag_name
-            MERGE (st:SubTag {name: sub_tag_name})
-            MERGE (t)-[:CONTAINS]->(st)
-            """
-            tx.run(query, parent_tag=parent_tag, sub_tags=sub_tags)
+# ==========================================
+# 2. NEO4J FUNCTIONS 
+# ==========================================
+def add_investor(tx, user_id, tags):
+    if not tags: return # Skip if no tags
+    
+    query = """
+    MERGE (i:Investor {userId: $user_id})
+    WITH i
+    UNWIND $tags AS tag_name
+    MERGE (t:Tag {name: tag_name})
+    MERGE (i)-[r:INTERESTED_IN]->(t)
+    ON CREATE SET r.weight = 1.0
+    """
+    tx.run(query, user_id=user_id, tags=tags)
 
-        with self.driver.session() as session:
-            for parent, subs in tags_dict.items():
-                session.execute_write(_create_tags, parent, subs)
-        print(f"Tags added for pitch {pitch_id}")
+def add_pitch(tx, pitch_id, sub_tags_dict):
+    if not sub_tags_dict: return # Skip if no analysis/subtags
+    
+    query = """
+    MERGE (p:PitchDeck {pitchId: $pitch_id})
+    WITH p
+    
+    UNWIND keys($sub_tags_dict) AS parent_tag_name
+    MERGE (t:Tag {name: parent_tag_name})
+    MERGE (p)-[:TAGGED_WITH]->(t)
+    
+    WITH p, t, parent_tag_name, $sub_tags_dict AS full_dict
+    UNWIND full_dict[parent_tag_name] AS sub_tag_name
+    MERGE (st:SubTag {name: sub_tag_name})
+    MERGE (t)-[:CONTAINS]->(st)
+    MERGE (p)-[:HAS_SUBTAG]->(st)
+    """
+    tx.run(query, pitch_id=pitch_id, sub_tags_dict=sub_tags_dict)
 
-    def add_investor(self, user_id, initial_tags):
-        """
-        Adds a new investor and links them to their initial tags with a weight of 1.0.
-        """
-        def _create_investor(tx, uid, tags):
-            query = """
-            MERGE (i:Investor {userId: $uid})
-            WITH i
-            UNWIND $tags AS tag_name
-            MERGE (t:Tag {name: tag_name})
-            MERGE (i)-[r:INTERESTED_IN]->(t)
-            ON CREATE SET r.weight = 1.0
-            """
-            tx.run(query, uid=uid, tags=tags)
-
-        with self.driver.session() as session:
-            session.execute_write(_create_investor, user_id, initial_tags)
-        print(f"Investor {user_id} added to graph.")
-
-    # --- READING DATA FROM NEO4J ---
-
-    def get_investor_subtags(self, user_id):
-        """
-        This is how the final sub-tags are passed back to your Python code!
-        Returns a list of dictionaries with the sub-tag and its current weight.
-        """
-        def _fetch_subtags(tx, uid):
-            query = """
-            MATCH (i:Investor {userId: $uid})-[r:INTERESTED_IN]->(t:Tag)-[:CONTAINS]->(st:SubTag)
-            RETURN st.name AS SubTag, t.name AS ParentTag, r.weight AS Weight
-            ORDER BY r.weight DESC
-            """
-            result = tx.run(query, uid=uid)
-            # Format the Neo4j result into a standard Python list of dictionaries
-            return [{"sub_tag": record["SubTag"], "parent_tag": record["ParentTag"], "weight": record["Weight"]} for record in result]
-
-        with self.driver.session() as session:
-            sub_tags_list = session.execute_read(_fetch_subtags, user_id)
-            return sub_tags_list
+# ==========================================
+# 3. THE SYNC LOGIC
+# ==========================================
+if __name__ == "__main__":
+    print("🔄 Starting Supabase to Neo4j Sync...")
+    
+    # Initialize clients
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+    
+    try:
+        with driver.session() as session:
+            # --- SYNC INVESTORS ---
+            print("Fetching investors from Supabase...")
+            investors_response = supabase.table("investors").select("*").execute()
+            real_investors = investors_response.data
+            
+            for inv in real_investors:
+                user_id = inv.get("user_id")
+                tags = inv.get("tags", [])
+                if user_id:
+                    session.execute_write(add_investor, user_id, tags)
+            print(f"✅ Successfully loaded {len(real_investors)} real investors into Neo4j.")
+            
+            # --- SYNC PITCH DECKS ---
+            print("\nFetching pitch decks from Supabase...")
+            pitches_response = supabase.table("pitchdecks").select("*").execute()
+            real_pitches = pitches_response.data
+            print("\nRAW DATA KEYS:", real_pitches[0].keys())
+            
+            loaded_count = 0
+            skipped_count = 0
+            error_count = 0
+            
+            for pitch in real_pitches:
+                pitch_id = pitch.get("pitchdeckid")
+                analysis = pitch.get("analysis")
+                
+                # 1. Fix Stringified JSON if Supabase returned it as text
+                if isinstance(analysis, str):
+                    try:
+                        analysis = json.loads(analysis)
+                    except json.JSONDecodeError:
+                        analysis = {}
+                
+                # 2. Safely extract sub_tags
+                sub_tags = {}
+                if isinstance(analysis, dict):
+                    sub_tags = analysis.get("sub_tags", {})
+                
+                # 3. Execute or report why it failed
+                if pitch_id and sub_tags:
+                    try:
+                        session.execute_write(add_pitch, pitch_id, sub_tags)
+                        loaded_count += 1
+                    except Exception as e:
+                        print(f"❌ Cypher error on pitch {pitch_id}: {e}")
+                        error_count += 1
+                else:
+                    # Print the exact data it rejected so we can inspect it
+                    print(f"⚠️ Skipped pitch {pitch_id} | Analysis Data: {analysis}")
+                    skipped_count += 1
+                    
+            print(f"\n✅ Successfully loaded: {loaded_count}")
+            print(f"⚠️ Skipped (No valid sub-tags): {skipped_count}")
+            print(f"❌ Errors (Failed to insert): {error_count}")
+            
+        print("\n🎉 Sync complete! Your graph is now populated with live data.")
+        
+    except Exception as e:
+        print(f"❌ Error during sync: {e}")
+    finally:
+        driver.close()
