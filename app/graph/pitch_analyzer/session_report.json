@@ -1,0 +1,91 @@
+{
+  "grade": "F",
+  "score": 0,
+  "max_score": 100,
+  "rubric": {
+    "team": {
+      "score": 0,
+      "notes": "No information provided"
+    },
+    "problem": {
+      "score": 0,
+      "notes": "No clear problem stated"
+    },
+    "product": {
+      "score": 0,
+      "notes": "No product or solution mentioned"
+    },
+    "market": {
+      "score": 0,
+      "notes": "No market information provided"
+    },
+    "traction": {
+      "score": 0,
+      "notes": "No traction or progress reported"
+    },
+    "financials": {
+      "score": 0,
+      "notes": "No financial data or projections provided"
+    },
+    "vision": {
+      "score": 0,
+      "notes": "No clear vision or strategy outlined"
+    },
+    "communication": {
+      "score": 0,
+      "notes": "Insufficient data to assess communication skills"
+    },
+    "diligence": {
+      "score": 0,
+      "notes": "No diligence answers or efforts demonstrated"
+    }
+  },
+  "strengths": [],
+  "critical_weaknesses": [
+    "team",
+    "problem",
+    "product",
+    "market",
+    "traction",
+    "financials",
+    "vision",
+    "communication",
+    "diligence"
+  ],
+  "essentials_checklist": {
+    "covered": [],
+    "missing": [
+      "problem",
+      "solution",
+      "market_size",
+      "traction",
+      "team",
+      "ask",
+      "business_model",
+      "moat"
+    ]
+  },
+  "investor_killer_moments": [
+    {
+      "timestamp_s": 0,
+      "type": "missing_information",
+      "detail": "No clear problem statement"
+    },
+    {
+      "timestamp_s": 0,
+      "type": "missing_information",
+      "detail": "No product or solution mentioned"
+    },
+    {
+      "timestamp_s": 0,
+      "type": "missing_information",
+      "detail": "No market information provided"
+    }
+  ],
+  "recommended_actions": [
+    "Develop a clear and concise problem statement and value proposition",
+    "Conduct market research and gather data on potential customers and competitors",
+    "Prepare a comprehensive pitch deck and practice presenting the pitch"
+  ],
+  "final_verdict": "I would not invest in this startup due to the complete lack of information and preparation."
+}

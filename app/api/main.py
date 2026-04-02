@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix, pitch_analyzer
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -26,7 +26,7 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://spark2scale-client.azurewebsites.net/", "http://localhost:3000"], # For production, replace "*" with your specific frontend URL
+    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000"], # For production, replace "*" with your specific frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,6 +46,9 @@ app.include_router(swot_generation.router, prefix="/api/v1/swot", tags=["SWOT Ge
 
 app.include_router(competitor_matrix.router, prefix="/api/v1/competitor-matrix", tags=["Competitor Analysis"])
 
+app.include_router(pitch_analyzer.router, prefix="/api/v1/pitch-analyzer", tags=["Pitch Analyzer"])
+
+
 @app.get("/")
 def read_root():
-    return {"message": "Spark2Scale AI Agent Service is Running"}
+    return {"message": "Spark2Scale AI Agent Service is Running now ..."}

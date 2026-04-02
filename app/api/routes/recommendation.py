@@ -2,7 +2,7 @@ import time
 import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # --- Import Logger ---
 from app.utils.logger import logger
@@ -10,6 +10,7 @@ from app.utils.logger import logger
 # --- Import Recommendation Logic ---
 from app.graph.recommendation_agent.workflow import run_recommendation_agent
 from app.core.config import Config
+from app.graph.feed_recommedation_agent.tools import get_investor_subtags
 
 router = APIRouter()
 
@@ -55,3 +56,27 @@ async def get_recommendations(input_data: RecommendationInput):
         if "validation error" in str(e).lower():
             raise HTTPException(status_code=422, detail=f"Data Schema Mismatch: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/investors/{user_id}/subtags", response_model=List[str])
+async def get_investor_interest_subtags(user_id: str):
+    """
+    Endpoint to fetch only the sub-tag names an investor is interested in
+    based on the Neo4j graph.
+    """
+    logger.info(f"[GET] Fetching subtags for Investor ID: {user_id}")
+    
+    try:
+        subtags = get_investor_subtags(user_id)
+        
+        if not subtags:
+            # We return an empty list rather than a 404 to be safe 
+            # (investor might exist but has no tag connections yet)
+            logger.warning(f"[WARN] No subtags found for investor {user_id}")
+            return []
+            
+        return subtags
+
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to fetch subtags from Neo4j: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Graph Database Error")

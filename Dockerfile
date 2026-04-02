@@ -16,6 +16,10 @@ RUN apt-get update && apt-get install -y \
     libpangoft2-1.0-0 \
     libcairo2 \
     curl \
+    portaudio19-dev \
+    libasound2-dev \
+    python3-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

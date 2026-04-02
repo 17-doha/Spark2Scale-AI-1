@@ -24,79 +24,85 @@ t5_client = None   # kept as a module-level alias for backward-compat with tests
 
 TARGET_SCHEMA = {
   "startup_evaluation": {
-    "meta_data": { "form_type": "Pre-Seed & Seed Evaluation", "last_updated": "YYYY-MM-DD" },
+    "meta_data": { "form_type": "Pre-Seed & Seed Evaluation", "last_updated": "2026-03-24" },
     "company_snapshot": {
-      "company_name": "string",
-      "website_url": "string (or empty)",
-      "hq_location": "string",
+      "company_name": "",
+      "website_url": "",
+      "hq_location": "",
       "date_founded": "YYYY-MM-DD",
-      "current_stage": "Pre-Seed / Seed",
-      "amount_raised_to_date": "string (e.g. 'USD 0')",
-      "current_round": { "target_amount": "string", "target_close_date": "YYYY-MM-DD" }
+      "current_stage": "",
+      "amount_raised_to_date": 0,  # Changed to number
+      "current_round": { 
+          "target_amount": 0,      # Changed to number
+          "target_close_date": "YYYY-MM-DD" 
+      }
     },
     "founder_and_team": {
       "founders": [
         {
-          "name": "string",
-          "role": "CEO/CTO/etc",
-          "ownership_percentage": "number",
-          "prior_experience": "string",
-          "years_direct_experience": "number",
-          "founder_market_fit_statement": "string"
+          "name": "",
+          "role": "",
+          "ownership_percentage": 0,
+          "prior_experience": "",
+          "years_direct_experience": 0,
+          "founder_market_fit_statement": ""
         }
       ],
-      "execution": { "full_time_start_date": "YYYY-MM-DD", "key_shipments": [{"date": "YYYY-MM-DD", "item": "string"}] }
+      "execution": { 
+          "full_time_start_date": "YYYY-MM-DD", 
+          "key_shipments": [{"date": "YYYY-MM-DD", "item": ""}] 
+      }
     },
     "problem_definition": {
-      "customer_profile": { "role": "string", "company_size": "string", "industry": "string" },
-      "problem_statement": "string",
-      "current_solution": "string",
-      "gap_analysis": "string",
+      "customer_profile": { "role": "", "company_size": "", "industry": "" },
+      "problem_statement": "",
+      "current_solution": "",
+      "gap_analysis": "",
       "frequency": "High/Medium/Low",
-      "impact_metrics": { "cost_type": "string", "description": "string" },
-      "evidence": { "interviews_conducted": "number", "customer_quotes": ["string"] }
+      "impact_metrics": { "cost_type": "", "description": "" },
+      "evidence": { "interviews_conducted": 0, "customer_quotes": [] }
     },
     "product_and_solution": {
       "product_stage": "Concept / MVP / Live",
-      "demo_link": "string",
-      "core_stickiness": "string",
-      "differentiation": "string",
-      "defensibility_moat": "string"
+      "demo_link": "",
+      "core_stickiness": "",
+      "differentiation": "",
+      "defensibility_moat": ""
     },
     "market_and_scope": {
-      "beachhead_market": "string",
-      "market_size_estimate": "string",
-      "long_term_vision": "string",
-      "expansion_strategy": "string"
+      "beachhead_market": "",
+      "market_size_estimate": "",
+      "long_term_vision": "",
+      "expansion_strategy": ""
     },
     "traction_metrics": {
-      "stage_context": "string",
-      "user_count": "number",
-      "active_users_monthly": "number",
-      "partnerships_and_lois": ["string"],
-      "early_revenue": "string",
-      "growth_rate": "string"
+      "stage_context": "",
+      "user_count": 0,
+      "active_users_monthly": 0,
+      "partnerships_and_lois": [],
+      "early_revenue": 0,          # Changed to number
+      "growth_rate": 0             # Changed to number (percentage)
     },
     "gtm_strategy": {
-      "buyer_persona": "string",
-      "user_persona": "string",
-      "primary_acquisition_channel": "string",
-      "sales_motion": "string",
-      "average_sales_cycle": "string",
-      "deal_closer": "string"
+      "buyer_persona": "",
+      "user_persona": "",
+      "primary_acquisition_channel": "",
+      "sales_motion": "",
+      "average_sales_cycle": "",
+      "deal_closer": ""
     },
     "business_model": {
-      "pricing_model": "string",
-      "average_price_per_customer": "number",
-      "gross_margin": "number",
-      "monthly_burn": "number",
-      "runway_months": "number"
+      "pricing_model": "",
+      "average_price_per_customer": 0,
+      "gross_margin": 0,
+      "monthly_burn": 0,
+      "runway_months": 0
     },
     "vision_and_strategy": {
-      "five_year_vision": "string",
-      "category_definition": "string",
-      "primary_risk": "string",
-      "use_of_funds": ["string"]
+      "five_year_vision": "",
+      "category_definition": "",
+      "primary_risk": "",
+      "use_of_funds": []
     }
   }
 }
@@ -112,6 +118,34 @@ def load_schema(schema_name: str) -> str:
         schemas = json.load(f)
         
     return json.dumps(schemas.get(schema_name, {}), indent=2)
+
+def force_numeric_types(data):
+    """Recursively ensures fields that should be numbers are actually numbers."""
+    numeric_fields = {
+        "amount_raised_to_date", "target_amount", "ownership_percentage", 
+        "years_direct_experience", "interviews_conducted", "user_count", 
+        "active_users_monthly", "early_revenue", "growth_rate", 
+        "average_price_per_customer", "gross_margin", "monthly_burn", "runway_months"
+    }
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key in numeric_fields:
+                if isinstance(value, str):
+                    # Strip non-numeric characters except for decimal points
+                    clean_val = "".join(c for c in value if c.isdigit() or c == '.')
+                    try:
+                        data[key] = float(clean_val) if '.' in clean_val else int(clean_val)
+                    except ValueError:
+                        data[key] = 0
+                elif value is None:
+                    data[key] = 0
+            else:
+                force_numeric_types(value)
+    elif isinstance(data, list):
+        for item in data:
+            force_numeric_types(item)
+    return data
 
 def extract_team_data(data):
     """
