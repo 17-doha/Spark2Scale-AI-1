@@ -87,7 +87,17 @@ def generate_financial_visuals(estimates):
     monthly = estimates["monthly_fixed_costs"]
     rev = estimates["revenue_assumptions"]
     
-    total_startup = sum(startup.values())
+    # Sanitize and prepare startup values
+    clean_startup = {}
+    for k, v in startup.items():
+        try:
+            val = float(v)
+            if not np.isnan(val) and val > 0:
+                clean_startup[k] = val
+        except:
+            pass
+            
+    total_startup = sum(clean_startup.values())
     total_monthly = sum(monthly.values())
     
     avg_ticket = rev.get("avg_ticket_price", 0)
@@ -95,10 +105,14 @@ def generate_financial_visuals(estimates):
     monthly_rev = customers * avg_ticket * 30
     monthly_profit = monthly_rev - total_monthly
     
+    # Initialize variables to prevent UnboundLocalError
+    break_even_month = 99
+    runway_months = 24
+    
     try:
         plt.figure(figsize=(8, 8), facecolor='#F0EADC')
         if total_startup > 0:
-            plt.pie(startup.values(), labels=startup.keys(), autopct='%1.1f%%', colors=plt.cm.Pastel1.colors)
+            plt.pie(clean_startup.values(), labels=clean_startup.keys(), autopct='%1.1f%%', colors=plt.cm.Pastel1.colors)
         else:
             plt.pie([1], labels=["No Data"], colors=['#cccccc'])
         plt.title(f"Startup Costs in {curr}\nTotal: {total_startup:,.0f} {curr}")
