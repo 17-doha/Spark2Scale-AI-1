@@ -32,7 +32,7 @@ class InvestorEmbeddingResponse(BaseModel):
 
 class SimilarInvestorsResponse(BaseModel):
     investor_id: str
-    results: list[dict]       # [{"investor_id": "...", "similarity": 0.95}]
+    results: list[dict]
     k: int
 
 
