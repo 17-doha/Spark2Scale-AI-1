@@ -80,8 +80,18 @@ def generate_chart(data: dict, output_dir: str, theme_colors: list = None, font_
 
         elif chart_type == "pie" or chart_type == "donut":
             inner_pct = 0.6 if chart_type == "donut" else 0
-            wedges, texts, autotexts = ax.pie(values, labels=labels, autopct='%1.1f%%',
-                                               colors=colors, wedgeprops=dict(width=1-inner_pct, edgecolor=bg_color, linewidth=2),
+            
+            if sum(values) == 0:
+                plot_values = [1]
+                plot_labels = ["No Data"]
+                plot_colors = ['#cccccc']
+            else:
+                plot_values = values
+                plot_labels = labels
+                plot_colors = colors
+
+            wedges, texts, autotexts = ax.pie(plot_values, labels=plot_labels, autopct='%1.1f%%',
+                                               colors=plot_colors, wedgeprops=dict(width=1-inner_pct, edgecolor=bg_color, linewidth=2),
                                                startangle=140, pctdistance=0.85 if chart_type == "donut" else 0.75)
             plt.setp(autotexts, size=12, weight="bold")
             if chart_type == "donut":

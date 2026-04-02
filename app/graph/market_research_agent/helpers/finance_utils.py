@@ -97,7 +97,10 @@ def generate_financial_visuals(estimates):
     
     try:
         plt.figure(figsize=(8, 8), facecolor='#F0EADC')
-        plt.pie(startup.values(), labels=startup.keys(), autopct='%1.1f%%', colors=plt.cm.Pastel1.colors)
+        if total_startup > 0:
+            plt.pie(startup.values(), labels=startup.keys(), autopct='%1.1f%%', colors=plt.cm.Pastel1.colors)
+        else:
+            plt.pie([1], labels=["No Data"], colors=['#cccccc'])
         plt.title(f"Startup Costs in {curr}\nTotal: {total_startup:,.0f} {curr}")
         plt.savefig("data_output/finance_startup_pie.png")
         plt.close()
