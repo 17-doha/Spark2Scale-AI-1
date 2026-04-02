@@ -34,3 +34,19 @@ class SimilarInvestorsResponse(BaseModel):
     investor_id: str
     results: list[dict]       # [{"investor_id": "...", "similarity": 0.95}]
     k: int
+
+
+class PitchdeckEmbeddingRequest(BaseModel):
+    pitchdeck_id: str
+
+
+class PitchdeckEmbeddingResponse(BaseModel):
+    pitchdeck_id : str
+    stored       : bool
+    message      : str
+
+
+class RecommendedPitchdecksResponse(BaseModel):
+    investor_id : str
+    results     : list[dict]
+    k           : int

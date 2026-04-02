@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix, feed_recommedation
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix, feed_recommedation, vdb_admin
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -47,6 +47,7 @@ app.include_router(swot_generation.router, prefix="/api/v1/swot", tags=["SWOT Ge
 app.include_router(competitor_matrix.router, prefix="/api/v1/competitor-matrix", tags=["Competitor Analysis"])
 
 app.include_router(feed_recommedation.router, prefix="/api/v1/feed", tags=["Feed Recommendation"])
+app.include_router(vdb_admin.router, prefix="/api/v1/feed", tags=["Vector DB Admin"])
 
 @app.get("/")
 def read_root():
