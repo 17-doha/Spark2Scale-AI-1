@@ -13,6 +13,7 @@ from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
 from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
+from app.graph.ppt_generation_agent.tools.input_loader import load_input_directory
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
 
@@ -59,8 +60,23 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
 
         storage_path = local_path  # fallback
         if supabase:
+            # First, insert into pitchdecks to get the auto-generated pitchdeckid
+            pitch_payload = {
+                "startup_id": startup_id,
+                "pitchname": final_draft.title or "Untitled Pitch",
+                "analysis": final_draft.model_dump()
+            }
+            insert_result = supabase.table("pitchdecks").insert(pitch_payload).execute()
+            
+            if not insert_result.data:
+                raise HTTPException(status_code=500, detail="Failed to insert record into pitchdecks table.")
+            
+            pitchdeck_id = insert_result.data[0].get("pitchdeckid")
+            logger.info(f"Inserted into pitchdecks, got pitchdeckid: {pitchdeck_id}")
+
             file_name = f"{uuid.uuid4().hex}.pptx"
-            supabase_storage_path = f"{startup_id}/{file_name}"
+            # Structured path: {startup_id}/{pitchdeck_id}/{file_name}
+            supabase_storage_path = f"{startup_id}/{pitchdeck_id}/{file_name}"
 
             with open(local_path, "rb") as f:
                 upload_result = supabase.storage.from_("ppts").upload(
@@ -75,15 +91,10 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
             logger.info(f"Supabase upload result: {upload_result}")
             storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
             logger.info(f"PPT uploaded to Supabase: {storage_path}")
-            doc_payload = {
-                "startup_id": startup_id,
-                "document_name": final_draft.title or "Pitch Deck",
-                "type": "ppt",
-                "current_path": storage_path,
-                "json_response": final_draft.model_dump(),
-            }
-            insert_result = supabase.table("documents").insert(doc_payload).execute()
-            logger.info(f"Document record inserted: {insert_result}")
+            
+            # Update the pitchdecks record with the final public URL
+            supabase.table("pitchdecks").update({"video_url": storage_path}).eq("pitchdeckid", pitchdeck_id).execute()
+            logger.info(f"Updated pitchdecks record with video_url: {storage_path}")
 
         return PPTGenerationResponse(
             status="success",
@@ -155,6 +166,35 @@ async def generate_ppt_from_files(
     finally:
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
+
+async def generate_deck_from_local_files(output_dir: str) -> dict:
+    """Helper for CLI/local script usage."""
+    # Use a default test startup_id if not providing one via API
+    test_startup_id = "00000000-0000-0000-0000-000000000000"
+    
+    # Resolve the standard input directory
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    input_dir = os.path.join(base_dir, "app", "graph", "ppt_generation_agent", "input")
+    
+    logger.info(f"Loading local data from {input_dir}")
+    loaded = load_input_directory(input_dir)
+    
+    if not loaded.flat_data:
+        return {"status": "error", "message": f"No data found in {input_dir}"}
+        
+    initial_state: PPTGenerationState = {
+        "research_data": loaded.research_data,
+        "logo_path": os.path.join(input_dir, "Logo.jpg") if os.path.exists(os.path.join(input_dir, "Logo.jpg")) else None,
+        "color_palette": None,
+        "use_default_colors": True,
+        "draft": None,
+        "critique": None,
+        "iteration": 0,
+        "ppt_path": None,
+    }
+    
+    response = await run_ppt_generation(initial_state, test_startup_id)
+    return response.model_dump()
 
 @router.post("/edit", response_model=PPTGenerationResponse)
 async def edit_ppt(
