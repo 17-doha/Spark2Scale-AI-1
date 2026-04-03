@@ -7,7 +7,7 @@ logger = get_logger("main")
 
 # This wrapper function isn't strictly necessary for Docker but is fine to keep
 def main():
-    logger.info("Starting Spark2Scale AI API Server...")
+    logger.info("Starting Spark2Scale AI API Serverssssssss...")
     # In Docker, we usually let the CMD handle execution, but this is fine for local debug
     uvicorn.run("app.api.main:app", host="0.0.0.0", port=8000, reload=False)
 
