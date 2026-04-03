@@ -19,6 +19,12 @@ import logging
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
+
+# Ensure the current directory is in sys.path so local imports work when imported as a module
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+
 from workflow import build_extractor_workflow
 
 # ── Logging ───────────────────────────────────────────────────────────────────

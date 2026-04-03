@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
 
+from app.graph.pitch_analyzer.main import load_company_context, run_extraction
+
 router = APIRouter()
 
 worker_process = None
@@ -19,7 +21,6 @@ def run_pitch_extraction():
     in the background BEFORE they actually start the voice session.
     """
     try:
-        from app.graph.pitch_analyzer.main import load_company_context, run_extraction
         
         # Load documents (currently hardcoded demo docs in main.py)
         docs = load_company_context()
