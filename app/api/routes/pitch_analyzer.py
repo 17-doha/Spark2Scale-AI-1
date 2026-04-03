@@ -11,6 +11,26 @@ router = APIRouter()
 
 worker_process = None
 
+@router.post("/extract", summary="Run LLM Pre-flight Extraction")
+def run_pitch_extraction():
+    """
+    Runs the LLM extraction pipeline separately from the worker.
+    Call this when the user clicks on the pitchdeck, so it processes the documents
+    in the background BEFORE they actually start the voice session.
+    """
+    try:
+        from app.graph.pitch_analyzer.main import load_company_context, run_extraction
+        
+        # Load documents (currently hardcoded demo docs in main.py)
+        docs = load_company_context()
+        
+        # Force skip=False so it guarantees the extraction runs and creates/updates the cache
+        cheat_sheet, voice_prompt = run_extraction(docs, skip=False)
+        
+        return {"status": "success", "message": "Extraction finished and cache updated."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
 @router.post("/start", summary="Start LiveKit AI Agent Worker")
 async def start_agent_worker():
     global worker_process
@@ -24,13 +44,15 @@ async def start_agent_worker():
         
     env = os.environ.copy()
     
-    # Send worker output directly to the main system stdout so Azure catches it in Log Stream!
+    # Start the worker in the background securely logging output to BOTH a file and stdout
+    log_file = open(os.path.join(os.getcwd(), "agent_worker.log"), "a", encoding="utf-8")
+    
     worker_process = subprocess.Popen(
-        [sys.executable, script_path, "dev"],
+        [sys.executable, script_path, "dev", "--skip-extraction"],
         cwd=os.path.dirname(script_path),
         env=env,
-        stdout=sys.stdout,
-        stderr=sys.stderr
+        stdout=log_file,
+        stderr=subprocess.STDOUT
     )
     
     return {"status": "started", "pid": worker_process.pid}
