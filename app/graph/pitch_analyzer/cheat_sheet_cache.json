@@ -12,15 +12,15 @@
       "market": "TAM claims are delusional, Red Ocean market.",
       "operations": "Ghost Ship: raising money with $0 burn."
     },
-    "business_plan_context": "Spark2Scale is an AI-driven startup evaluation platform for MENA founders with a flawed GTM strategy and no paid tier.",
-    "cap_table_context": "Founders own only 50% of the company, with the remaining 50% given to an external app development agency.",
-    "market_research_stats": "Market size: $44.1 Billion TAM, $22.1 Billion SAM, $275.9 Million SOM.",
+    "business_plan_context": "Spark2Scale is an AI-driven startup evaluation platform for MENA founders, operating on a Freemium model with no defined paid tier.",
+    "cap_table_context": "Founders own only 50%. The remaining 50% was given to an agency for MVP development \u2014 RED FLAG.",
+    "market_research_stats": "TAM: $44.1 Billion, SAM: $22.1 Billion, SOM: $275.9 Million. Validation verdict: MODERATE, pain score: 64.2, confidence: High.",
     "expected_ppt_flow": [
-      "Introduction to Spark2Scale",
-      "Problem statement",
-      "Solution overview",
-      "Market size and opportunity",
-      "Ask for funding"
+      "Title: Spark2Scale - The AI Co-Founder for MENA",
+      "Problem: Founders lack a structured system to validate ideas.",
+      "Solution: A multi-agent AI system that evaluates pitch decks.",
+      "Market Size: $44.1 Billion Global Incubator Market.",
+      "The Ask: Raising $500k Pre-Seed to scale engineering and launch TikTok marketing."
     ],
     "prior_recommendations": [
       "Fix the flawed GTM strategy.",
@@ -29,7 +29,7 @@
     ],
     "swot_analysis": {
       "strengths": [
-        "Technical founding team with AI/ML backgrounds",
+        "Technical founding team with AI/ML backgrounds (Tabaani, Praxilab)",
         "Custom Transformer models tailored for MENA region"
       ],
       "weaknesses": [
@@ -39,27 +39,27 @@
       ],
       "opportunities": [
         "Partnering with MENA incubators like Flat6Labs",
-        "Expanding the Pitch Coach feature"
+        "Expanding the Pitch Coach feature using Qwen3-Omni-Flash for live feedback"
       ],
       "threats": [
-        "Generic AI models releasing specialized VC-agent wrappers",
+        "Generic AI models (ChatGPT/Claude) releasing specialized VC-agent wrappers",
         "Running out of runway due to $0 revenue and undefined acquisition strategy"
       ]
     },
     "hard_numbers": {
       "burn_rate": "$100/mo",
-      "target_raise": "$500,000"
+      "target_raise": "$500k"
     },
     "vulnerabilities_to_attack": [
-      "Lack of relevant experience and unclear roles",
-      "Flawed GTM strategy",
-      "Zero revenue and undefined paid tier"
+      "Generic AI models (ChatGPT/Claude) releasing specialized VC-agent wrappers",
+      "Running out of runway due to $0 revenue and undefined acquisition strategy",
+      "Zero GTM or enterprise sales experience"
     ],
     "diligence_questions": [
       "How do you plan to acquire your first 100 customers?",
-      "What is your strategy for competing with established AI models?",
-      "How will you monetize your platform and achieve profitability?"
+      "What is the clear timeline and milestone for revenue generation?",
+      "What is the plan to mitigate the threat of generic AI models?"
     ]
   },
-  "voice_prompt": "You are an Elite Venture Capital Pitch Coach evaluating 'Spark2Scale'.\n### 1. STARTUP PROFILE & DOCUMENTS\n- Business Plan: Spark2Scale is an AI-driven startup evaluation platform for MENA founders with a flawed GTM strategy and no paid tier.\n- Market Context: Market size: $44.1 Billion TAM, $22.1 Billion SAM, $275.9 Million SOM.\n- Cap Table: Founders own only 50% of the company, with the remaining 50% given to an external app development agency.\n- Financials: $100/mo burn; Target raise: $500,000\n\n### 2. EVALUATION SNAPSHOT (9 PILLARS)\n- Team: Lack of relevant experience and unclear roles.\n- Problem: Clear problem statement, but impact unquantified.\n- Product: Generic AI wrapper, no proprietary moat.\n- GTM: Flawed strategy \u2014 TikTok Ads for Ministry of Education.\n- Traction: Zero users, zero revenue, zero signal.\n- Vision: Ambitious but vague, no clear beachhead.\n- Business: Freemium with no paid tier \u2014 charity project.\n- Market: TAM claims are delusional, Red Ocean market.\n- Operations: Ghost Ship: raising money with $0 burn.\n\n### 3. SWOT ANALYSIS\n- Strengths: Technical founding team with AI/ML backgrounds, Custom Transformer models tailored for MENA region\n- Weaknesses: Zero GTM or enterprise sales experience, Pricing model is Freemium with no defined paid tier ($0 revenue), Stagnant velocity with 0 current users\n\n### 4. EXPECTED PITCH FLOW (PPT)\nIntroduction to Spark2Scale\n- Problem statement\n- Solution overview\n- Market size and opportunity\n- Ask for funding\n\n### 5. PRIOR RECOMMENDATIONS & VULNERABILITIES\nRecommendations: Fix the flawed GTM strategy.\n- Build a team with relevant experience.\n- Develop a unique, proprietary solution.\nVulnerabilities: Lack of relevant experience and unclear roles\n- Flawed GTM strategy\n- Zero revenue and undefined paid tier\n\n### 6. MANDATORY CHECKLIST (DILIGENCE QUESTIONS)\n1. How do you plan to acquire your first 100 customers?\n2. What is your strategy for competing with established AI models?\n3. How will you monetize your platform and achieve profitability?\n"
+  "voice_prompt": "You are an Elite Venture Capital Pitch Coach evaluating 'Spark2Scale'.\n### 1. STARTUP PROFILE & DOCUMENTS\n- Business Plan: Spark2Scale is an AI-driven startup evaluation platform for MENA founders, operating on a Freemium model with no defined paid tier.\n- Market Context: TAM: $44.1 Billion, SAM: $22.1 Billion, SOM: $275.9 Million. Validation verdict: MODERATE, pain score: 64.2, confidence: High.\n- Cap Table: Founders own only 50%. The remaining 50% was given to an agency for MVP development \u2014 RED FLAG.\n- Financials: $100/mo burn; Target raise: $500k\n\n### 2. EVALUATION SNAPSHOT (9 PILLARS)\n- Team: Lack of relevant experience and unclear roles.\n- Problem: Clear problem statement, but impact unquantified.\n- Product: Generic AI wrapper, no proprietary moat.\n- GTM: Flawed strategy \u2014 TikTok Ads for Ministry of Education.\n- Traction: Zero users, zero revenue, zero signal.\n- Vision: Ambitious but vague, no clear beachhead.\n- Business: Freemium with no paid tier \u2014 charity project.\n- Market: TAM claims are delusional, Red Ocean market.\n- Operations: Ghost Ship: raising money with $0 burn.\n\n### 3. SWOT ANALYSIS\n- Strengths: Technical founding team with AI/ML backgrounds (Tabaani, Praxilab), Custom Transformer models tailored for MENA region\n- Weaknesses: Zero GTM or enterprise sales experience, Pricing model is Freemium with no defined paid tier ($0 revenue), Stagnant velocity with 0 current users\n\n### 4. EXPECTED PITCH FLOW (PPT)\nTitle: Spark2Scale - The AI Co-Founder for MENA\n- Problem: Founders lack a structured system to validate ideas.\n- Solution: A multi-agent AI system that evaluates pitch decks.\n- Market Size: $44.1 Billion Global Incubator Market.\n- The Ask: Raising $500k Pre-Seed to scale engineering and launch TikTok marketing.\n\n### 5. PRIOR RECOMMENDATIONS & VULNERABILITIES\nRecommendations: Fix the flawed GTM strategy.\n- Build a team with relevant experience.\n- Develop a unique, proprietary solution.\nVulnerabilities: Generic AI models (ChatGPT/Claude) releasing specialized VC-agent wrappers\n- Running out of runway due to $0 revenue and undefined acquisition strategy\n- Zero GTM or enterprise sales experience\n\n### 6. MANDATORY CHECKLIST (DILIGENCE QUESTIONS)\n1. How do you plan to acquire your first 100 customers?\n2. What is the clear timeline and milestone for revenue generation?\n3. What is the plan to mitigate the threat of generic AI models?\n"
 }
