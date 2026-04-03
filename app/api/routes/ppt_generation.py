@@ -59,12 +59,14 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         local_path = await generate_pptx_file(final_draft, output_path)
 
         storage_path = local_path  # fallback
+        logger.info(f"Checking Supabase client: {'initialized' if supabase else 'NOT initialized'}")
         if supabase:
+            logger.info(f"Starting database insertion for startup: {startup_id}")
             # First, insert into documents to get the auto-generated did
             doc_payload = {
                 "startup_id": startup_id,
                 "document_name": final_draft.title or "Pitch Deck",
-                "type": "ppt",
+                "type": "Pitch Deck (PPT)",
                 "json_response": final_draft.model_dump(),
                 "current_path": "pending"  # placeholder
             }
@@ -92,11 +94,15 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
 
             logger.info(f"Supabase upload result: {upload_result}")
             storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
-            logger.info(f"PPT uploaded to Supabase: {storage_path}")
+            logger.info(f"Supabase Public URL generated: {storage_path}")
             
             # Update the documents record with the final public URL
-            supabase.table("documents").update({"current_path": storage_path}).eq("did", document_id).execute()
-            logger.info(f"Updated documents record with current_path: {storage_path}")
+            update_result = supabase.table("documents").update({"current_path": storage_path}).eq("did", document_id).execute()
+            logger.info(f"Updated documents record with current_path. Result: {update_result}")
+        else:
+            logger.error("Supabase client is not initialized. Storage upload skipped.")
+            # If the user strictly wants Supabase, we could raise an error here
+            # raise HTTPException(status_code=500, detail="Supabase storage not configured.")
 
         return PPTGenerationResponse(
             status="success",
