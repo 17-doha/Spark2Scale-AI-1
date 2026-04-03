@@ -60,23 +60,25 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
 
         storage_path = local_path  # fallback
         if supabase:
-            # First, insert into pitchdecks to get the auto-generated pitchdeckid
-            pitch_payload = {
+            # First, insert into documents to get the auto-generated did
+            doc_payload = {
                 "startup_id": startup_id,
-                "pitchname": final_draft.title or "Untitled Pitch",
-                "analysis": final_draft.model_dump()
+                "document_name": final_draft.title or "Pitch Deck",
+                "type": "ppt",
+                "json_response": final_draft.model_dump(),
+                "current_path": "pending"  # placeholder
             }
-            insert_result = supabase.table("pitchdecks").insert(pitch_payload).execute()
+            insert_result = supabase.table("documents").insert(doc_payload).execute()
             
             if not insert_result.data:
-                raise HTTPException(status_code=500, detail="Failed to insert record into pitchdecks table.")
+                raise HTTPException(status_code=500, detail="Failed to insert record into documents table.")
             
-            pitchdeck_id = insert_result.data[0].get("pitchdeckid")
-            logger.info(f"Inserted into pitchdecks, got pitchdeckid: {pitchdeck_id}")
+            document_id = insert_result.data[0].get("did")
+            logger.info(f"Inserted into documents, got document_id: {document_id}")
 
             file_name = f"{uuid.uuid4().hex}.pptx"
-            # Structured path: {startup_id}/{pitchdeck_id}/{file_name}
-            supabase_storage_path = f"{startup_id}/{pitchdeck_id}/{file_name}"
+            # Structured path: {startup_id}/{document_id}/{file_name}
+            supabase_storage_path = f"{startup_id}/{document_id}/{file_name}"
 
             with open(local_path, "rb") as f:
                 upload_result = supabase.storage.from_("ppts").upload(
@@ -92,9 +94,9 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
             storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
             logger.info(f"PPT uploaded to Supabase: {storage_path}")
             
-            # Update the pitchdecks record with the final public URL
-            supabase.table("pitchdecks").update({"video_url": storage_path}).eq("pitchdeckid", pitchdeck_id).execute()
-            logger.info(f"Updated pitchdecks record with video_url: {storage_path}")
+            # Update the documents record with the final public URL
+            supabase.table("documents").update({"current_path": storage_path}).eq("did", document_id).execute()
+            logger.info(f"Updated documents record with current_path: {storage_path}")
 
         return PPTGenerationResponse(
             status="success",
