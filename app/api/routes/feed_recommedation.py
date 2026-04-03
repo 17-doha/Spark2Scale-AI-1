@@ -1,16 +1,11 @@
 """
 app/api/routes/feed_recommedation.py
 =====================================
-Feed Recommendation API.
-
-Key change: GET /feed/recommend/{investor_id} now accepts a `rerank` query param.
-  ?rerank=true  (default) → two-stage: vector search + Jina reranker
-  ?rerank=false            → vector search only (faster, less precise)
+Key change: both /similar-investors and /recommend now run tag-filtered
+Qdrant searches via the LangGraph pipeline — no new endpoints.
 """
 
 from fastapi import APIRouter, HTTPException, Request
-from typing import Optional
-
 from app.core.limiter import api_limiter
 from app.core.logger import get_logger
 from app.graph.feed_recommedation_agent.schema import (
@@ -21,16 +16,20 @@ from app.graph.feed_recommedation_agent.schema import (
     PitchdeckEmbeddingResponse,
     RecommendedPitchdecksResponse,
 )
-from app.graph.feed_recommedation_agent.tools import (
-    fetch_investor_tags,
-    build_and_store_investor_embedding,
-    build_investor_embedding,
-    get_top_k_similar_investors,
-)
 from app.graph.feed_recommedation_agent.tools.pitchdeck_tools import (
     build_and_store_pitchdeck_embedding,
-    get_recommended_pitchdecks_for_investor,
 )
+from app.graph.feed_recommedation_agent.tools.tag_tools import (
+    fetch_investor_tags,
+    get_investor_subtags,
+)
+from app.graph.feed_recommedation_agent.tools import (
+    build_and_store_investor_embedding,
+    build_investor_embedding,
+)
+from app.graph.feed_recommedation_agent.workflow import filtered_search_app
+from app.core.qdrant_client import get_qdrant
+from qdrant_client.models import Filter, FieldCondition, MatchAny
 import os
 
 router = APIRouter()
@@ -73,56 +72,87 @@ async def upsert_pitchdeck_embedding(request: Request, payload: PitchdeckEmbeddi
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  SIMILARITY — investor ↔ investor
+#  SIMILAR INVESTORS  — tag-filtered
 # ════════════════════════════════════════════════════════════════════════════
 
 @router.get("/similar-investors/{investor_id}", response_model=SimilarInvestorsResponse)
 @api_limiter.limit("60/minute")
 async def get_similar_investors(request: Request, investor_id: str, k: int = TOP_K):
+    """
+    Top-K investors most similar to the given investor.
+    ANN search runs only within investors whose tags overlap with filter_tags.
+    """
     vector = await build_investor_embedding(investor_id)
     if vector is None:
         raise HTTPException(status_code=404, detail="Investor has no tags.")
-    results = get_top_k_similar_investors(vector, k=k)
-    results = [r for r in results if r.get("investor_id") != investor_id]
+
+    subtags = get_investor_subtags(investor_id)
+    qdrant_filter = (
+        Filter(should=[FieldCondition(key="tags", match=MatchAny(any=subtags))])
+        if subtags else None
+    )
+
+    try:
+        res = get_qdrant().query_points(
+            collection_name = "investors",
+            query           = vector,
+            query_filter    = qdrant_filter,
+            limit           = k + 1,         # +1 so we can drop self
+            with_payload    = True,
+        )
+        results = [
+            {
+                "investor_id": h.payload.get("investor_id"),
+                "similarity" : round(h.score, 4),
+                "tags"       : h.payload.get("tags", []),
+            }
+            for h in res.points
+            if h.payload.get("investor_id") != investor_id
+        ][:k]
+    except Exception as e:
+        logger.error("[similar-investors] Qdrant search failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
     return SimilarInvestorsResponse(investor_id=investor_id, results=results, k=k)
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  RECOMMENDATION — investor → pitchdeck  (with optional reranker)
+#  RECOMMEND  — full filtered LangGraph pipeline
 # ════════════════════════════════════════════════════════════════════════════
 
 @router.get("/recommend/{investor_id}", response_model=RecommendedPitchdecksResponse)
 @api_limiter.limit("60/minute")
-async def recommend_pitchdecks(
-    request     : Request,
-    investor_id : str,
-    k           : int  = TOP_K,
-    rerank      : bool = True,      # ?rerank=false to skip Stage 2
-):
+async def recommend_pitchdecks(request: Request, investor_id: str, k: int = TOP_K):
     """
-    Recommend the top-K pitchdecks for a given investor.
+    Top-K pitchdeck recommendations for a given investor.
 
-    Two-stage pipeline (default):
-      1. Vector search  — fast ANN retrieval from Qdrant [pitchdecks]
-      2. Reranker       — Jina cross-encoder re-scores candidates for precision
-
-    Each result includes:
-      - pitchdeck_id, startup_id, tags
-      - vector_score  (always)
-      - rerank_score  (only when ?rerank=true)
-
-    Use ?rerank=false for lower-latency responses where approximate ranking is acceptable.
+    Runs the full LangGraph:
+      1. generate_filter_tags   — tag pre-filter list (mock → swap later)
+      2. build_investor_vector  — investor's aggregated embedding
+      3. filtered_vector_search — Qdrant ANN within the filtered subset only
+      4. rerank_candidates      — Jina cross-encoder re-scores → top-K
+      5. format_output          — final shaping
     """
-    results = await get_recommended_pitchdecks_for_investor(
-        investor_id  = investor_id,
-        k            = k,
-        use_reranker = rerank,
+    result = await filtered_search_app.ainvoke({
+        "investor_id"    : investor_id,
+        "filter_tags"    : [],
+        "investor_vector": None,
+        "candidates"     : [],
+        "final_results"  : [],
+        "errors"         : [],
+    })
+
+    final_results = result.get("final_results", [])
+    errors        = result.get("errors", [])
+
+    if not final_results and errors:
+        raise HTTPException(status_code=404, detail=errors[0])
+
+    return RecommendedPitchdecksResponse(
+        investor_id = investor_id,
+        results     = final_results[:k],
+        k           = k,
     )
-
-    if results is None:
-        raise HTTPException(status_code=404, detail="Investor not found or has no tags.")
-
-    return RecommendedPitchdecksResponse(investor_id=investor_id, results=results, k=k)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -131,43 +161,29 @@ async def recommend_pitchdecks(
 
 @router.post("/webhook/investor")
 async def webhook_investor(request: Request):
-    """
-    Triggered by Supabase on INSERT/UPDATE to `investors`.
-    Configure in: Dashboard → Database → Webhooks
-    URL: https://<your-api>/api/v1/feed/webhook/investor
-    """
     body        = await request.json()
     event_type  = body.get("type", "")
-    record      = body.get("record", {})
-    investor_id = record.get("user_id")
+    investor_id = body.get("record", {}).get("user_id")
 
     if not investor_id:
         return {"status": "skipped", "reason": "No user_id in record."}
     if event_type not in ("INSERT", "UPDATE"):
         return {"status": "skipped", "reason": f"Event '{event_type}' not handled."}
 
-    logger.info("[Webhook] %s investors → syncing %s", event_type, investor_id)
     ok = await build_and_store_investor_embedding(investor_id)
     return {"status": "synced" if ok else "failed", "investor_id": investor_id, "event": event_type}
 
 
 @router.post("/webhook/pitchdeck")
 async def webhook_pitchdeck(request: Request):
-    """
-    Triggered by Supabase on INSERT/UPDATE to `pitchdecks`.
-    Configure in: Dashboard → Database → Webhooks
-    URL: https://<your-api>/api/v1/feed/webhook/pitchdeck
-    """
     body         = await request.json()
     event_type   = body.get("type", "")
-    record       = body.get("record", {})
-    pitchdeck_id = record.get("pitchdeckid")
+    pitchdeck_id = body.get("record", {}).get("pitchdeckid")
 
     if not pitchdeck_id:
         return {"status": "skipped", "reason": "No pitchdeckid in record."}
     if event_type not in ("INSERT", "UPDATE"):
         return {"status": "skipped", "reason": f"Event '{event_type}' not handled."}
 
-    logger.info("[Webhook] %s pitchdecks → syncing %s", event_type, pitchdeck_id)
     ok = await build_and_store_pitchdeck_embedding(pitchdeck_id)
     return {"status": "synced" if ok else "failed", "pitchdeck_id": pitchdeck_id, "event": event_type}

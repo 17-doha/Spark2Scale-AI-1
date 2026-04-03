@@ -13,9 +13,6 @@ class Config:
     SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
     TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
     GEMINI_MODEL_NAME = GEMINI_MODEL
-    # Image generation:
-    # - Provider is configured via IMAGE_PROVIDER: "pollinations" (default) or "google" (Gemini image model).
-    # - IMAGE_MODEL controls the underlying model name for that provider.
     _raw_image_model = os.getenv("IMAGE_MODEL", "gptimage-large")
     IMAGE_MODEL = _raw_image_model if not _raw_image_model.startswith("AIzaSy") else "gptimage-large"
     IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "pollinations")  # "pollinations" | "google"
@@ -28,6 +25,9 @@ class Config:
     LANGCHAIN_PROJECT_NAME = os.getenv("LANGCHAIN_PROJECT_NAME", "spark2scale")
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+    NEO4J_URI = os.getenv("NEO4J_URI", "")
+    NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "")
+    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
 
     

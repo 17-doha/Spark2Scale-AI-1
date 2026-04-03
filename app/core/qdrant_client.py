@@ -17,6 +17,7 @@ from qdrant_client.models import (
     Distance,
     VectorParams,
     PointStruct,
+    PayloadSchemaType,
 )
 from app.core.logger import get_logger
 
@@ -67,12 +68,20 @@ def init_qdrant_collections() -> None:
         distance_metric = Distance.COSINE
 
     for name in COLLECTIONS:
-        if name in existing:
-            logger.info("[Qdrant] Collection '%s' already exists — skipping.", name)
-            continue
+        if name not in existing:
+            client.create_collection(
+                collection_name=name,
+                vectors_config=VectorParams(size=EMBEDDING_DIM, distance=distance_metric),
+            )
+            logger.info("[Qdrant] Created collection '%s' (%d-dim, %s).", name, EMBEDDING_DIM, VDB_SEARCH_ALGORITHM)
+        else:
+            logger.info("[Qdrant] Collection '%s' already exists.", name)
 
-        client.create_collection(
-            collection_name=name,
-            vectors_config=VectorParams(size=EMBEDDING_DIM, distance=distance_metric),
-        )
-        logger.info("[Qdrant] Created collection '%s' (%d-dim, %s).", name, EMBEDDING_DIM, VDB_SEARCH_ALGORITHM)
+        # Ensure 'tags' payload index exists for investors and pitchdecks
+        if name in ["investors", "pitchdecks"]:
+            client.create_payload_index(
+                collection_name=name,
+                field_name="tags",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+            logger.info("[Qdrant] Ensured 'keyword' index for 'tags' in '%s'.", name)

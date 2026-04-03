@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from app.core.limiter import api_limiter
 from app.core.qdrant_client import get_qdrant, init_qdrant_collections, COLLECTIONS
-from app.graph.feed_recommedation_agent.tools import build_and_store_all
+from app.graph.feed_recommedation_agent.tools import build_and_store_all, sync_supabase_to_neo4j
 from app.graph.feed_recommedation_agent.tools.pitchdeck_tools import build_and_store_all_pitchdecks
 
 router = APIRouter()
@@ -50,3 +50,9 @@ async def upsert_all_pitchdeck_embeddings(request: Request):
     results = await build_and_store_all_pitchdecks()
     success = sum(1 for v in results.values() if v)
     return {"total": len(results), "success": success, "failed": len(results) - success}
+
+@router.post("/neo4j/sync")
+def trigger_neo4j_sync():
+    """Trigger the Supabase → Neo4j synchronization."""
+    sync_supabase_to_neo4j()
+    return {"message": "Neo4j sync triggered. Check logs for details."}
