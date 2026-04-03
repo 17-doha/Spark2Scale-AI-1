@@ -51,4 +51,4 @@ app.include_router(pitch_analyzer.router, prefix="/api/v1/pitch-analyzer", tags=
 
 @app.get("/")
 def read_root():
-    return {"message": "Spark2Scale AI Agent Service is Running now ..."}
+    return {"message": "Spark2Scale AI Agent Service is Running now ...ssss"}
