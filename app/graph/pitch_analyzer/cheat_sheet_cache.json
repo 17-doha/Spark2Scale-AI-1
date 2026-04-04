@@ -12,15 +12,15 @@
       "market": "TAM claims are delusional, Red Ocean market",
       "operations": "Ghost Ship: raising money with $0 burn"
     },
-    "business_plan_context": "Spark2Scale is an AI-driven startup evaluation platform for MENA founders, with a flawed GTM strategy and no defined paid tier",
-    "cap_table_context": "Founders own only 50%, with 50% given to an external app dev agency for MVP development \u2014 a significant red flag",
-    "market_research_stats": "TAM: $44.1B, SAM: $22.1B, SOM: $275.9M, with a moderate validation verdict and high confidence",
+    "business_plan_context": "Spark2Scale is an AI-driven startup evaluation platform for MENA founders, with a freemium model and zero revenue",
+    "cap_table_context": "Founders own only 50%, with the remaining 50% given to an external app dev agency \u2014 a significant red flag",
+    "market_research_stats": "TAM: $44.1 Billion, SAM: $22.1 Billion, SOM: $275.9 Million",
     "expected_ppt_flow": [
       "Introduction to Spark2Scale",
-      "Problem statement",
-      "Solution overview",
-      "Market size and opportunity",
-      "The ask: $500k Pre-Seed funding"
+      "Problem statement: lack of structured system for idea validation",
+      "Solution: multi-agent AI system for pitch deck evaluation",
+      "Market size and potential",
+      "The ask: $500k Pre-Seed for engineering and marketing"
     ],
     "prior_recommendations": [
       "Fix the flawed GTM strategy",
@@ -48,18 +48,18 @@
     },
     "hard_numbers": {
       "burn_rate": "$100/mo",
-      "target_raise": "$500k"
+      "target_raise": "$500,000"
     },
     "vulnerabilities_to_attack": [
-      "Lack of relevant experience in GTM and enterprise sales",
-      "Flawed pricing model with no defined paid tier",
-      "Stagnant velocity with 0 current users"
+      "Flawed GTM strategy",
+      "Lack of proprietary moat",
+      "Zero revenue and stagnant user growth"
     ],
     "diligence_questions": [
       "How do you plan to acquire your first 100 paying customers?",
-      "What is your strategy for competing with generic AI models?",
-      "How will you define and achieve key milestones with the proposed $500k funding?"
+      "What is your strategy for differentiating your AI solution from generic models?",
+      "How will you ensure the financial sustainability of the company with a freemium model and zero revenue?"
     ]
   },
-  "voice_prompt": "You are an Elite Venture Capital Pitch Coach evaluating 'Spark2Scale'.\n### 1. STARTUP PROFILE & DOCUMENTS\n- Business Plan: Spark2Scale is an AI-driven startup evaluation platform for MENA founders, with a flawed GTM strategy and no defined paid tier\n- Market Context: TAM: $44.1B, SAM: $22.1B, SOM: $275.9M, with a moderate validation verdict and high confidence\n- Cap Table: Founders own only 50%, with 50% given to an external app dev agency for MVP development \u2014 a significant red flag\n- Financials: $100/mo burn; Target raise: $500k\n\n### 2. EVALUATION SNAPSHOT (9 PILLARS)\n- Team: Lack of relevant experience and unclear roles\n- Problem: Clear problem statement, but impact unquantified\n- Product: Generic AI wrapper, no proprietary moat\n- GTM: Flawed strategy \u2014 TikTok Ads for Ministry of Education\n- Traction: Zero users, zero revenue, zero signal\n- Vision: Ambitious but vague, no clear beachhead\n- Business: Freemium with no paid tier \u2014 charity project\n- Market: TAM claims are delusional, Red Ocean market\n- Operations: Ghost Ship: raising money with $0 burn\n\n### 3. SWOT ANALYSIS\n- Strengths: Technical founding team with AI/ML backgrounds, Custom Transformer models tailored for MENA region\n- Weaknesses: Zero GTM or enterprise sales experience, Pricing model is Freemium with no defined paid tier ($0 revenue), Stagnant velocity with 0 current users\n\n### 4. EXPECTED PITCH FLOW (PPT)\nIntroduction to Spark2Scale\n- Problem statement\n- Solution overview\n- Market size and opportunity\n- The ask: $500k Pre-Seed funding\n\n### 5. PRIOR RECOMMENDATIONS & VULNERABILITIES\nRecommendations: Fix the flawed GTM strategy\n- Build a team with relevant experience\n- Develop a unique, proprietary solution\nVulnerabilities: Lack of relevant experience in GTM and enterprise sales\n- Flawed pricing model with no defined paid tier\n- Stagnant velocity with 0 current users\n\n### 6. MANDATORY CHECKLIST (DILIGENCE QUESTIONS)\n1. How do you plan to acquire your first 100 paying customers?\n2. What is your strategy for competing with generic AI models?\n3. How will you define and achieve key milestones with the proposed $500k funding?\n"
+  "voice_prompt": "You are an Elite Venture Capital Pitch Coach evaluating 'Spark2Scale'.\n### 1. STARTUP PROFILE & DOCUMENTS\n- Business Plan: Spark2Scale is an AI-driven startup evaluation platform for MENA founders, with a freemium model and zero revenue\n- Market Context: TAM: $44.1 Billion, SAM: $22.1 Billion, SOM: $275.9 Million\n- Cap Table: Founders own only 50%, with the remaining 50% given to an external app dev agency \u2014 a significant red flag\n- Financials: $100/mo burn; Target raise: $500,000\n\n### 2. EVALUATION SNAPSHOT (9 PILLARS)\n- Team: Lack of relevant experience and unclear roles\n- Problem: Clear problem statement, but impact unquantified\n- Product: Generic AI wrapper, no proprietary moat\n- GTM: Flawed strategy \u2014 TikTok Ads for Ministry of Education\n- Traction: Zero users, zero revenue, zero signal\n- Vision: Ambitious but vague, no clear beachhead\n- Business: Freemium with no paid tier \u2014 charity project\n- Market: TAM claims are delusional, Red Ocean market\n- Operations: Ghost Ship: raising money with $0 burn\n\n### 3. SWOT ANALYSIS\n- Strengths: Technical founding team with AI/ML backgrounds, Custom Transformer models tailored for MENA region\n- Weaknesses: Zero GTM or enterprise sales experience, Pricing model is Freemium with no defined paid tier ($0 revenue), Stagnant velocity with 0 current users\n\n### 4. EXPECTED PITCH FLOW (PPT)\nIntroduction to Spark2Scale\n- Problem statement: lack of structured system for idea validation\n- Solution: multi-agent AI system for pitch deck evaluation\n- Market size and potential\n- The ask: $500k Pre-Seed for engineering and marketing\n\n### 5. PRIOR RECOMMENDATIONS & VULNERABILITIES\nRecommendations: Fix the flawed GTM strategy\n- Build a team with relevant experience\n- Develop a unique, proprietary solution\nVulnerabilities: Flawed GTM strategy\n- Lack of proprietary moat\n- Zero revenue and stagnant user growth\n\n### 6. MANDATORY CHECKLIST (DILIGENCE QUESTIONS)\n1. How do you plan to acquire your first 100 paying customers?\n2. What is your strategy for differentiating your AI solution from generic models?\n3. How will you ensure the financial sustainability of the company with a freemium model and zero revenue?\n"
 }

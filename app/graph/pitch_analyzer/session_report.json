@@ -5,39 +5,39 @@
   "rubric": {
     "team": {
       "score": 0,
-      "notes": "No information provided"
+      "notes": "No clear team introduction or description"
     },
     "problem": {
       "score": 0,
-      "notes": "No problem statement"
+      "notes": "No problem statement or description"
     },
     "product": {
       "score": 0,
-      "notes": "No product described"
+      "notes": "No product or solution description"
     },
     "market": {
       "score": 0,
-      "notes": "No market information"
+      "notes": "No market description or size provided"
     },
     "traction": {
       "score": 0,
-      "notes": "No traction mentioned"
+      "notes": "No users, revenue, or growth metrics provided"
     },
     "financials": {
       "score": 0,
-      "notes": "No financial information provided"
+      "notes": "No financials or ask details provided"
     },
     "vision": {
       "score": 0,
-      "notes": "No clear vision"
+      "notes": "No clear vision or mission statement"
     },
     "communication": {
       "score": 0,
-      "notes": "Insufficient communication"
+      "notes": "Poor communication, incoherent statements"
     },
     "diligence": {
       "score": 0,
-      "notes": "No diligence answers"
+      "notes": "No diligence answers provided"
     }
   },
   "strengths": [],
@@ -68,19 +68,24 @@
   "investor_killer_moments": [
     {
       "timestamp_s": 0,
-      "type": "lack of preparation",
-      "detail": "No pitch provided"
+      "type": "incoherent statement",
+      "detail": "Kurdish, yes. What purpose exceeded."
     },
     {
-      "timestamp_s": 0,
-      "type": "insufficient information",
-      "detail": "No data to assess the startup"
+      "timestamp_s": 10,
+      "type": "unprofessional language",
+      "detail": "Shut up"
+    },
+    {
+      "timestamp_s": 20,
+      "type": "lack of clarity",
+      "detail": "I stay? And he was starting Zunicoin, the listening to that."
     }
   ],
   "recommended_actions": [
-    "Develop a clear and concise pitch that covers the essential points",
-    "Prepare answers to common diligence questions",
-    "Gather data and metrics to demonstrate traction and market understanding"
+    "Develop a clear and concise pitch that presents a problem statement, solution, and market opportunity",
+    "Prepare a professional and well-structured presentation that includes key metrics and financials",
+    "Practice and rehearse the pitch to ensure confident and clear communication"
   ],
-  "final_verdict": "I would not invest in this startup due to the complete lack of information and preparation."
+  "final_verdict": "I would not invest in this startup due to the lack of clarity, poor communication, and absence of key metrics and financials."
 }
