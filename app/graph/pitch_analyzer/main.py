@@ -224,10 +224,11 @@ if __name__ == "__main__":
         sys.argv.remove("--skip-extraction")
 
     # ── 2. Check required API keys ─────────────────────────────────────────────
-    required = ["DASHSCOPE_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY"]
+    required = ["GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY"]
     missing  = [v for v in required if not os.environ.get(v)]
     if missing:
-        logging.error(f"Missing required env vars: {', '.join(missing)}")
+        logging.error(f"[STARTUP ABORT] Missing required env vars: {', '.join(missing)}")
+        logging.error("The worker will NOT start. Add these keys to your .env file.")
         sys.exit(1)
 
     # ── 3. Load Company Context + Run Extraction ───────────────────────────────

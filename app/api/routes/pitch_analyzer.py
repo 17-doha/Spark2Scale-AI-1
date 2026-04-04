@@ -57,28 +57,61 @@ def run_pitch_extraction():
 @router.post("/start", summary="Start LiveKit AI Agent Worker")
 async def start_agent_worker():
     global worker_process
-    
+
     if worker_process is not None and worker_process.poll() is None:
         return {"status": "already_running", "pid": worker_process.pid}
-        
+
+    # The script lives under <project_root>/app/graph/pitch_analyzer/main.py
+    # os.getcwd() is the FastAPI server root (project root), which is correct.
     script_path = os.path.join(os.getcwd(), "app", "graph", "pitch_analyzer", "main.py")
     if not os.path.exists(script_path):
         raise HTTPException(status_code=500, detail=f"Agent script not found at {script_path}")
-        
+
     env = os.environ.copy()
-    
-    # Start the worker in the background securely logging output to BOTH a file and stdout
-    log_file = open(os.path.join(os.getcwd(), "agent_worker.log"), "a", encoding="utf-8")
-    
+
+    # Log goes to the project root (same cwd as FastAPI server)
+    log_path = os.path.join(os.getcwd(), "agent_worker.log")
+    log_file = open(log_path, "a", encoding="utf-8")
+
+    # cwd = project root so that cheat_sheet_cache.json and .env resolve correctly
     worker_process = subprocess.Popen(
         [sys.executable, script_path, "dev", "--skip-extraction"],
-        cwd=os.path.dirname(script_path),
+        cwd=os.getcwd(),   # <-- project root, NOT the pitch_analyzer subfolder
         env=env,
         stdout=log_file,
         stderr=subprocess.STDOUT
     )
-    
+
+    import asyncio as _asyncio
+    # Wait briefly to detect immediate crash (e.g., missing env vars → sys.exit(1))
+    await _asyncio.sleep(2)
+    exit_code = worker_process.poll()
+    if exit_code is not None:
+        # Read last lines of log for diagnosis
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                tail = "".join(f.readlines()[-20:])
+        except Exception:
+            tail = "(log unavailable)"
+        raise HTTPException(
+            status_code=500,
+            detail=f"Worker crashed immediately (exit code {exit_code}). Last log:\n{tail}"
+        )
+
     return {"status": "started", "pid": worker_process.pid}
+
+
+@router.get("/worker-status", summary="Check if AI Worker is Running")
+async def get_worker_status():
+    """Returns whether the Python AI worker subprocess is currently alive."""
+    global worker_process
+    if worker_process is None:
+        return {"running": False, "reason": "never_started"}
+    code = worker_process.poll()
+    if code is None:
+        return {"running": True, "pid": worker_process.pid}
+    return {"running": False, "reason": f"exited_with_code_{code}"}
+
 
 class TokenRequest(BaseModel):
     participant_name: Optional[str] = "Founder"
