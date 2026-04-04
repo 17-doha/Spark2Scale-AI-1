@@ -17,6 +17,28 @@ router = APIRouter()
 # The agent writes the report here after every session
 _REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
 
+AGENT_ENV_KEYS = [
+    "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
+    "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL",
+]
+
+
+@router.get("/env-check", summary="Check Required Env Vars are Set")
+async def env_check():
+    """
+    Returns which required env vars are present vs missing.
+    Never exposes actual values — only key names. Safe for production debugging.
+    """
+    present = [k for k in AGENT_ENV_KEYS if os.environ.get(k)]
+    missing = [k for k in AGENT_ENV_KEYS if not os.environ.get(k)]
+    return {
+        "ok": len(missing) == 0,
+        "present": present,
+        "missing": missing,
+        "cwd": os.getcwd(),
+    }
+
+
 
 @router.get("/report", summary="Fetch Latest Session Report")
 async def get_session_report():
@@ -33,7 +55,30 @@ async def get_session_report():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read report: {str(e)}")
 
+import threading
+import logging as _logging
+
 worker_process = None
+_worker_log: list[str] = []   # ring-buffer of last 200 lines for /worker-status tail
+_LOG_MAX = 200
+
+
+def _stream_output(proc: subprocess.Popen) -> None:
+    """
+    Reads the worker subprocess stdout line-by-line and:
+      1. Forwards every line to the parent Python logger (appears in Azure log stream)
+      2. Keeps the last _LOG_MAX lines in memory for diagnostics
+    """
+    try:
+        for raw in proc.stdout:                       # type: ignore[union-attr]
+            line = raw.rstrip("\n")
+            _worker_log.append(line)
+            if len(_worker_log) > _LOG_MAX:
+                _worker_log.pop(0)
+            _logging.info("[AGENT] %s", line)
+    except Exception:
+        pass
+
 
 @router.post("/extract", summary="Run LLM Pre-flight Extraction")
 def run_pitch_extraction():
@@ -43,74 +88,81 @@ def run_pitch_extraction():
     in the background BEFORE they actually start the voice session.
     """
     try:
-        
-        # Load documents (currently hardcoded demo docs in main.py)
         docs = load_company_context()
-        
         # Force skip=False so it guarantees the extraction runs and creates/updates the cache
         cheat_sheet, voice_prompt = run_extraction(docs, skip=False)
-        
         return {"status": "success", "message": "Extraction finished and cache updated."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
+
 @router.post("/start", summary="Start LiveKit AI Agent Worker")
 async def start_agent_worker():
-    global worker_process
+    global worker_process, _worker_log
+    import asyncio as _asyncio
 
+    # --- Already running? Return immediately ---
     if worker_process is not None and worker_process.poll() is None:
         return {"status": "already_running", "pid": worker_process.pid}
 
-    # The script lives under <project_root>/app/graph/pitch_analyzer/main.py
-    # os.getcwd() is the FastAPI server root (project root), which is correct.
     script_path = os.path.join(os.getcwd(), "app", "graph", "pitch_analyzer", "main.py")
     if not os.path.exists(script_path):
         raise HTTPException(status_code=500, detail=f"Agent script not found at {script_path}")
 
     env = os.environ.copy()
+    _worker_log.clear()
 
-    # Log goes to the project root (same cwd as FastAPI server)
-    log_path = os.path.join(os.getcwd(), "agent_worker.log")
-    log_file = open(log_path, "a", encoding="utf-8")
-
-    # cwd = project root so that cheat_sheet_cache.json and .env resolve correctly
-    worker_process = subprocess.Popen(
-        [sys.executable, script_path, "dev", "--skip-extraction"],
-        cwd=os.getcwd(),   # <-- project root, NOT the pitch_analyzer subfolder
-        env=env,
-        stdout=log_file,
-        stderr=subprocess.STDOUT
-    )
-
-    import asyncio as _asyncio
-    # Wait briefly to detect immediate crash (e.g., missing env vars → sys.exit(1))
-    await _asyncio.sleep(2)
-    exit_code = worker_process.poll()
-    if exit_code is not None:
-        # Read last lines of log for diagnosis
-        try:
-            with open(log_path, "r", encoding="utf-8") as f:
-                tail = "".join(f.readlines()[-20:])
-        except Exception:
-            tail = "(log unavailable)"
+    # --- Verify env vars BEFORE spawning (surface the error clearly) ---
+    required_keys = ["GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
+                     "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"]
+    missing = [k for k in required_keys if not env.get(k)]
+    if missing:
         raise HTTPException(
             status_code=500,
-            detail=f"Worker crashed immediately (exit code {exit_code}). Last log:\n{tail}"
+            detail=f"Cannot start agent worker — missing env vars: {', '.join(missing)}"
         )
 
+    # --- Spawn subprocess with PIPE stdout so we can forward to Azure log stream ---
+    _logging.info("[AGENT START] Spawning LiveKit agent worker from %s", script_path)
+    worker_process = subprocess.Popen(
+        [sys.executable, script_path, "dev", "--skip-extraction"],
+        cwd=os.getcwd(),          # project root — .env and cache resolve here
+        env=env,
+        stdout=subprocess.PIPE,   # ← PIPE so we can read and forward to parent stdout
+        stderr=subprocess.STDOUT, # merge stderr into stdout
+        text=True,
+        bufsize=1,                # line-buffered
+    )
+
+    # Spin up a daemon thread to forward subprocess logs to Azure's log stream
+    t = threading.Thread(target=_stream_output, args=(worker_process,), daemon=True)
+    t.start()
+
+    # Give it 3 seconds to detect a crash-on-startup (missing keys, import error, etc.)
+    await _asyncio.sleep(3)
+    exit_code = worker_process.poll()
+    if exit_code is not None:
+        tail = "\n".join(_worker_log[-20:]) or "(no output captured)"
+        raise HTTPException(
+            status_code=500,
+            detail=f"Agent worker crashed at startup (exit {exit_code}).\n\nLast output:\n{tail}"
+        )
+
+    _logging.info("[AGENT START] Worker is alive — pid=%s", worker_process.pid)
     return {"status": "started", "pid": worker_process.pid}
 
 
 @router.get("/worker-status", summary="Check if AI Worker is Running")
 async def get_worker_status():
-    """Returns whether the Python AI worker subprocess is currently alive."""
-    global worker_process
+    """Returns whether the Python AI worker subprocess is currently alive, plus log tail."""
+    global worker_process, _worker_log
     if worker_process is None:
-        return {"running": False, "reason": "never_started"}
+        return {"running": False, "reason": "never_started", "log_tail": []}
     code = worker_process.poll()
+    tail = list(_worker_log[-30:])
     if code is None:
-        return {"running": True, "pid": worker_process.pid}
-    return {"running": False, "reason": f"exited_with_code_{code}"}
+        return {"running": True, "pid": worker_process.pid, "log_tail": tail}
+    return {"running": False, "reason": f"exited_with_code_{code}", "log_tail": tail}
 
 
 class TokenRequest(BaseModel):
