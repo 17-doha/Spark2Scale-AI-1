@@ -28,7 +28,7 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers (since the library is used and missing browsers cause timeouts)
-RUN playwright install --with-deps chromium
+RUN apt-get update && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 
 # Copy the application code
 COPY . .
