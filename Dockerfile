@@ -27,6 +27,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright browsers (since the library is used and missing browsers cause timeouts)
+RUN playwright install --with-deps chromium
+
 # Copy the application code
 COPY . .
 
@@ -34,4 +37,5 @@ COPY . .
 EXPOSE 80
 
 # Use Gunicorn with a high timeout to allow for T5 and LangGraph processing
-CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:80", "main:app"]
+# Adding logging flags so Azure can capture crash logs, and binding dynamically so Azure proxy port mapping succeeds.
+CMD sh -c "gunicorn -w 2 -k uvicorn.workers.UvicornWorker --timeout 300 --access-logfile - --error-logfile - --bind 0.0.0.0:${WEBSITES_PORT:-80} main:app"
