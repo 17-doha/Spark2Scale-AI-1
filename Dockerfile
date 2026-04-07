@@ -20,6 +20,19 @@ RUN apt-get update && apt-get install -y \
     libasound2-dev \
     python3-dev \
     ffmpeg \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libxcb-dri3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -27,10 +40,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers (since the library is used and missing browsers cause timeouts)
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive python -m playwright install --with-deps chromium && \
-    rm -rf /var/lib/apt/lists/*
+# Install Playwright browser binary directly (dependencies are installed above)
+RUN playwright install chromium
 
 # Copy the application code
 COPY . .
