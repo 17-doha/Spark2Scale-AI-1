@@ -22,6 +22,7 @@ from app.graph.feed_recommedation_agent.tools.pitchdeck_tools import (
 from app.graph.feed_recommedation_agent.tools.tag_tools import (
     fetch_investor_tags,
     get_investor_subtags,
+    update_graph_edge_weight
 )
 from app.graph.feed_recommedation_agent.tools import (
     build_and_store_investor_embedding,
@@ -32,10 +33,21 @@ from app.core.qdrant_client import get_qdrant
 from qdrant_client.models import Filter, FieldCondition, MatchAny
 import os
 
+from fastapi import BackgroundTasks
+from pydantic import BaseModel
+from app.core.rewards import REWARD_MATRIX, InteractionType
+from app.core.supabase_client import supabase
+
 router = APIRouter()
 logger = get_logger(__name__)
 TOP_K  = int(os.getenv("TOP_K", "10"))
 
+
+class InteractionPayload(BaseModel):
+    user_id: str
+    pitch_id: str
+    liked: bool
+    contacted: bool
 
 # ════════════════════════════════════════════════════════════════════════════
 #  INVESTOR sync
@@ -115,6 +127,44 @@ async def get_similar_investors(request: Request, investor_id: str, k: int = TOP
 
     return SimilarInvestorsResponse(investor_id=investor_id, results=results, k=k)
 
+@router.post("/interactions")
+async def handle_interaction(payload: InteractionPayload, background_tasks: BackgroundTasks):
+    # 1. Determine RL Action
+    if payload.contacted:
+        action_type = InteractionType.CONTACT
+    elif payload.liked:
+        action_type = InteractionType.LIKE
+    else:
+        action_type = InteractionType.DISLIKE
+
+    config = REWARD_MATRIX.get(action_type)
+
+    # 2. Fetch the tag directly from the pitchdecks table
+    try:
+        # Note: Replace 'main_tag' with the actual column name in your pitchdecks table
+        response = supabase.table("pitchdecks").select("main_tag").eq("pitchdeckid", payload.pitch_id).single().execute()
+        
+        if not response.data or not response.data.get("main_tag"):
+            raise HTTPException(status_code=404, detail="Pitch deck tag not found.")
+            
+        parent_tag = response.data["main_tag"]
+    except Exception as e:
+        logger.error(f"Failed to fetch tag for pitch {payload.pitch_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # 3. Fire Neo4j Graph Update (Macro RL)
+    background_tasks.add_task(
+        update_graph_edge_weight,
+        user_id=payload.user_id,
+        tag_name=parent_tag,
+        reward=config.reward,
+        alpha=config.alpha
+    )
+
+    return {
+        "status": "success", 
+        "message": f"Registered {action_type.value}. Neo4j learning in background."
+    }
 
 # ════════════════════════════════════════════════════════════════════════════
 #  RECOMMEND  — full filtered LangGraph pipeline

@@ -130,7 +130,9 @@ def _add_investor_node(tx, user_id, tags):
     UNWIND $tags AS tag_name
     MERGE (t:Tag {name: tag_name})
     MERGE (i)-[r:INTERESTED_IN]->(t)
-    ON CREATE SET r.weight = 1.0
+    ON CREATE SET 
+        r.weight = 0.5,        // Start at neutral 0.5
+        r.impressions = 0      // Crucial for tracking how often it's seen
     """
     tx.run(query, user_id=user_id, tags=tags)
 
@@ -200,5 +202,62 @@ def sync_supabase_to_neo4j():
             
     except Exception as e:
         logger.error(f"[Neo4j] Sync Failed: {e}")
+    finally:
+        driver.close()
+
+
+def update_graph_edge_weight(user_id: str, tag_name: str, reward: float, alpha: float):
+    """
+    Updates the Investor -> Tag edge weight using TD Learning principles.
+    Formula: W_new = W_old + alpha * (Reward - W_old)
+    """
+    if not NEO4J_URI:
+        logger.error("[Neo4j] URI not configured, skipping graph RL update.")
+        return
+
+    driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+    
+    # The Cypher query does the math atomically to prevent race conditions
+    query = """
+    // 1. Find the specific edge between this investor and the overarching tag
+    MATCH (i:Investor {userId: $userId})-[r:INTERESTED_IN]->(t:Tag {name: $tagName})
+    
+    // 2. Increment impressions (handling cases where it might be null)
+    SET r.impressions = coalesce(r.impressions, 0) + 1
+    
+    // 3. Apply the Weight Update Formula
+    // W_new = W_old + alpha * (Reward - W_old)
+    WITH r, coalesce(r.weight, 0.5) AS current_weight
+    WITH r, current_weight + ($alpha * ($reward - current_weight)) AS calculated_weight
+    
+    // 4. Clamp the limits (Filter out noise)
+    // We prevent the weight from exceeding 1.0 or dropping exactly to 0.0 
+    // (A tiny baseline of 0.01 ensures it can slowly recover if needed later)
+    SET r.weight = CASE 
+        WHEN calculated_weight > 1.0 THEN 1.0 
+        WHEN calculated_weight < 0.01 THEN 0.01 
+        ELSE calculated_weight 
+    END
+    
+    RETURN r.weight AS new_weight, r.impressions AS new_impressions
+    """
+    
+    try:
+        with driver.session() as session:
+            result = session.run(
+                query, 
+                userId=user_id, 
+                tagName=tag_name, 
+                reward=reward, 
+                alpha=alpha
+            )
+            record = result.single()
+            if record:
+                logger.info(
+                    f"[RL Update] User {user_id} | Tag '{tag_name}' "
+                    f"-> New W: {record['new_weight']:.3f}, Impressions: {record['new_impressions']}"
+                )
+    except Exception as e:
+        logger.error(f"[Neo4j] Error updating graph weights for {user_id}: {e}")
     finally:
         driver.close()
