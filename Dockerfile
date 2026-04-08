@@ -50,5 +50,9 @@ COPY . .
 EXPOSE 80
 
 # Use Gunicorn with a high timeout to allow for T5 and LangGraph processing
+# -w 1: single worker is required because worker_process is a module-level global.
+#        With -w 2, each worker has its own NULL copy and spawns a second agent
+#        into the same LiveKit room, causing the "connecting" loop.
+#        Use Azure horizontal scaling (multiple container instances) for traffic load.
 # Adding logging flags so Azure can capture crash logs, and binding dynamically so Azure proxy port mapping succeeds.
-CMD sh -c "gunicorn -w 2 -k uvicorn.workers.UvicornWorker --timeout 300 --access-logfile - --error-logfile - --bind 0.0.0.0:${WEBSITES_PORT:-80} main:app"
+CMD sh -c "gunicorn -w 1 -k uvicorn.workers.UvicornWorker --timeout 300 --access-logfile - --error-logfile - --bind 0.0.0.0:${WEBSITES_PORT:-80} main:app"

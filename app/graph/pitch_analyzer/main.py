@@ -38,6 +38,10 @@ load_dotenv(find_dotenv())
 # ── Cache path for skipping re-extraction during development ─────────────────
 CHEAT_SHEET_CACHE = Path("cheat_sheet_cache.json")
 
+# ── Absolute path where the agent writes the session report ───────────────────
+# Used by the FastAPI /report endpoint — must match _REPORT_PATH in pitch_analyzer.py
+SESSION_REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # STARTUP DOCUMENTS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -179,9 +183,14 @@ def run_extraction(docs: dict, skip: bool) -> tuple[dict, str]:
         (cheat_sheet_dict, voice_prompt_string)
     """
     if skip and CHEAT_SHEET_CACHE.exists():
-        logging.info(f"Loading cheat sheet from cache: {CHEAT_SHEET_CACHE}")
-        cached = json.loads(CHEAT_SHEET_CACHE.read_text(encoding="utf-8"))
-        return cached["cheat_sheet"], cached["voice_prompt"]
+        logging.info(f"[CACHE HIT] Loading cheat sheet from cache: {CHEAT_SHEET_CACHE}")
+        try:
+            cached = json.loads(CHEAT_SHEET_CACHE.read_text(encoding="utf-8"))
+            if cached.get("cheat_sheet") and cached.get("voice_prompt"):
+                return cached["cheat_sheet"], cached["voice_prompt"]
+            logging.warning("[CACHE] Cache file exists but is empty/corrupt — re-running extraction.")
+        except Exception as e:
+            logging.warning(f"[CACHE] Failed to read cache: {e} — re-running extraction.")
 
     logging.info("Running Pre-Flight Extraction (this may take 30–60 seconds)...")
     extractor_app = build_extractor_workflow()
@@ -248,7 +257,22 @@ if __name__ == "__main__":
         # If no subcommand provided, default to 'dev' so `python main.py` works
         sys.argv.append("dev")
         
+    # ── Validate _PREFLIGHT before launching ──────────────────────────────────
+    if not _PREFLIGHT.get("cheat_sheet"):
+        logging.error("[STARTUP ABORT] _PREFLIGHT cheat_sheet is empty — agent will have no context!")
+        sys.exit(1)
+
+    logging.info(f"[STARTUP] _PREFLIGHT loaded: {len(str(_PREFLIGHT['cheat_sheet']))} chars in cheat_sheet.")
+
     cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint
+        entrypoint_fnc=entrypoint,
+        # ── CRITICAL: Azure Docker cold-start needs extra time ────────────────
+        # Default is ~10s. Our import chain (torch/silero, deepgram, livekit)
+        # takes 7-9s in Docker — bumping to 60s eliminates the proc_pool
+        # TimeoutError cascade seen in the Azure logs.
+        initialize_process_timeout=60.0,
+        # Keep 2 warm processes ready so a job is immediately served.
+        # Setting to 1 is enough for single-user demo; increase for production.
+        num_idle_processes=1,
     ))
 

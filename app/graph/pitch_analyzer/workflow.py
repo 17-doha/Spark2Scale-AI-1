@@ -183,6 +183,9 @@ _PREFLIGHT: dict = {
     "voice_prompt": "",
 }
 
+# ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
+_SESSION_REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
+
 
 def build_extractor_workflow():
     """
@@ -847,12 +850,11 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
 
                 state.post_pitch_review = report
 
-                # Save full report to disk for review
+                # Save full report to disk for /report endpoint
                 try:
-                    report_path = "session_report.json"
-                    with open(report_path, "w", encoding="utf-8") as f:
+                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
                         _json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"[REPORT] Saved to {report_path}")
+                    logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
                 except Exception as e:
                     logging.warning(f"Failed to save report JSON: {e}")
 
@@ -945,10 +947,9 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                     state.post_pitch_review = report
 
                     try:
-                        report_path = "session_report.json"
-                        with open(report_path, "w", encoding="utf-8") as f:
+                        with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
                             _json.dump(report, f, indent=2, ensure_ascii=False)
-                        logging.info(f"[REPORT] Saved to {report_path}")
+                        logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
                     except Exception as e:
                         logging.warning(f"Failed to save report JSON: {e}")
 
@@ -1111,10 +1112,9 @@ async def entrypoint(ctx: JobContext):
                 # 3. Save it to JSON
                 if report:
                     import json
-                    report_path = "session_report.json"
-                    with open(report_path, "w", encoding="utf-8") as f:
+                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
                         json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"✅ [OFFLINE REPORT] Successfully saved to {report_path}")
+                    logging.info(f"✅ [OFFLINE REPORT] Successfully saved to {_SESSION_REPORT_PATH}")
                 else:
                     logging.warning("⚠️ [OFFLINE REPORT] LLM returned empty report.")
                     

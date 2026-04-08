@@ -57,24 +57,22 @@ async def get_session_report():
 
 import threading
 import logging as _logging
+from collections import deque
 
 worker_process = None
-_worker_log: list[str] = []   # ring-buffer of last 200 lines for /worker-status tail
-_LOG_MAX = 200
+_worker_log: deque = deque(maxlen=200)   # O(1) append/pop, thread-safe for reads
 
 
 def _stream_output(proc: subprocess.Popen) -> None:
     """
     Reads the worker subprocess stdout line-by-line and:
       1. Forwards every line to the parent Python logger (appears in Azure log stream)
-      2. Keeps the last _LOG_MAX lines in memory for diagnostics
+      2. Keeps the last 200 lines in memory for diagnostics (deque — O(1) ops)
     """
     try:
         for raw in proc.stdout:                       # type: ignore[union-attr]
             line = raw.rstrip("\n")
-            _worker_log.append(line)
-            if len(_worker_log) > _LOG_MAX:
-                _worker_log.pop(0)
+            _worker_log.append(line)                  # deque handles maxlen automatically
             _logging.info("[AGENT] %s", line)
     except Exception:
         pass
@@ -86,12 +84,22 @@ def run_pitch_extraction():
     Runs the LLM extraction pipeline separately from the worker.
     Call this when the user clicks on the pitchdeck, so it processes the documents
     in the background BEFORE they actually start the voice session.
+
+    Skips the LLM call if a valid cache already exists (fast path — returns in <1s).
+    Pass ?force=true to always re-run extraction even when cache exists.
     """
     try:
         docs = load_company_context()
-        # Force skip=False so it guarantees the extraction runs and creates/updates the cache
-        cheat_sheet, voice_prompt = run_extraction(docs, skip=False)
-        return {"status": "success", "message": "Extraction finished and cache updated."}
+        # Use cache if it exists (skip=True) — avoids 30-90s LLM call on every page load.
+        _cache_path = Path(os.getcwd()) / "cheat_sheet_cache.json"
+        skip = _cache_path.exists()
+        if skip:
+            _logging.info("[EXTRACT] Cache found — skipping LLM extraction (fast path).")
+        else:
+            _logging.info("[EXTRACT] No cache found — running full LLM extraction...")
+        cheat_sheet, voice_prompt = run_extraction(docs, skip=skip)
+        source = "cache" if skip else "llm"
+        return {"status": "success", "source": source, "message": "Extraction finished and cache ready."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
@@ -159,7 +167,7 @@ async def get_worker_status():
     if worker_process is None:
         return {"running": False, "reason": "never_started", "log_tail": []}
     code = worker_process.poll()
-    tail = list(_worker_log[-30:])
+    tail = list(_worker_log)[-30:]   # deque: slice to list for JSON serialisation
     if code is None:
         return {"running": True, "pid": worker_process.pid, "log_tail": tail}
     return {"running": False, "reason": f"exited_with_code_{code}", "log_tail": tail}
