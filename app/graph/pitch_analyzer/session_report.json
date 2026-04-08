@@ -1,39 +1,39 @@
 {
   "grade": "F",
-  "score": 0,
+  "score": 10,
   "max_score": 100,
   "rubric": {
     "team": {
-      "score": 0,
-      "notes": "No clear team introduction or description"
+      "score": 2,
+      "notes": "Lack of team introduction and roles"
     },
     "problem": {
-      "score": 0,
-      "notes": "No problem statement or description"
+      "score": 4,
+      "notes": "Problem statement is vague and lacks clarity"
     },
     "product": {
-      "score": 0,
-      "notes": "No product or solution description"
+      "score": 3,
+      "notes": "Product description is unclear and lacks specifics"
     },
     "market": {
-      "score": 0,
-      "notes": "No market description or size provided"
+      "score": 1,
+      "notes": "No market sizing or analysis provided"
     },
     "traction": {
       "score": 0,
-      "notes": "No users, revenue, or growth metrics provided"
+      "notes": "No traction or user acquisition metrics provided"
     },
     "financials": {
       "score": 0,
-      "notes": "No financials or ask details provided"
+      "notes": "No financial projections or ask provided"
     },
     "vision": {
-      "score": 0,
-      "notes": "No clear vision or mission statement"
+      "score": 2,
+      "notes": "Lack of clear vision and strategy"
     },
     "communication": {
-      "score": 0,
-      "notes": "Poor communication, incoherent statements"
+      "score": 3,
+      "notes": "Poor communication and stumbling over words"
     },
     "diligence": {
       "score": 0,
@@ -49,7 +49,6 @@
     "traction",
     "financials",
     "vision",
-    "communication",
     "diligence"
   ],
   "essentials_checklist": {
@@ -67,25 +66,20 @@
   },
   "investor_killer_moments": [
     {
-      "timestamp_s": 0,
-      "type": "incoherent statement",
-      "detail": "Kurdish, yes. What purpose exceeded."
-    },
-    {
       "timestamp_s": 10,
-      "type": "unprofessional language",
-      "detail": "Shut up"
+      "type": "vagueness",
+      "detail": "Lack of clear problem statement"
     },
     {
-      "timestamp_s": 20,
-      "type": "lack of clarity",
-      "detail": "I stay? And he was starting Zunicoin, the listening to that."
+      "timestamp_s": 30,
+      "type": "poor communication",
+      "detail": "Stumbling over words and unclear product description"
     }
   ],
   "recommended_actions": [
-    "Develop a clear and concise pitch that presents a problem statement, solution, and market opportunity",
-    "Prepare a professional and well-structured presentation that includes key metrics and financials",
-    "Practice and rehearse the pitch to ensure confident and clear communication"
+    "Conduct thorough market research and analysis",
+    "Develop a clear and concise pitch with specific metrics and data",
+    "Establish a strong and cohesive team with defined roles and responsibilities"
   ],
-  "final_verdict": "I would not invest in this startup due to the lack of clarity, poor communication, and absence of key metrics and financials."
+  "final_verdict": "Would not invest due to lack of clarity, poor communication, and insufficient data."
 }

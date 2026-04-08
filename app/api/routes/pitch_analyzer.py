@@ -173,12 +173,61 @@ async def get_worker_status():
     return {"running": False, "reason": f"exited_with_code_{code}", "log_tail": tail}
 
 
+
+@router.post("/stop", summary="Gracefully Stop the AI Agent Worker")
+async def stop_agent_worker():
+    """
+    Terminates the LiveKit worker subprocess.
+    Call this from the frontend on 'End Session' or 'End Call' AFTER
+    the room disconnect, so no zombie agent hangs around for the next session.
+
+    The worker's on_participant_disconnected handler already:
+      1. Sets state.phase='done'  → stops all background tasks
+      2. Generates the offline report
+      3. Calls ctx.room.disconnect() → agent leaves the LiveKit room
+
+    This /stop endpoint then kills the worker OS process so the NEXT
+    /start call spawns a completely fresh process with clean state.
+    """
+    global worker_process, _worker_log
+    import asyncio as _asyncio
+
+    if worker_process is None or worker_process.poll() is not None:
+        worker_process = None
+        return {"status": "not_running"}
+
+    pid = worker_process.pid
+    _logging.info("[AGENT STOP] Terminating worker pid=%s", pid)
+
+    try:
+        worker_process.terminate()
+        # Give it up to 10s to exit cleanly (report may still be writing)
+        for _ in range(20):
+            await _asyncio.sleep(0.5)
+            if worker_process.poll() is not None:
+                break
+        else:
+            # Force-kill if still alive after 10s
+            _logging.warning("[AGENT STOP] Process did not exit cleanly — force-killing pid=%s", pid)
+            worker_process.kill()
+    except Exception as e:
+        _logging.warning("[AGENT STOP] Error during termination: %s", e)
+    finally:
+        worker_process = None
+        _worker_log.clear()
+
+    return {"status": "stopped", "pid": pid}
+
+
+
+
 class TokenRequest(BaseModel):
     participant_name: Optional[str] = "Founder"
     room_name: Optional[str] = None
 
 @router.post("/token", summary="Generate LiveKit Token for Pitch Analyzer")
 async def generate_pitch_analyzer_token(request: TokenRequest):
+
     api_key = os.getenv("LIVEKIT_API_KEY")
     api_secret = os.getenv("LIVEKIT_API_SECRET")
 

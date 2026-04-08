@@ -709,6 +709,13 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
 
     while True:
         await asyncio.sleep(2.0)
+
+        # ── EXIT immediately if session was ended early (e.g. user disconnected) ──
+        # This stops the watcher from calling session.generate_reply() on a dead room.
+        if state.phase == "done":
+            logging.info("[PHASE WATCHER] Phase is 'done' — exiting watcher loop.")
+            return
+
         now     = time.time()
         elapsed = now - state.session_start_ts
         state.time_elapsed = elapsed
@@ -1086,42 +1093,77 @@ async def entrypoint(ctx: JobContext):
     # ── HANG-UP INTERCEPTOR ─────────────────────────────────────────────────
     @ctx.room.on("participant_disconnected")
     def on_participant_disconnected(participant):
-        logging.info(f"Founder {participant.identity} clicked END CALL. Generating offline report...")
-        
+        logging.info(f"Founder {participant.identity} clicked END CALL. Cleaning up session...")
+
+        # ── CRITICAL: set phase to 'done' SYNCHRONOUSLY ──────────────────────────
+        # This immediately terminates the _phase_watcher, _silence_watcher, and
+        # contradiction_watcher loops on their next iteration (all check state.phase).
+        # Without this, the old agent stays in the room and answers the NEXT session.
+        state.phase = "done"
+        logging.info("[DISCONNECT] state.phase set to 'done' — all watchers will terminate.")
+
         async def generate_offline_report():
             try:
                 # 1. Run the fast monotone check first
                 from tools import detect_monotone
                 mono_result = detect_monotone(state.feature_history)
                 state.monotone_assessment = mono_result.get("assessment", "Not enough voice data.")
-                
+
+                # 2. Build transcript — use pitch_history as fallback if STT produced nothing
+                #    (can happen when session is very short or user ended before speaking)
+                transcript = state.full_transcript.strip()
+                if not transcript:
+                    if state.pitch_history:
+                        transcript = " ".join(state.pitch_history)
+                        logging.warning("[OFFLINE REPORT] full_transcript empty — using pitch_history as fallback.")
+                    else:
+                        logging.warning("[OFFLINE REPORT] Skipping report — no speech data captured (session too short).")
+                        # Still disconnect cleanly even if no report
+                        await asyncio.sleep(0.5)
+                        try:
+                            await ctx.room.disconnect()
+                        except Exception:
+                            pass
+                        return
+
                 logging.info("[OFFLINE REPORT] Building report via LLM...")
-                
-                # 2. Trigger the main report builder
+
+                # 3. Trigger the main report builder
                 report = await _safe_thread_call(
                     build_investment_readiness_report,
-                    state.session_log, 
-                    state.grammar_buffer, 
+                    state.session_log,
+                    state.grammar_buffer,
                     state.structured_claims,
-                    state.pitch_history, 
-                    state.diligence_answered, 
-                    state.full_transcript,
+                    state.pitch_history,
+                    state.diligence_answered,
+                    transcript,
                     getattr(state, 'monotone_assessment', ''),
                 )
 
-                # 3. Save it to JSON
+                # 4. Save it to JSON
                 if report:
-                    import json
+                    import json as _json
                     with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
-                        json.dump(report, f, indent=2, ensure_ascii=False)
+                        _json.dump(report, f, indent=2, ensure_ascii=False)
                     logging.info(f"✅ [OFFLINE REPORT] Successfully saved to {_SESSION_REPORT_PATH}")
                 else:
                     logging.warning("⚠️ [OFFLINE REPORT] LLM returned empty report.")
-                    
+
             except Exception as e:
                 logging.error(f"[OFFLINE REPORT] Failed: {e}")
 
-        # Fire off the generation task 
+            finally:
+                # 5. ALWAYS disconnect the agent from the room after report is done.
+                #    This is the key fix for the double-agent problem: the agent must
+                #    leave its room so the next session gets a clean agent.
+                await asyncio.sleep(1)  # brief pause so LiveKit can flush any pending audio
+                try:
+                    await ctx.room.disconnect()
+                    logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
+                except Exception as disc_err:
+                    logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
+
+        # Fire off the generation + cleanup task
         asyncio.create_task(generate_offline_report())
     # ── Start session ─────────────────────────────────────────────────────────
     await session.start(room=ctx.room, agent=agent)
