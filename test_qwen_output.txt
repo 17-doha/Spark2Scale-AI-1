@@ -1,18 +1,17 @@
-﻿venv\Scripts\python.exe : C:\Dahdouha\Year 4 - 
-Sem 2\Spark2Scale-AI-1\test_qwen_max.py:7: 
+﻿venv\Scripts\python.exe : C:\Dahdouha\Year 4 - Sem 
+2\Spark2Scale-AI-1\test_qwen_max.py:7: 
 SyntaxWarning: invalid escape sequence '\S'
 At line:1 char:32
 + ... CODING="utf-8"; venv\Scripts\python.exe 
 test_qwen_max.py 2>&1 | Out-F ...
 +                     
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (C:\D 
-   ahdouha\Yea...e sequence '\S':String) [], Rem  
-  oteException
+    + CategoryInfo          : NotSpecified: (C:\Dahd 
+   ouha\Yea...e sequence '\S':String) [], RemoteExc  
+  eption
     + FullyQualifiedErrorId : NativeCommandError
  
-  Run with: venv\Scripts\python.exe 
-test_qwen_max.py
+  Run with: venv\Scripts\python.exe test_qwen_max.py
 Failed to multipart ingest runs: 
 langsmith.utils.LangSmithError: Failed to POST 
 https://api.smith.langchain.com/runs/multipart in 
@@ -51,29 +50,29 @@ https://api.smith.langchain.com/runs/multipart',
          ÔåÆ value: sk-daaebed50...
 
 ÔûÂ TEST 2: Direct HTTP ping to DashScope API
-  Ô£à PASS  DashScope responds OK (latency=2.11s)
+  Ô£à PASS  DashScope responds OK (latency=1.12s)
          ÔåÆ response: {"ok": true}
 
 ÔûÂ TEST 3: _get_fast_llm() is configured for qwen-max
-  Ô£à PASS  model is qwen-turbo
+  Ô£à PASS  model is qwen-max
   Ô£à PASS  base_url is DashScope
   Ô£à PASS  NOT Groq endpoint
 
 ÔûÂ TEST 4: extract_claims() ÔÇö end-to-end with a sample transcript
-  Ôä╣´©Å  latency: 2.07s
+  Ôä╣´©Å  latency: 2.42s
   Ôä╣´©Å  result: {
   "traction": {
-    "users": "5,000",
-    "revenue": "120k",
-    "growth": "30%"
+    "users": "5k",
+    "revenue": "$120k MRR",
+    "growth": "30% month-over-month"
   },
   "ask": {
-    "amount": "2M",
-    "valuation": "10M"
+    "amount": "$2M",
+    "valuation": "$10M"
   },
   "economics": {
-    "cac": "40",
-    "ltv": "600",
+    "cac": "$40",
+    "ltv": "$600",
     "churn": null
   },
   "gtm": {
@@ -90,31 +89,31 @@ https://api.smith.langchain.com/runs/multipart',
   Ô£à PASS  economics.cac present
 
 ÔûÂ TEST 5: check_consistency_logic() ÔÇö contradiction detection
-  Ôä╣´©Å  latency: 2.02s
+  Ôä╣´©Å  latency: 2.04s
   Ôä╣´©Å  result: {
   "contradiction": true,
   "is_critical": true,
   "error_type": "Self-Contradiction",
   "evidence": [
-    "We have 500 paying users",
+    "We have 500 paying users | Our MRR is $50k",
     "We have zero paying users and no revenue yet."
   ],
-  "conflicting_claim": "paying users",
-  "recommended_interrupt": "Wait \u2014 earlier you said X, but now 
+  "conflicting_claim": "Number of paying users and MRR",
+  "recommended_interrupt": "Wait
   Ô£à PASS  returns dict with 'contradiction' key
   Ô£à PASS  detected contradiction correctly
          ÔåÆ expected True ÔÇö '500 users and $50k MRR' vs 'zero users, no revenue'
 
 ÔûÂ TEST 6: check_investor_essentials() ÔÇö coverage check
-  Ôä╣´©Å  latency: 0.74s
+  Ôä╣´©Å  latency: 0.89s
   Ôä╣´©Å  covered: ['problem', 'solution', 'market_size', 'traction', 'team', 'ask', 'use_of_funds', 'business_model']
   Ôä╣´©Å  missing: []
   Ô£à PASS  returns covered/missing keys
   Ô£à PASS  found some covered essentials
 
 ÔûÂ TEST 7: build_investment_readiness_report() ÔÇö full report pipeline
-  Ôä╣´©Å  latency: 9.77s
-  Ôä╣´©Å  grade:   C  score: 58/100
+  Ôä╣´©Å  latency: 10.77s
+  Ôä╣´©Å  grade:   C+  score: 65/100
   Ô£à PASS  report has grade
   Ô£à PASS  report has rubric
   Ô£à PASS  report has strengths

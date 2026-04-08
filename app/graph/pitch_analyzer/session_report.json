@@ -9,35 +9,35 @@
     },
     "problem": {
       "score": 0,
-      "notes": "Not discussed"
+      "notes": "No clear problem statement"
     },
     "product": {
       "score": 0,
-      "notes": "Not mentioned"
+      "notes": "No product description"
     },
     "market": {
       "score": 0,
-      "notes": "No data provided"
+      "notes": "No market analysis"
     },
     "traction": {
       "score": 0,
-      "notes": "No progress reported"
+      "notes": "No traction data"
     },
     "financials": {
       "score": 0,
-      "notes": "No financial information given"
+      "notes": "No financial information"
     },
     "vision": {
       "score": 0,
-      "notes": "Not articulated"
+      "notes": "No clear vision"
     },
     "communication": {
       "score": 0,
-      "notes": "Insufficient data for assessment"
+      "notes": "Insufficient communication"
     },
     "diligence": {
       "score": 0,
-      "notes": "No answers provided"
+      "notes": "No diligence answers provided"
     }
   },
   "strengths": [],
@@ -65,11 +65,17 @@
       "moat"
     ]
   },
-  "investor_killer_moments": [],
-  "recommended_actions": [
-    "Develop a clear and concise pitch that covers all essential aspects of the business",
-    "Prepare thorough answers to common diligence questions",
-    "Practice vocal delivery to improve engagement and persuasion"
+  "investor_killer_moments": [
+    {
+      "timestamp_s": 0,
+      "type": "Lack of preparation",
+      "detail": "No meaningful data presented"
+    }
   ],
-  "final_verdict": "I would not invest in this company due to the complete lack of information provided about the business."
+  "recommended_actions": [
+    "Conduct thorough market research and analysis",
+    "Develop a clear and compelling pitch narrative",
+    "Prepare detailed financial projections and diligence answers"
+  ],
+  "final_verdict": "I would not invest in this company due to the complete lack of preparation and meaningful information presented."
 }

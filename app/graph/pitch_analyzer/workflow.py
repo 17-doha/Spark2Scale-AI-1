@@ -1016,11 +1016,11 @@ async def entrypoint(ctx: JobContext):
             model="nova-2",
             language="en-US",
         ),
-        # Switched to Groq
+        # Switched to qwen-max from DashScope
         llm=lk_openai.LLM(
-            model="llama-3.3-70b-versatile",
-            base_url="https://api.groq.com/openai/v1",
-            api_key=os.getenv("GROQ_API_KEY_1"),
+            model="qwen-max",
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            api_key=os.getenv("DASHSCOPE_API_KEY"),
         ),
         # Deepgram TTS — robust, fast, no strict web socket limits
         tts=deepgram.TTS(

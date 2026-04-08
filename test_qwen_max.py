@@ -51,7 +51,7 @@ print("▶ TEST 2: Direct HTTP ping to DashScope API")
 import urllib.request, urllib.error
 try:
     payload = json.dumps({
-        "model": "qwen-turbo",
+        "model": "qwen-max",
         "messages": [
             {"role": "system", "content": "You must respond with exactly this JSON and nothing else: {\"ok\": true}"},
             {"role": "user", "content": "test"}
@@ -87,7 +87,7 @@ try:
     llm = tools._get_fast_llm()
     model_name = getattr(llm, "model_name", None) or getattr(llm, "model", None) or ""
     base_url   = getattr(llm, "openai_api_base", None) or getattr(llm, "base_url", None) or ""
-    check("model is qwen-turbo",        "qwen-turbo" in str(model_name))
+    check("model is qwen-max",          "qwen-max" in str(model_name))
     check("base_url is DashScope",      "dashscope" in str(base_url).lower())
     check("NOT Groq endpoint",          "groq.com" not in str(base_url).lower())
 except Exception as e:

@@ -233,9 +233,8 @@ if __name__ == "__main__":
         sys.argv.remove("--skip-extraction")
 
     # ── 2. Check required API keys ─────────────────────────────────────────────
-    # DASHSCOPE_API_KEY: used by tools.py + node.py (intermediate LLM = qwen-max)
-    # GROQ_API_KEY_1   : used by workflow.py AgentSession (real-time voice LLM)
-    required = ["DASHSCOPE_API_KEY", "GROQ_API_KEY_1", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY"]
+    # DASHSCOPE_API_KEY: used by background tasks AND real-time voice session
+    required = ["DASHSCOPE_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY"]
     missing  = [v for v in required if not os.environ.get(v)]
     if missing:
         logging.error(f"[STARTUP ABORT] Missing required env vars: {', '.join(missing)}")

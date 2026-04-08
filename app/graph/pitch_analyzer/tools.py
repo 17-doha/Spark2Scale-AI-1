@@ -47,7 +47,7 @@ def _get_fast_llm():
         _fast_llm = ChatOpenAI(
             api_key=os.getenv("DASHSCOPE_API_KEY", ""),
             base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            model="qwen-turbo",
+            model="qwen-max",
             model_kwargs={"response_format": {"type": "json_object"}}
         )
     return _fast_llm
