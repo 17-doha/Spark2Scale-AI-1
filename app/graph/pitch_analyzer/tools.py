@@ -10,6 +10,9 @@ CHANGES IN THIS VERSION:
            NOT flagging: clarifications, self-corrections, vague language,
            speech disfluencies, transcription noise, or aspirational statements.
            Rule: "If not 100% certain → contradiction=false."
+
+  FIX C — Switched intermediate LLM from Groq to qwen-max (DashScope Alibaba).
+           Uses the OpenAI-compatible endpoint — no extra packages required.
 """
 
 import os
@@ -28,23 +31,23 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LLM SINGLETON  (FIX A — Qwen-Max, not Groq)
+# LLM SINGLETON  (FIX C — qwen-max via DashScope, not Groq)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _fast_llm = None
 
 def _get_fast_llm():
     """
-    Returns a singleton Qwen client for background analysis tools.
-    Uses qwen-turbo which has a separate quota from the older qwen-max.
+    Returns a singleton qwen-max client for background analysis tools.
+    DashScope exposes an OpenAI-compatible endpoint, so ChatOpenAI works directly.
     """
     global _fast_llm
     if _fast_llm is None:
         load_dotenv()
         _fast_llm = ChatOpenAI(
-            api_key=os.getenv("GROQ_API_KEY_1", ""),
-            base_url="https://api.groq.com/openai/v1",
-            model="llama-3.3-70b-versatile",
+            api_key=os.getenv("DASHSCOPE_API_KEY", ""),
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            model="qwen-turbo",
             model_kwargs={"response_format": {"type": "json_object"}}
         )
     return _fast_llm

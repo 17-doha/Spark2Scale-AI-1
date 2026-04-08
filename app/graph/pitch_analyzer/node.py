@@ -40,9 +40,9 @@ def extract_vc_cheat_sheet(state: PitchState) -> PitchState:
     docs = state["raw_documents"]
 
     llm = ChatOpenAI(
-        api_key=os.getenv("GROQ_API_KEY_1"),
-        base_url="https://api.groq.com/openai/v1",
-        model="llama-3.3-70b-versatile"
+        api_key=os.getenv("DASHSCOPE_API_KEY"),
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        model="qwen-max"   # use qwen-max for extraction (larger context needed)
     )
 
     parser = JsonOutputParser(pydantic_object=VCCheatSheet)

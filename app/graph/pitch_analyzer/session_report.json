@@ -1,43 +1,43 @@
 {
   "grade": "F",
-  "score": 10,
+  "score": 0,
   "max_score": 100,
   "rubric": {
     "team": {
-      "score": 2,
-      "notes": "Lack of team introduction and roles"
+      "score": 0,
+      "notes": "No information provided"
     },
     "problem": {
-      "score": 4,
-      "notes": "Problem statement is vague and lacks clarity"
+      "score": 0,
+      "notes": "Not discussed"
     },
     "product": {
-      "score": 3,
-      "notes": "Product description is unclear and lacks specifics"
+      "score": 0,
+      "notes": "Not mentioned"
     },
     "market": {
-      "score": 1,
-      "notes": "No market sizing or analysis provided"
+      "score": 0,
+      "notes": "No data provided"
     },
     "traction": {
       "score": 0,
-      "notes": "No traction or user acquisition metrics provided"
+      "notes": "No progress reported"
     },
     "financials": {
       "score": 0,
-      "notes": "No financial projections or ask provided"
+      "notes": "No financial information given"
     },
     "vision": {
-      "score": 2,
-      "notes": "Lack of clear vision and strategy"
+      "score": 0,
+      "notes": "Not articulated"
     },
     "communication": {
-      "score": 3,
-      "notes": "Poor communication and stumbling over words"
+      "score": 0,
+      "notes": "Insufficient data for assessment"
     },
     "diligence": {
       "score": 0,
-      "notes": "No diligence answers provided"
+      "notes": "No answers provided"
     }
   },
   "strengths": [],
@@ -49,6 +49,7 @@
     "traction",
     "financials",
     "vision",
+    "communication",
     "diligence"
   ],
   "essentials_checklist": {
@@ -64,22 +65,11 @@
       "moat"
     ]
   },
-  "investor_killer_moments": [
-    {
-      "timestamp_s": 10,
-      "type": "vagueness",
-      "detail": "Lack of clear problem statement"
-    },
-    {
-      "timestamp_s": 30,
-      "type": "poor communication",
-      "detail": "Stumbling over words and unclear product description"
-    }
-  ],
+  "investor_killer_moments": [],
   "recommended_actions": [
-    "Conduct thorough market research and analysis",
-    "Develop a clear and concise pitch with specific metrics and data",
-    "Establish a strong and cohesive team with defined roles and responsibilities"
+    "Develop a clear and concise pitch that covers all essential aspects of the business",
+    "Prepare thorough answers to common diligence questions",
+    "Practice vocal delivery to improve engagement and persuasion"
   ],
-  "final_verdict": "Would not invest due to lack of clarity, poor communication, and insufficient data."
+  "final_verdict": "I would not invest in this company due to the complete lack of information provided about the business."
 }
