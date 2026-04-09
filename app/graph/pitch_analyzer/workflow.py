@@ -184,7 +184,7 @@ _PREFLIGHT: dict = {
 }
 
 # ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
-_SESSION_REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
+_SESSION_REPORT_PATH =  Path(__file__).resolve().parent / "session_report.json"
 
 
 def build_extractor_workflow():

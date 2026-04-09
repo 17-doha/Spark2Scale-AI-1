@@ -1,43 +1,43 @@
 {
   "grade": "F",
-  "score": 0,
+  "score": 25,
   "max_score": 100,
   "rubric": {
     "team": {
-      "score": 0,
-      "notes": "No information provided"
+      "score": 3,
+      "notes": "The founder is a solo founder, but mentions having a team with skills in front end, back end, and AI. There's no clarity on the actual team structure or roles."
     },
     "problem": {
-      "score": 0,
-      "notes": "No clear problem statement"
+      "score": 2,
+      "notes": "The problem is not clearly defined. The pitch mentions evaluating startup ideas, but it's unclear what specific pain point this addresses."
     },
     "product": {
-      "score": 0,
-      "notes": "No product description"
+      "score": 2,
+      "notes": "There is no clear description of the product. The pitch only vaguely mentions being a 'matching agent between founders and investors.'"
     },
     "market": {
-      "score": 0,
-      "notes": "No market analysis"
+      "score": 3,
+      "notes": "The market size and target audience are not discussed. The pitch does not provide any information about the potential market or customer segments."
     },
     "traction": {
-      "score": 0,
-      "notes": "No traction data"
+      "score": 1,
+      "notes": "The traction claims are contradictory. The founder states they have 10k users and $5M in revenue, but also repeatedly says they have no money. This inconsistency is a major red flag."
     },
     "financials": {
-      "score": 0,
-      "notes": "No financial information"
+      "score": 1,
+      "notes": "Financials are highly inconsistent. The founder claims both $5M in revenue and having no money, which is confusing and untrustworthy."
     },
     "vision": {
-      "score": 0,
-      "notes": "No clear vision"
+      "score": 4,
+      "notes": "The vision is somewhat vague. The founder mentions being the first to do something, but it's not clear what that is or why it's significant."
     },
     "communication": {
-      "score": 0,
-      "notes": "Insufficient communication"
+      "score": 2,
+      "notes": "The communication is very poor. The pitch is filled with self-contradictions, repetitions, and a lack of clarity. The founder seems unprepared and unsure."
     },
     "diligence": {
-      "score": 0,
-      "notes": "No diligence answers provided"
+      "score": 3,
+      "notes": "No diligence questions were answered, and the provided information is highly inconsistent and unreliable."
     }
   },
   "strengths": [],
@@ -48,17 +48,16 @@
     "market",
     "traction",
     "financials",
-    "vision",
-    "communication",
-    "diligence"
+    "communication"
   ],
   "essentials_checklist": {
-    "covered": [],
-    "missing": [
+    "covered": [
       "problem",
       "solution",
+      "traction"
+    ],
+    "missing": [
       "market_size",
-      "traction",
       "team",
       "ask",
       "business_model",
@@ -67,15 +66,30 @@
   },
   "investor_killer_moments": [
     {
-      "timestamp_s": 0,
-      "type": "Lack of preparation",
-      "detail": "No meaningful data presented"
+      "timestamp_s": 81.1,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 97.3,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 110.4,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 188.0,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
     }
   ],
   "recommended_actions": [
-    "Conduct thorough market research and analysis",
-    "Develop a clear and compelling pitch narrative",
-    "Prepare detailed financial projections and diligence answers"
+    "Clarify the team structure and roles. Provide a detailed background of each team member and their contributions.",
+    "Define the problem and the specific pain point your solution addresses. Clearly articulate the value proposition for your target customers.",
+    "Provide consistent and verifiable traction metrics. If you have $5M in revenue and 10k users, be prepared to back these claims with data and financial statements."
   ],
-  "final_verdict": "I would not invest in this company due to the complete lack of preparation and meaningful information presented."
+  "final_verdict": "I would not invest in this company due to the significant inconsistencies in the pitch, lack of clarity on the problem, product, and market, and poor communication from the founder."
 }

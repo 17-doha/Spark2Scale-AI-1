@@ -15,7 +15,7 @@ from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 router = APIRouter()
 
 # The agent writes the report here after every session
-_REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
+_REPORT_PATH = Path(__file__).resolve().parent / "session_report.json"
 
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
