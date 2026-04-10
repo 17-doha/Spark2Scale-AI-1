@@ -17,8 +17,9 @@ router = APIRouter()
 
 # ── SINGLE SOURCE OF TRUTH PATH ──
 # Always write to the OS temp directory so it works in cloud/Docker deployments
-_TEMP_DIR = Path(tempfile.gettempdir())
-_STATE_PATH = _TEMP_DIR / "session_state.json"
+_BASE_DIR = Path(__file__).resolve().parent
+_STATE_PATH = _BASE_DIR / "session_state.json"
+_REPORT_PATH = _BASE_DIR / "session_report.json"
 
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",

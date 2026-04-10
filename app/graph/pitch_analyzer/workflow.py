@@ -194,8 +194,9 @@ import tempfile
 from pathlib import Path
 
 # Match the exact same paths used in the FastAPI router
-_TEMP_DIR = Path(tempfile.gettempdir())
-_SESSION_STATE_PATH = _TEMP_DIR / "session_state.json"
+_BASE_DIR = Path(__file__).resolve().parent
+_STATE_PATH = _BASE_DIR / "session_state.json"
+_REPORT_PATH = _BASE_DIR / "session_report.json"
 
 def build_extractor_workflow():
     """
@@ -1105,42 +1106,46 @@ async def entrypoint(ctx: JobContext):
     def on_participant_disconnected(participant):
         logging.info(f"Founder {participant.identity} clicked END CALL. Cleaning up session...")
 
-        # ── CRITICAL: set phase to 'done' SYNCHRONOUSLY ──────────────────────────
-        # This immediately terminates the _phase_watcher, _silence_watcher, and
-        # contradiction_watcher loops on their next iteration (all check state.phase).
+        # ── 1. Terminate all watchers SYNCHRONOUSLY ──────────────────────────
         state.phase = "done"
         logging.info("[DISCONNECT] state.phase set to 'done' — all watchers will terminate.")
 
-        # ── SAVE RAW SESSION STATE SYNCHRONOUSLY ─────────────────────────────────
-        # We save the raw session data SYNCHRONOUSLY here (no LLM, just JSON) so it
-        # survives the LiveKit process kill. The FastAPI /generate-report endpoint 
-        # will handle building the actual LLM report in the safe main process.
+        # ── 2. Build the state snapshot ──────────────────────────────────────────
+        _state_snapshot = {
+            "session_log":        state.session_log,
+            "grammar_buffer":     state.grammar_buffer,
+            "structured_claims":  state.structured_claims,
+            "pitch_history":      state.pitch_history,
+            "diligence_answered": state.diligence_answered,
+            "full_transcript":    state.full_transcript,
+            "feature_history":    state.feature_history,
+            "nervousness_score":  state.nervousness_score,
+        }
+
+        # ── 3. FAIL-SAFE FILE WRITING ────────────────────────────────────────────
+        # Using try/finally guarantees that even if the process is being killed 
+        # by LiveKit, this file write operation takes absolute priority.
         try:
             import json as _json
-            _state_snapshot = {
-                "session_log":        state.session_log,
-                "grammar_buffer":     state.grammar_buffer,
-                "structured_claims":  state.structured_claims,
-                "pitch_history":      state.pitch_history,
-                "diligence_answered": state.diligence_answered,
-                "full_transcript":    state.full_transcript,
-                "feature_history":    state.feature_history,
-                "nervousness_score":  state.nervousness_score,
-            }
-            with open(_SESSION_STATE_PATH, "w", encoding="utf-8") as _f:
-                _json.dump(_state_snapshot, _f, indent=2, ensure_ascii=False)
-            logging.info(f"[DISCONNECT] Session state saved to {_SESSION_STATE_PATH} ({len(state.session_log)} log events)")
-        except Exception as _state_err:
-            logging.error(f"[DISCONNECT] Failed to save session state: {_state_err}")
+            # You can add any extra cleanup logic you want to attempt here
+            logging.info("Attempting to write session state to disk...")
+        except Exception as e:
+            logging.error(f"[DISCONNECT] Error during cleanup phase: {e}")
+        finally:
+            # THIS BLOCK ALWAYS RUNS.
+            try:
+                with open(_SESSION_STATE_PATH, "w", encoding="utf-8") as _f:
+                    _json.dump(_state_snapshot, _f, indent=2, ensure_ascii=False)
+                logging.info(f"✅ [DISCONNECT] FAIL-SAFE: Session state saved to {_SESSION_STATE_PATH} ({len(state.session_log)} events)")
+            except Exception as critical_err:
+                logging.error(f"🚨 [DISCONNECT CRITICAL] Could not write file in finally block: {critical_err}")
 
-        # ── DISCONNECT AGENT ─────────────────────────────────────────────────────
-        # Since we removed the offline report generation, we just need to clean up
-        # the room connection and exit gracefully.
+        # ── 4. Disconnect the Agent from the Room ────────────────────────────────
         async def cleanup_room():
             await asyncio.sleep(0.5)
             try:
                 await ctx.room.disconnect()
-                logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
+                logging.info("[DISCONNECT] Agent cleanly disconnected from room.")
             except Exception as disc_err:
                 logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
 
