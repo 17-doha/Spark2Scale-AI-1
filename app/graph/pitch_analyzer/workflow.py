@@ -194,9 +194,9 @@ import tempfile
 from pathlib import Path
 
 # Match the exact same paths used in the FastAPI router
-_BASE_DIR = Path(__file__).resolve().parent
-_STATE_PATH = _BASE_DIR / "session_state.json"
-_REPORT_PATH = _BASE_DIR / "session_report.json"
+_TEMP_DIR = Path(tempfile.gettempdir())
+_STATE_PATH = _TEMP_DIR / "spark2scale_session_state.json"
+_REPORT_PATH = _TEMP_DIR / "spark2scale_session_report.json"
 
 def build_extractor_workflow():
     """

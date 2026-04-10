@@ -18,9 +18,9 @@ router = APIRouter()
 # ── SINGLE SOURCE OF TRUTH PATH ──
 # The worker (workflow.py) writes files to the pitch_analyzer graph directory.
 # The FastAPI route must read from the SAME location.
-_GRAPH_DIR = Path(__file__).resolve().parents[2] / "graph" / "pitch_analyzer"
-_STATE_PATH = _GRAPH_DIR / "session_state.json"
-_REPORT_PATH = _GRAPH_DIR / "session_report.json"
+_TEMP_DIR = Path(tempfile.gettempdir())
+_STATE_PATH = _TEMP_DIR / "spark2scale_session_state.json"
+_REPORT_PATH = _TEMP_DIR / "spark2scale_session_report.json"
 
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
@@ -40,6 +40,16 @@ async def env_check():
     }
 
 
+@router.get("/get-report", summary="Retrieve Last Generated Report")
+async def get_report():
+    if not _REPORT_PATH.exists():
+        raise HTTPException(status_code=404, detail="No report found.")
+    try:
+        return json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read report: {e}")
+
+
 @router.post("/generate-report", summary="Build Investment Readiness Report")
 async def generate_report_from_state():
     """
@@ -51,9 +61,12 @@ async def generate_report_from_state():
     import logging as _log
 
     if not _STATE_PATH.exists():
+        # If no state, check if a report already exists (e.g. from a previous run)
+        if _REPORT_PATH.exists():
+            return json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
         raise HTTPException(
             status_code=404,
-            detail="No session state found. The session may not have started properly or the worker failed to save data."
+            detail="No session state or report found."
         )
 
     # Load saved state
@@ -84,9 +97,12 @@ async def generate_report_from_state():
             transcript = " ".join(pitch_history)
             _log.warning("[GENERATE-REPORT] full_transcript empty — using pitch_history as fallback.")
         else:
+            # If no transcript and no report, return 404 to indicate no data available
+            if _REPORT_PATH.exists():
+                return json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
             raise HTTPException(
-                status_code=422,
-                detail="Session too short — no speech was captured. Cannot generate a meaningful report."
+                status_code=404,
+                detail="Session too short — no speech was captured and no previous report exists."
             )
 
     # Build the report (LLM call — runs in FastAPI main process, no kill risk)
