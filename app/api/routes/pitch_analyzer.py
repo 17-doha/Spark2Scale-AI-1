@@ -20,6 +20,10 @@ router = APIRouter()
 # parents[2] goes: routes -> api -> app, then we descend into graph/pitch_analyzer/
 _REPORT_PATH = Path(__file__).resolve().parents[2] / "graph" / "pitch_analyzer" / "session_report.json"
 
+# Raw session state saved synchronously by workflow.py on participant disconnect
+# (written before the LiveKit job process is force-killed ~3s after disconnect)
+_STATE_PATH  = Path(__file__).resolve().parents[2] / "graph" / "pitch_analyzer" / "session_state.json"
+
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
     "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL",
@@ -57,6 +61,95 @@ async def get_session_report():
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read report: {str(e)}")
+
+
+@router.post("/generate-report", summary="Build Investment Readiness Report from Saved Session State")
+async def generate_report_from_state():
+    """
+    Builds the Investment Readiness Report in the FastAPI main process from the
+    raw session state saved synchronously by workflow.py at participant disconnect.
+
+    WHY THIS ENDPOINT EXISTS:
+    The LiveKit agent framework force-kills the job subprocess ~3 seconds after
+    participant disconnect (SIGUSR1). An LLM call takes 10-30 seconds, so the
+    asyncio.create_task() in on_participant_disconnected never completes.
+    Instead of relying on that, we:
+      1. Save raw session state synchronously (fast, no LLM) in the job process
+      2. Build the report here, in the long-lived FastAPI process, after /stop
+    """
+    import asyncio as _asyncio
+    import sys as _sys
+    import logging as _log
+
+    if not _STATE_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="No session state found. The participant may not have spoken, "
+                   "or the session ended too quickly to save state."
+        )
+
+    # Load saved state
+    try:
+        state_data = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read session state: {e}")
+
+    # Import the report builder from the pitch_analyzer package
+    # (runs in FastAPI process — not the killed job subprocess)
+    try:
+        _graph_path = str(Path(__file__).resolve().parents[2] / "graph" / "pitch_analyzer")
+        if _graph_path not in _sys.path:
+            _sys.path.insert(0, _graph_path)
+        from tools import build_investment_readiness_report, detect_monotone  # type: ignore
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Cannot import report builder: {e}")
+
+    # Monotone detection (fast, no LLM)
+    feature_history = state_data.get("feature_history", [])
+    mono_result = detect_monotone(feature_history)
+    monotone_assessment = mono_result.get("assessment", "Not enough voice data.")
+
+    # Build transcript
+    transcript = state_data.get("full_transcript", "").strip()
+    if not transcript:
+        pitch_history = state_data.get("pitch_history", [])
+        if pitch_history:
+            transcript = " ".join(pitch_history)
+            _log.warning("[GENERATE-REPORT] full_transcript empty — using pitch_history as fallback.")
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="Session too short — no speech was captured. Cannot generate a meaningful report."
+            )
+
+    # Build the report (LLM call — runs in FastAPI main process, no kill risk)
+    try:
+        loop = _asyncio.get_event_loop()
+        report = await loop.run_in_executor(
+            None,
+            build_investment_readiness_report,
+            state_data.get("session_log", []),
+            state_data.get("grammar_buffer", []),
+            state_data.get("structured_claims", {}),
+            state_data.get("pitch_history", []),
+            state_data.get("diligence_answered", []),
+            transcript,
+            monotone_assessment,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+
+    if not report:
+        raise HTTPException(status_code=500, detail="LLM returned an empty report. Please try again.")
+
+    # Persist to session_report.json so GET /report also works
+    try:
+        _REPORT_PATH.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        _log.info(f"[GENERATE-REPORT] ✅ Report saved to {_REPORT_PATH}")
+    except Exception as e:
+        _log.warning(f"[GENERATE-REPORT] Could not persist report to disk: {e}")
+
+    return JSONResponse(content=report)
 
 import threading
 import logging as _logging

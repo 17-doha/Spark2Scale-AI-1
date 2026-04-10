@@ -184,7 +184,11 @@ _PREFLIGHT: dict = {
 }
 
 # ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
-_SESSION_REPORT_PATH =  Path(__file__).resolve().parent / "session_report.json"
+_SESSION_REPORT_PATH = Path(__file__).resolve().parent / "session_report.json"
+
+# ── Raw session state — saved synchronously on disconnect so FastAPI can build the report
+# even after the LiveKit job process is force-killed (which happens ~3s after disconnect)
+_SESSION_STATE_PATH = Path(__file__).resolve().parent / "session_state.json"
 
 
 def build_extractor_workflow():
@@ -1102,7 +1106,33 @@ async def entrypoint(ctx: JobContext):
         state.phase = "done"
         logging.info("[DISCONNECT] state.phase set to 'done' — all watchers will terminate.")
 
+        # ── SAVE RAW SESSION STATE SYNCHRONOUSLY ─────────────────────────────────
+        # The LiveKit framework force-kills this job process with SIGUSR1 ~3 seconds
+        # after participant disconnect — long before an LLM call (10-30s) can finish.
+        # We save the raw session data SYNCHRONOUSLY here (no LLM, just JSON) so it
+        # survives the kill. The FastAPI /generate-report endpoint then builds the
+        # actual report from the saved state in the main process, which stays alive.
+        try:
+            import json as _json
+            _state_snapshot = {
+                "session_log":        state.session_log,
+                "grammar_buffer":     state.grammar_buffer,
+                "structured_claims":  state.structured_claims,
+                "pitch_history":      state.pitch_history,
+                "diligence_answered": state.diligence_answered,
+                "full_transcript":    state.full_transcript,
+                "feature_history":    state.feature_history,
+                "nervousness_score":  state.nervousness_score,
+            }
+            with open(_SESSION_STATE_PATH, "w", encoding="utf-8") as _f:
+                _json.dump(_state_snapshot, _f, indent=2, ensure_ascii=False)
+            logging.info(f"[DISCONNECT] Session state saved to {_SESSION_STATE_PATH} ({len(state.session_log)} log events)")
+        except Exception as _state_err:
+            logging.error(f"[DISCONNECT] Failed to save session state: {_state_err}")
+
         async def generate_offline_report():
+            """Best-effort LLM report in the job process. May be killed before completing.
+            If killed, the FastAPI /generate-report endpoint handles it from saved state."""
             try:
                 # 1. Run the fast monotone check first
                 from tools import detect_monotone
@@ -1110,7 +1140,6 @@ async def entrypoint(ctx: JobContext):
                 state.monotone_assessment = mono_result.get("assessment", "Not enough voice data.")
 
                 # 2. Build transcript — use pitch_history as fallback if STT produced nothing
-                #    (can happen when session is very short or user ended before speaking)
                 transcript = state.full_transcript.strip()
                 if not transcript:
                     if state.pitch_history:
@@ -1118,7 +1147,6 @@ async def entrypoint(ctx: JobContext):
                         logging.warning("[OFFLINE REPORT] full_transcript empty — using pitch_history as fallback.")
                     else:
                         logging.warning("[OFFLINE REPORT] Skipping report — no speech data captured (session too short).")
-                        # Still disconnect cleanly even if no report
                         await asyncio.sleep(0.5)
                         try:
                             await ctx.room.disconnect()
@@ -1126,7 +1154,7 @@ async def entrypoint(ctx: JobContext):
                             pass
                         return
 
-                logging.info("[OFFLINE REPORT] Building report via LLM...")
+                logging.info("[OFFLINE REPORT] Building report via LLM (best-effort, may be interrupted)...")
 
                 # 3. Trigger the main report builder
                 report = await _safe_thread_call(
@@ -1150,20 +1178,18 @@ async def entrypoint(ctx: JobContext):
                     logging.warning("⚠️ [OFFLINE REPORT] LLM returned empty report.")
 
             except Exception as e:
-                logging.error(f"[OFFLINE REPORT] Failed: {e}")
+                logging.error(f"[OFFLINE REPORT] Failed (will rely on FastAPI /generate-report): {e}")
 
             finally:
                 # 5. ALWAYS disconnect the agent from the room after report is done.
-                #    This is the key fix for the double-agent problem: the agent must
-                #    leave its room so the next session gets a clean agent.
-                await asyncio.sleep(1)  # brief pause so LiveKit can flush any pending audio
+                await asyncio.sleep(1)
                 try:
                     await ctx.room.disconnect()
                     logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
                 except Exception as disc_err:
                     logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
 
-        # Fire off the generation + cleanup task
+        # Fire off the generation + cleanup task (best-effort — may be cancelled by LiveKit)
         asyncio.create_task(generate_offline_report())
     # ── Start session ─────────────────────────────────────────────────────────
     await session.start(room=ctx.room, agent=agent)
