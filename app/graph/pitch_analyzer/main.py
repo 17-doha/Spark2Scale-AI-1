@@ -1,22 +1,10 @@
-"""
-main.py — Entry point for the Spark2Scale AI Pitch Coach (Sparky).
-
-Usage:
-  python main.py                    # Full run: extract + voice session
-  python main.py --skip-extraction  # Skip LLM extraction, use cached cheat sheet
-
-Prerequisites:
-  - .env file with DASHSCOPE_API_KEY=...
-  - PyAudio working (microphone access required)
-  - requirements.txt installed
-"""
-
 import os
 import sys
 import json
 import asyncio
 import logging
 import argparse
+import tempfile
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
@@ -35,13 +23,14 @@ logging.basicConfig(
 )
 
 load_dotenv(find_dotenv())
+
 # ── Cache path for skipping re-extraction during development ─────────────────
 CHEAT_SHEET_CACHE = Path("cheat_sheet_cache.json")
 
-# ── Absolute path where the agent writes the session report ───────────────────
-# Used by the FastAPI /report endpoint — must match _REPORT_PATH in pitch_analyzer.py
-SESSION_REPORT_PATH = Path(os.getcwd()) / "app" / "graph" / "pitch_analyzer" / "session_report.json"
-
+# ── UNIFIED STATE PATH ────────────────────────────────────────────────────────
+# This writes to the writable cloud directory. The report file has been removed.
+_TEMP_DIR = Path(tempfile.gettempdir())
+_SESSION_STATE_PATH = _TEMP_DIR / "session_state.json"
 # ═══════════════════════════════════════════════════════════════════════════════
 # STARTUP DOCUMENTS
 # ═══════════════════════════════════════════════════════════════════════════════

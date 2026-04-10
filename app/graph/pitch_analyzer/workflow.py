@@ -183,13 +183,19 @@ _PREFLIGHT: dict = {
     "voice_prompt": "",
 }
 
-# ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
-_SESSION_REPORT_PATH = Path(__file__).resolve().parent / "session_report.json"
+# # ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
+# _SESSION_REPORT_PATH = Path(__file__).resolve().parent / "session_report.json"
 
-# ── Raw session state — saved synchronously on disconnect so FastAPI can build the report
-# even after the LiveKit job process is force-killed (which happens ~3s after disconnect)
-_SESSION_STATE_PATH = Path(__file__).resolve().parent / "session_state.json"
+# # ── Raw session state — saved synchronously on disconnect so FastAPI can build the report
+# # even after the LiveKit job process is force-killed (which happens ~3s after disconnect)
+# _SESSION_STATE_PATH = Path(__file__).resolve().parent / "session_state.json"
 
+import tempfile
+from pathlib import Path
+
+# Match the exact same paths used in the FastAPI router
+_TEMP_DIR = Path(tempfile.gettempdir())
+_SESSION_STATE_PATH = _TEMP_DIR / "session_state.json"
 
 def build_extractor_workflow():
     """
@@ -1102,16 +1108,13 @@ async def entrypoint(ctx: JobContext):
         # ── CRITICAL: set phase to 'done' SYNCHRONOUSLY ──────────────────────────
         # This immediately terminates the _phase_watcher, _silence_watcher, and
         # contradiction_watcher loops on their next iteration (all check state.phase).
-        # Without this, the old agent stays in the room and answers the NEXT session.
         state.phase = "done"
         logging.info("[DISCONNECT] state.phase set to 'done' — all watchers will terminate.")
 
         # ── SAVE RAW SESSION STATE SYNCHRONOUSLY ─────────────────────────────────
-        # The LiveKit framework force-kills this job process with SIGUSR1 ~3 seconds
-        # after participant disconnect — long before an LLM call (10-30s) can finish.
         # We save the raw session data SYNCHRONOUSLY here (no LLM, just JSON) so it
-        # survives the kill. The FastAPI /generate-report endpoint then builds the
-        # actual report from the saved state in the main process, which stays alive.
+        # survives the LiveKit process kill. The FastAPI /generate-report endpoint 
+        # will handle building the actual LLM report in the safe main process.
         try:
             import json as _json
             _state_snapshot = {
@@ -1130,67 +1133,20 @@ async def entrypoint(ctx: JobContext):
         except Exception as _state_err:
             logging.error(f"[DISCONNECT] Failed to save session state: {_state_err}")
 
-        async def generate_offline_report():
-            """Best-effort LLM report in the job process. May be killed before completing.
-            If killed, the FastAPI /generate-report endpoint handles it from saved state."""
+        # ── DISCONNECT AGENT ─────────────────────────────────────────────────────
+        # Since we removed the offline report generation, we just need to clean up
+        # the room connection and exit gracefully.
+        async def cleanup_room():
+            await asyncio.sleep(0.5)
             try:
-                # 1. Run the fast monotone check first
-                from tools import detect_monotone
-                mono_result = detect_monotone(state.feature_history)
-                state.monotone_assessment = mono_result.get("assessment", "Not enough voice data.")
+                await ctx.room.disconnect()
+                logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
+            except Exception as disc_err:
+                logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
 
-                # 2. Build transcript — use pitch_history as fallback if STT produced nothing
-                transcript = state.full_transcript.strip()
-                if not transcript:
-                    if state.pitch_history:
-                        transcript = " ".join(state.pitch_history)
-                        logging.warning("[OFFLINE REPORT] full_transcript empty — using pitch_history as fallback.")
-                    else:
-                        logging.warning("[OFFLINE REPORT] Skipping report — no speech data captured (session too short).")
-                        await asyncio.sleep(0.5)
-                        try:
-                            await ctx.room.disconnect()
-                        except Exception:
-                            pass
-                        return
+        asyncio.create_task(cleanup_room())
 
-                logging.info("[OFFLINE REPORT] Building report via LLM (best-effort, may be interrupted)...")
 
-                # 3. Trigger the main report builder
-                report = await _safe_thread_call(
-                    build_investment_readiness_report,
-                    state.session_log,
-                    state.grammar_buffer,
-                    state.structured_claims,
-                    state.pitch_history,
-                    state.diligence_answered,
-                    transcript,
-                    getattr(state, 'monotone_assessment', ''),
-                )
-
-                # 4. Save it to JSON
-                if report:
-                    import json as _json
-                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
-                        _json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"✅ [OFFLINE REPORT] Successfully saved to {_SESSION_REPORT_PATH}")
-                else:
-                    logging.warning("⚠️ [OFFLINE REPORT] LLM returned empty report.")
-
-            except Exception as e:
-                logging.error(f"[OFFLINE REPORT] Failed (will rely on FastAPI /generate-report): {e}")
-
-            finally:
-                # 5. ALWAYS disconnect the agent from the room after report is done.
-                await asyncio.sleep(1)
-                try:
-                    await ctx.room.disconnect()
-                    logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
-                except Exception as disc_err:
-                    logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
-
-        # Fire off the generation + cleanup task (best-effort — may be cancelled by LiveKit)
-        asyncio.create_task(generate_offline_report())
     # ── Start session ─────────────────────────────────────────────────────────
     await session.start(room=ctx.room, agent=agent)
 
