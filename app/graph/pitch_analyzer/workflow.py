@@ -868,13 +868,23 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
 
                 state.post_pitch_review = report
 
-                # Save full report to disk for /report endpoint
+                # Save full report + raw state so /generate-report always has data
                 try:
-                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
+                    with open(_REPORT_PATH, "w", encoding="utf-8") as f:
                         _json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
+                    logging.info(f"[REPORT] Saved to {_REPORT_PATH}")
+                    # Also save state snapshot so the API can rebuild if needed
+                    _snap = {
+                        "session_log": state.session_log, "grammar_buffer": state.grammar_buffer,
+                        "structured_claims": state.structured_claims, "pitch_history": state.pitch_history,
+                        "diligence_answered": state.diligence_answered, "full_transcript": state.full_transcript,
+                        "feature_history": state.feature_history, "nervousness_score": state.nervousness_score,
+                    }
+                    with open(_STATE_PATH, "w", encoding="utf-8") as f:
+                        _json.dump(_snap, f, indent=2, ensure_ascii=False)
+                    logging.info(f"[REPORT] Session state also saved to {_STATE_PATH}")
                 except Exception as e:
-                    logging.warning(f"Failed to save report JSON: {e}")
+                    logging.warning(f"Failed to save report/state JSON: {e}")
 
                 logging.info("[PHASE] Speaking final verdict forcefully via session.say()")
                 
@@ -965,11 +975,20 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                     state.post_pitch_review = report
 
                     try:
-                        with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
+                        with open(_REPORT_PATH, "w", encoding="utf-8") as f:
                             _json.dump(report, f, indent=2, ensure_ascii=False)
-                        logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
+                        logging.info(f"[REPORT] Saved to {_REPORT_PATH}")
+                        _snap = {
+                            "session_log": state.session_log, "grammar_buffer": state.grammar_buffer,
+                            "structured_claims": state.structured_claims, "pitch_history": state.pitch_history,
+                            "diligence_answered": state.diligence_answered, "full_transcript": state.full_transcript,
+                            "feature_history": state.feature_history, "nervousness_score": state.nervousness_score,
+                        }
+                        with open(_STATE_PATH, "w", encoding="utf-8") as f:
+                            _json.dump(_snap, f, indent=2, ensure_ascii=False)
+                        logging.info(f"[REPORT] Session state also saved to {_STATE_PATH}")
                     except Exception as e:
-                        logging.warning(f"Failed to save report JSON: {e}")
+                        logging.warning(f"Failed to save report/state JSON: {e}")
 
                     await session.generate_reply(
                         instructions=(
@@ -1134,9 +1153,9 @@ async def entrypoint(ctx: JobContext):
         finally:
             # THIS BLOCK ALWAYS RUNS.
             try:
-                with open(_SESSION_STATE_PATH, "w", encoding="utf-8") as _f:
+                with open(_STATE_PATH, "w", encoding="utf-8") as _f:
                     _json.dump(_state_snapshot, _f, indent=2, ensure_ascii=False)
-                logging.info(f"✅ [DISCONNECT] FAIL-SAFE: Session state saved to {_SESSION_STATE_PATH} ({len(state.session_log)} events)")
+                logging.info(f"✅ [DISCONNECT] FAIL-SAFE: Session state saved to {_STATE_PATH} ({len(state.session_log)} events)")
             except Exception as critical_err:
                 logging.error(f"🚨 [DISCONNECT CRITICAL] Could not write file in finally block: {critical_err}")
 

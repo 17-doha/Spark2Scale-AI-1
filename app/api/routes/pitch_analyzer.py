@@ -16,10 +16,11 @@ from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 router = APIRouter()
 
 # ── SINGLE SOURCE OF TRUTH PATH ──
-# Always write to the OS temp directory so it works in cloud/Docker deployments
-_BASE_DIR = Path(__file__).resolve().parent
-_STATE_PATH = _BASE_DIR / "session_state.json"
-_REPORT_PATH = _BASE_DIR / "session_report.json"
+# The worker (workflow.py) writes files to the pitch_analyzer graph directory.
+# The FastAPI route must read from the SAME location.
+_GRAPH_DIR = Path(__file__).resolve().parents[2] / "graph" / "pitch_analyzer"
+_STATE_PATH = _GRAPH_DIR / "session_state.json"
+_REPORT_PATH = _GRAPH_DIR / "session_report.json"
 
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
@@ -108,7 +109,13 @@ async def generate_report_from_state():
     if not report:
         raise HTTPException(status_code=500, detail="LLM returned an empty report. Please try again.")
 
-    # Optional cleanup: Remove the state file after successful generation so it doesn't leak into the next session
+    # Save the generated report to disk for subsequent fast fetches
+    try:
+        _REPORT_PATH.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+    # Cleanup: remove state file so the next session starts clean
     try:
         _STATE_PATH.unlink(missing_ok=True)
     except Exception:
