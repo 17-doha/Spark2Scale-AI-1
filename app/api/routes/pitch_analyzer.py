@@ -97,13 +97,10 @@ async def generate_report_from_state():
             transcript = " ".join(pitch_history)
             _log.warning("[GENERATE-REPORT] full_transcript empty — using pitch_history as fallback.")
         else:
-            # If no transcript and no report, return 404 to indicate no data available
-            if _REPORT_PATH.exists():
-                return json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
-            raise HTTPException(
-                status_code=404,
-                detail="Session too short — no speech was captured and no previous report exists."
-            )
+            # If no transcript and no report exists, just pass a dummy string
+            # to force the report generation. The AI will judge it accordingly.
+            _log.warning("[GENERATE-REPORT] No speech captured at all — passing dummy transcript.")
+            transcript = "The founder ended the session very early and practically no speech was recorded."
 
     # Build the report (LLM call — runs in FastAPI main process, no kill risk)
     try:
