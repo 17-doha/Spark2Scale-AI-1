@@ -5,7 +5,6 @@ class InteractionType(str, Enum):
     CONTACT = "contact_founder"
     LIKE = "like"
     DISLIKE = "dislike"
-    SKIP = "skip"
 
 class RewardConfig(BaseModel):
     reward: float
@@ -14,8 +13,16 @@ class RewardConfig(BaseModel):
 
 # The Hyperparameter Matrix
 REWARD_MATRIX = {
-    InteractionType.CONTACT: RewardConfig(reward=10.0, alpha=0.30, vector_beta=0.15),
-    InteractionType.LIKE: RewardConfig(reward=1.0, alpha=0.10, vector_beta=0.05),
-    InteractionType.DISLIKE: RewardConfig(reward=-1.0, alpha=0.05, vector_beta=0.02),
-    InteractionType.SKIP: RewardConfig(reward=-0.1, alpha=0.01, vector_beta=0.00),
+    # Target is 1.0. Alpha is 0.3 (Fast learning).
+    # Hit 1: 0.5 + 0.3*(1.0-0.5) = 0.65
+    # Hit 2: 0.65 + 0.3*(1.0-0.65) = 0.755
+    # Hit 3: 0.755 + 0.3*(1.0-0.755) = 0.828
+    InteractionType.CONTACT: RewardConfig(reward=1.0, alpha=0.30, vector_beta=0.15),
+
+    # Target is 0.8. Alpha is 0.15 (Slower learning).
+    # Moves the weight up, but won't ever push it past 0.8.
+    InteractionType.LIKE: RewardConfig(reward=0.8, alpha=0.15, vector_beta=0.05),
+
+    # Target is 0.0 (punishing). Alpha is 0.20.
+    InteractionType.DISLIKE: RewardConfig(reward=0.0, alpha=0.20, vector_beta=0.02),
 }

@@ -152,10 +152,41 @@ def _add_pitch_node(tx, pitch_id, sub_tags_dict):
     """
     tx.run(query, pitch_id=pitch_id, sub_tags_dict=sub_tags_dict)
 
+def _prune_stale_nodes(tx, valid_investor_ids, valid_pitch_ids):
+    """Deletes nodes in Neo4j that no longer exist in Supabase, and cleans up orphaned tags."""
+    
+    # 1. Delete stale investors
+    tx.run("""
+        MATCH (i:Investor)
+        WHERE NOT i.userId IN $valid_investor_ids
+        DETACH DELETE i
+    """, valid_investor_ids=valid_investor_ids)
+
+    # 2. Delete stale pitch decks
+    tx.run("""
+        MATCH (p:PitchDeck)
+        WHERE NOT p.pitchId IN $valid_pitch_ids
+        DETACH DELETE p
+    """, valid_pitch_ids=valid_pitch_ids)
+
+    # 3. Clean up orphaned SubTags (SubTags with no connections)
+    tx.run("""
+        MATCH (st:SubTag)
+        WHERE NOT ()-->(st) AND NOT (st)-->()
+        DELETE st
+    """)
+
+    # 4. Clean up orphaned Tags (Tags with no connections)
+    tx.run("""
+        MATCH (t:Tag)
+        WHERE NOT ()-->(t) AND NOT (t)-->()
+        DELETE t
+    """)
 
 def sync_supabase_to_neo4j():
     """
     Performs a full refresh of the Neo4j graph from Supabase data.
+    Now includes pruning of deleted records!
     """
     logger.info("[Neo4j] Starting Supabase to Neo4j Sync...")
     
@@ -170,20 +201,27 @@ def sync_supabase_to_neo4j():
     
     try:
         with driver.session() as session:
-            # --- Sync Investors ---
-            investors = supabase.table("investors").select("*").execute().data
+            # --- Fetch Source Data ---
+            investors = supabase.table("investors").select("*").execute().data or []
+            pitches = supabase.table("pitchdecks").select("*").execute().data or []
+
+            valid_investor_ids = [inv.get("user_id") for inv in investors if inv.get("user_id")]
+            valid_pitch_ids = [pitch.get("pitchdeckid") for pitch in pitches if pitch.get("pitchdeckid")]
+
+            # --- 1. PRUNE ---
+            logger.info("[Neo4j] Pruning stale records...")
+            session.execute_write(_prune_stale_nodes, valid_investor_ids, valid_pitch_ids)
+
+            # --- 2. SYNC INVESTORS ---
             for inv in investors:
                 session.execute_write(_add_investor_node, inv.get("user_id"), inv.get("tags", []))
             
-            # --- Sync Pitches ---
-            pitches = supabase.table("pitchdecks").select("*").execute().data
+            # --- 3. SYNC PITCHES ---
             loaded, skipped = 0, 0
-
             for pitch in pitches:
                 p_id = pitch.get("pitchdeckid")
                 analysis = pitch.get("analysis")
 
-                # Handle potential stringified JSON
                 if isinstance(analysis, str):
                     try: 
                         analysis = json.loads(analysis)
@@ -206,10 +244,11 @@ def sync_supabase_to_neo4j():
         driver.close()
 
 
-def update_graph_edge_weight(user_id: str, tag_name: str, reward: float, alpha: float):
+
+def update_graph_edge_weights(user_id: str, tag_names: list[str], reward: float, alpha: float):
     """
-    Updates the Investor -> Tag edge weight using TD Learning principles.
-    Formula: W_new = W_old + alpha * (Reward - W_old)
+    Updates MULTIPLE Investor -> Tag edge weights atomically using TD Learning, 
+    then normalizes all tags for that investor so they sum to 1.0.
     """
     if not NEO4J_URI:
         logger.error("[Neo4j] URI not configured, skipping graph RL update.")
@@ -217,29 +256,30 @@ def update_graph_edge_weight(user_id: str, tag_name: str, reward: float, alpha: 
 
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     
-    # The Cypher query does the math atomically to prevent race conditions
     query = """
-    // 1. Find the specific edge between this investor and the overarching tag
-    MATCH (i:Investor {userId: $userId})-[r:INTERESTED_IN]->(t:Tag {name: $tagName})
+    // 1. Find ALL the tags the user interacted with on this specific pitch deck
+    MATCH (i:Investor {userId: $userId})-[r:INTERESTED_IN]->(t:Tag)
+    WHERE t.name IN $tagNames
     
-    // 2. Increment impressions (handling cases where it might be null)
+    // 2. Apply the Reward Math to all of them simultaneously
     SET r.impressions = coalesce(r.impressions, 0) + 1
+    WITH i, r, coalesce(r.weight, 0.5) AS current_weight
+    WITH i, r, current_weight + ($alpha * ($reward - current_weight)) AS raw_weight
+    SET r.weight = CASE WHEN raw_weight < 0.01 THEN 0.01 ELSE raw_weight END
     
-    // 3. Apply the Weight Update Formula
-    // W_new = W_old + alpha * (Reward - W_old)
-    WITH r, coalesce(r.weight, 0.5) AS current_weight
-    WITH r, current_weight + ($alpha * ($reward - current_weight)) AS calculated_weight
+    // 3. Fetch ALL tags for this investor to calculate the new total sum
+    WITH i
+    MATCH (i)-[all_r:INTERESTED_IN]->(:Tag)
+    WITH i, sum(coalesce(all_r.weight, 0.5)) AS total_sum
     
-    // 4. Clamp the limits (Filter out noise)
-    // We prevent the weight from exceeding 1.0 or dropping exactly to 0.0 
-    // (A tiny baseline of 0.01 ensures it can slowly recover if needed later)
-    SET r.weight = CASE 
-        WHEN calculated_weight > 1.0 THEN 1.0 
-        WHEN calculated_weight < 0.01 THEN 0.01 
-        ELSE calculated_weight 
-    END
+    // 4. Normalize EVERY tag for this investor so they add up to exactly 1.0
+    MATCH (i)-[norm_r:INTERESTED_IN]->(norm_t:Tag)
+    SET norm_r.weight = coalesce(norm_r.weight, 0.5) / total_sum
     
-    RETURN r.weight AS new_weight, r.impressions AS new_impressions
+    // 5. Return the updated weights for logging
+    WITH norm_t, norm_r
+    WHERE norm_t.name IN $tagNames
+    RETURN norm_t.name AS tag, norm_r.weight AS weight, norm_r.impressions AS impressions
     """
     
     try:
@@ -247,15 +287,14 @@ def update_graph_edge_weight(user_id: str, tag_name: str, reward: float, alpha: 
             result = session.run(
                 query, 
                 userId=user_id, 
-                tagName=tag_name, 
+                tagNames=tag_names, 
                 reward=reward, 
                 alpha=alpha
             )
-            record = result.single()
-            if record:
+            for record in result:
                 logger.info(
-                    f"[RL Update] User {user_id} | Tag '{tag_name}' "
-                    f"-> New W: {record['new_weight']:.3f}, Impressions: {record['new_impressions']}"
+                    f"[RL Update] User {user_id} | Tag '{record['tag']}' "
+                    f"-> Normalized W: {record['weight']:.3f}, Impressions: {record['impressions']}"
                 )
     except Exception as e:
         logger.error(f"[Neo4j] Error updating graph weights for {user_id}: {e}")
