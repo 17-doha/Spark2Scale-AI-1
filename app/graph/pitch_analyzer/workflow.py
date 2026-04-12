@@ -1046,9 +1046,9 @@ async def entrypoint(ctx: JobContext):
             model="nova-2",
             language="en-US",
         ),
-        # Switched to qwen-max from DashScope
+        # Switched to qwen-turbo-2025-04-28 from DashScope
         llm=lk_openai.LLM(
-            model="qwen-max",
+            model="qwen-turbo-2025-04-28",
             base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
             api_key=os.getenv("DASHSCOPE_API_KEY"),
         ),

@@ -1,7 +1,7 @@
 """
 test_qwen_max.py
 ────────────────
-Tests that qwen-max (DashScope) works as a drop-in replacement for Groq
+Tests that qwen-turbo-2025-04-28 (DashScope) works as a drop-in replacement for Groq
 in the pitch-analyzer intermediate LLM path.
 
 Run with: venv\Scripts\python.exe test_qwen_max.py
@@ -9,7 +9,7 @@ Run with: venv\Scripts\python.exe test_qwen_max.py
 Tests:
   1. DASHSCOPE_API_KEY is present in .env
   2. Direct HTTP call to DashScope OpenAI-compatible endpoint
-  3. _get_fast_llm() returns a ChatOpenAI with qwen-max, not Groq
+  3. _get_fast_llm() returns a ChatOpenAI with qwen-turbo-2025-04-28, not Groq
   4. extract_claims() works end-to-end with a sample transcript
   5. check_consistency_logic() returns correct JSON
   6. check_investor_essentials() returns covered/missing lists
@@ -35,7 +35,7 @@ def check(name, ok, detail=""):
     results.append((name, ok))
 
 print("\n══════════════════════════════════════════════════════════")
-print("  qwen-max (DashScope) Integration Tests")
+print("  qwen-turbo-2025-04-28 (DashScope) Integration Tests")
 print("══════════════════════════════════════════════════════════\n")
 
 
@@ -51,7 +51,7 @@ print("▶ TEST 2: Direct HTTP ping to DashScope API")
 import urllib.request, urllib.error
 try:
     payload = json.dumps({
-        "model": "qwen-max",
+        "model": "qwen-turbo-2025-04-28",
         "messages": [
             {"role": "system", "content": "You must respond with exactly this JSON and nothing else: {\"ok\": true}"},
             {"role": "user", "content": "test"}
@@ -80,14 +80,14 @@ except Exception as e:
 print()
 
 
-# ─── TEST 3: _get_fast_llm() uses qwen-max ────────────────────────────────────
-print("▶ TEST 3: _get_fast_llm() is configured for qwen-max")
+# ─── TEST 3: _get_fast_llm() uses qwen-turbo-2025-04-28 ────────────────────────────────────
+print("▶ TEST 3: _get_fast_llm() is configured for qwen-turbo-2025-04-28")
 try:
     import tools
     llm = tools._get_fast_llm()
     model_name = getattr(llm, "model_name", None) or getattr(llm, "model", None) or ""
     base_url   = getattr(llm, "openai_api_base", None) or getattr(llm, "base_url", None) or ""
-    check("model is qwen-max",          "qwen-max" in str(model_name))
+    check("model is qwen-turbo-2025-04-28",          "qwen-turbo-2025-04-28" in str(model_name))
     check("base_url is DashScope",      "dashscope" in str(base_url).lower())
     check("NOT Groq endpoint",          "groq.com" not in str(base_url).lower())
 except Exception as e:
@@ -202,7 +202,7 @@ passed = sum(1 for _, ok in results if ok)
 total  = len(results)
 print(f"  Results: {passed}/{total} passed")
 if passed == total:
-    print("  🎉 All qwen-max tests passed — safe to deploy!")
+    print("  🎉 All qwen-turbo-2025-04-28 tests passed — safe to deploy!")
 else:
     failed = [n for n, ok in results if not ok]
     print("  ⚠️  Fix before deploying:")
