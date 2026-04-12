@@ -419,7 +419,7 @@ def _make_tools(state: LiveKitSessionState, session_ref: list):
 
         grade      = report.get("grade", "?")
         score      = report.get("score", 0)
-        max_s      = report.get("max_score", 100)
+        max_s      = report.get("max_score", 45)
         strengths  = ", ".join(report.get("strengths", []))
         weaknesses = ", ".join(report.get("critical_weaknesses", []))
         missing    = ", ".join(report.get("essentials_checklist", {}).get("missing", []))
@@ -843,7 +843,7 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
 
                 grade       = report.get("grade", "?")
                 score       = report.get("score", 0)
-                max_s       = report.get("max_score", 100)
+                max_s       = report.get("max_score", 45)
                 rubric_data = report.get("rubric", {})
                 strength_keys   = report.get("strengths", [])
                 weakness_keys   = report.get("critical_weaknesses", [])
@@ -946,7 +946,7 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                 if report:
                     grade          = report.get("grade", "?")
                     score          = report.get("score", 0)
-                    max_s          = report.get("max_score", 100)
+                    max_s          = report.get("max_score", 45)
                     rubric_data    = report.get("rubric", {})
                     strength_keys  = report.get("strengths", [])
                     weakness_keys  = report.get("critical_weaknesses", [])
