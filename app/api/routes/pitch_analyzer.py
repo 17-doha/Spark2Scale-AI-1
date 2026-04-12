@@ -6,7 +6,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
@@ -15,12 +15,14 @@ from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 
 router = APIRouter()
 
-# ── SINGLE SOURCE OF TRUTH PATH ──
-# The worker (workflow.py) writes files to the pitch_analyzer graph directory.
+# ── SINGLE SOURCE OF TRUTH PATHS ──
+# The worker (workflow.py) writes files to the temp directory.
 # The FastAPI route must read from the SAME location.
 _TEMP_DIR = Path(tempfile.gettempdir())
 _STATE_PATH = _TEMP_DIR / "spark2scale_session_state.json"
 _REPORT_PATH = _TEMP_DIR / "spark2scale_session_report.json"
+# Context file: carries pitchdeckid across the extract → generate-report boundary.
+_CONTEXT_PATH = _TEMP_DIR / "spark2scale_session_context.json"
 
 AGENT_ENV_KEYS = [
     "GROQ_API_KEY", "DEEPGRAM_API_KEY", "ELEVENLABS_API_KEY",
@@ -41,7 +43,32 @@ async def env_check():
 
 
 @router.get("/get-report", summary="Retrieve Last Generated Report")
-async def get_report():
+async def get_report(pitchdeckid: Optional[str] = None):
+    """
+    Returns the last generated report.
+    If pitchdeckid is provided, tries to fetch session_report from Supabase first.
+    Falls back to the local temp file if Supabase lookup fails or isn't available.
+    """
+    # ── Supabase-first path (when pitchdeckid is provided) ──────────────────
+    if pitchdeckid:
+        try:
+            from app.core.supabase_client import supabase  # type: ignore
+            if supabase is not None:
+                result = (
+                    supabase
+                    .table("pitchdecks")
+                    .select("session_report")
+                    .eq("pitchdeckid", pitchdeckid)
+                    .single()
+                    .execute()
+                )
+                if result.data and result.data.get("session_report"):
+                    return JSONResponse(content=result.data["session_report"])
+        except Exception as e:
+            import logging as _log
+            _log.warning(f"[GET-REPORT] Supabase lookup failed, falling back to file: {e}")
+
+    # ── Local file fallback ─────────────────────────────────────────────────
     if not _REPORT_PATH.exists():
         raise HTTPException(status_code=404, detail="No report found.")
     try:
@@ -128,9 +155,25 @@ async def generate_report_from_state():
     except Exception:
         pass
 
-    # Cleanup: remove state file so the next session starts clean
+    # ── Save to Supabase if we have a pitchdeckid from the context file ──────
+    supabase_linked = False
+    try:
+        if _CONTEXT_PATH.exists():
+            ctx = json.loads(_CONTEXT_PATH.read_text(encoding="utf-8"))
+            pitchdeckid = ctx.get("pitchdeckid")
+            if pitchdeckid:
+                from app.graph.pitch_analyzer.supabase_report import save_report_to_supabase
+                supabase_linked = save_report_to_supabase(pitchdeckid, report)
+    except Exception as _ctx_err:
+        import logging as _log
+        _log.warning(f"[GENERATE-REPORT] Supabase save failed: {_ctx_err}")
+
+    report["_supabase_linked"] = supabase_linked
+
+    # Cleanup: remove state + context files so the next session starts clean
     try:
         _STATE_PATH.unlink(missing_ok=True)
+        _CONTEXT_PATH.unlink(missing_ok=True)
     except Exception:
         pass
 
@@ -160,16 +203,39 @@ def _stream_output(proc: subprocess.Popen) -> None:
         pass
 
 
+class ExtractRequest(BaseModel):
+    """Optional context IDs passed from the frontend to link this session to a pitch deck row."""
+    pitchdeckid: Optional[str] = None
+    startup_id: Optional[str] = None
+
+
 @router.post("/extract", summary="Run LLM Pre-flight Extraction")
-def run_pitch_extraction():
+def run_pitch_extraction(request: ExtractRequest = Body(default=ExtractRequest())):
     """
     Runs the LLM extraction pipeline separately from the worker.
     Call this when the user clicks on the pitchdeck, so it processes the documents
     in the background BEFORE they actually start the voice session.
 
+    Accepts an optional JSON body with {pitchdeckid, startup_id} to link the
+    upcoming session to a specific pitch deck row in Supabase. These IDs are
+    persisted to spark2scale_session_context.json and read back by /generate-report.
+
     Skips the LLM call if a valid cache already exists (fast path — returns in <1s).
-    Pass ?force=true to always re-run extraction even when cache exists.
     """
+    # ── Persist context IDs for use in /generate-report ────────────────────
+    try:
+        context = {
+            "pitchdeckid": request.pitchdeckid,
+            "startup_id":  request.startup_id,
+        }
+        _CONTEXT_PATH.write_text(json.dumps(context), encoding="utf-8")
+        _logging.info(
+            f"[EXTRACT] Session context saved — pitchdeckid={request.pitchdeckid}, "
+            f"startup_id={request.startup_id}"
+        )
+    except Exception as _ctx_err:
+        _logging.warning(f"[EXTRACT] Could not save session context: {_ctx_err}")
+
     try:
         docs = load_company_context()
         # Use cache if it exists (skip=True) — avoids 30-90s LLM call on every page load.
@@ -181,7 +247,12 @@ def run_pitch_extraction():
             _logging.info("[EXTRACT] No cache found — running full LLM extraction...")
         cheat_sheet, voice_prompt = run_extraction(docs, skip=skip)
         source = "cache" if skip else "llm"
-        return {"status": "success", "source": source, "message": "Extraction finished and cache ready."}
+        return {
+            "status": "success",
+            "source": source,
+            "message": "Extraction finished and cache ready.",
+            "pitchdeckid": request.pitchdeckid,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
