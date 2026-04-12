@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.graph.market_research_agent.workflow import market_research_app
+from app.graph.idea_check.workflow import idea_check_app
 from app.api.schemas import ResearchRequest, ResearchResponse
 from app.core.logger import get_logger
 import json
@@ -49,4 +50,34 @@ async def research_idea(request: ResearchRequest):
         
     except Exception as e:
         logger.error(f"[ERROR] Market Research Failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/validate-idea")
+async def validate_idea(request: ResearchRequest):
+    """
+    Triggers the standalone Idea Check Agent to validate a problem and solution hypothesis.
+    """
+    logger.info(f"[LAUNCH] Received Idea Validation Request: {request.idea}")
+    
+    try:
+        inputs = {
+            "idea": request.idea,
+            "problem": request.problem,
+            "region": request.region or "Global"
+        }
+        
+        result = await idea_check_app.ainvoke(inputs)
+        
+        if result.get("error"):
+            raise Exception(result["error"])
+            
+        analysis = result.get("analysis_result", {})
+        
+        return {
+            "status": "success",
+            "validation_data": analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"[ERROR] Idea Validation Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
