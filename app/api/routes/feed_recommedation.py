@@ -36,7 +36,7 @@ import os
 
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
-from app.core.rewards import REWARD_MATRIX, InteractionType
+from app.graph.feed_recommedation_agent.rewards import REWARD_MATRIX, InteractionType
 from app.core.supabase_client import supabase
 from neo4j import GraphDatabase
 from app.core.config import config
