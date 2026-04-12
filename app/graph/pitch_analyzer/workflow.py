@@ -183,9 +183,20 @@ _PREFLIGHT: dict = {
     "voice_prompt": "",
 }
 
-# ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
-_SESSION_REPORT_PATH =  Path(__file__).resolve().parent / "session_report.json"
+# # ── Absolute path for session report (must match _REPORT_PATH in pitch_analyzer.py) ──
+# _SESSION_REPORT_PATH = Path(__file__).resolve().parent / "session_report.json"
 
+# # ── Raw session state — saved synchronously on disconnect so FastAPI can build the report
+# # even after the LiveKit job process is force-killed (which happens ~3s after disconnect)
+# _SESSION_STATE_PATH = Path(__file__).resolve().parent / "session_state.json"
+
+import tempfile
+from pathlib import Path
+
+# Match the exact same paths used in the FastAPI router
+_TEMP_DIR = Path(tempfile.gettempdir())
+_STATE_PATH = _TEMP_DIR / "spark2scale_session_state.json"
+_REPORT_PATH = _TEMP_DIR / "spark2scale_session_report.json"
 
 def build_extractor_workflow():
     """
@@ -857,13 +868,23 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
 
                 state.post_pitch_review = report
 
-                # Save full report to disk for /report endpoint
+                # Save full report + raw state so /generate-report always has data
                 try:
-                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
+                    with open(_REPORT_PATH, "w", encoding="utf-8") as f:
                         _json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
+                    logging.info(f"[REPORT] Saved to {_REPORT_PATH}")
+                    # Also save state snapshot so the API can rebuild if needed
+                    _snap = {
+                        "session_log": state.session_log, "grammar_buffer": state.grammar_buffer,
+                        "structured_claims": state.structured_claims, "pitch_history": state.pitch_history,
+                        "diligence_answered": state.diligence_answered, "full_transcript": state.full_transcript,
+                        "feature_history": state.feature_history, "nervousness_score": state.nervousness_score,
+                    }
+                    with open(_STATE_PATH, "w", encoding="utf-8") as f:
+                        _json.dump(_snap, f, indent=2, ensure_ascii=False)
+                    logging.info(f"[REPORT] Session state also saved to {_STATE_PATH}")
                 except Exception as e:
-                    logging.warning(f"Failed to save report JSON: {e}")
+                    logging.warning(f"Failed to save report/state JSON: {e}")
 
                 logging.info("[PHASE] Speaking final verdict forcefully via session.say()")
                 
@@ -954,11 +975,20 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                     state.post_pitch_review = report
 
                     try:
-                        with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
+                        with open(_REPORT_PATH, "w", encoding="utf-8") as f:
                             _json.dump(report, f, indent=2, ensure_ascii=False)
-                        logging.info(f"[REPORT] Saved to {_SESSION_REPORT_PATH}")
+                        logging.info(f"[REPORT] Saved to {_REPORT_PATH}")
+                        _snap = {
+                            "session_log": state.session_log, "grammar_buffer": state.grammar_buffer,
+                            "structured_claims": state.structured_claims, "pitch_history": state.pitch_history,
+                            "diligence_answered": state.diligence_answered, "full_transcript": state.full_transcript,
+                            "feature_history": state.feature_history, "nervousness_score": state.nervousness_score,
+                        }
+                        with open(_STATE_PATH, "w", encoding="utf-8") as f:
+                            _json.dump(_snap, f, indent=2, ensure_ascii=False)
+                        logging.info(f"[REPORT] Session state also saved to {_STATE_PATH}")
                     except Exception as e:
-                        logging.warning(f"Failed to save report JSON: {e}")
+                        logging.warning(f"Failed to save report/state JSON: {e}")
 
                     await session.generate_reply(
                         instructions=(
@@ -1095,76 +1125,52 @@ async def entrypoint(ctx: JobContext):
     def on_participant_disconnected(participant):
         logging.info(f"Founder {participant.identity} clicked END CALL. Cleaning up session...")
 
-        # ── CRITICAL: set phase to 'done' SYNCHRONOUSLY ──────────────────────────
-        # This immediately terminates the _phase_watcher, _silence_watcher, and
-        # contradiction_watcher loops on their next iteration (all check state.phase).
-        # Without this, the old agent stays in the room and answers the NEXT session.
+        # ── 1. Terminate all watchers SYNCHRONOUSLY ──────────────────────────
         state.phase = "done"
         logging.info("[DISCONNECT] state.phase set to 'done' — all watchers will terminate.")
 
-        async def generate_offline_report():
+        # ── 2. Build the state snapshot ──────────────────────────────────────────
+        _state_snapshot = {
+            "session_log":        state.session_log,
+            "grammar_buffer":     state.grammar_buffer,
+            "structured_claims":  state.structured_claims,
+            "pitch_history":      state.pitch_history,
+            "diligence_answered": state.diligence_answered,
+            "full_transcript":    state.full_transcript,
+            "feature_history":    state.feature_history,
+            "nervousness_score":  state.nervousness_score,
+        }
+
+        # ── 3. FAIL-SAFE FILE WRITING ────────────────────────────────────────────
+        # Using try/finally guarantees that even if the process is being killed 
+        # by LiveKit, this file write operation takes absolute priority.
+        try:
+            import json as _json
+            # You can add any extra cleanup logic you want to attempt here
+            logging.info("Attempting to write session state to disk...")
+        except Exception as e:
+            logging.error(f"[DISCONNECT] Error during cleanup phase: {e}")
+        finally:
+            # THIS BLOCK ALWAYS RUNS.
             try:
-                # 1. Run the fast monotone check first
-                from tools import detect_monotone
-                mono_result = detect_monotone(state.feature_history)
-                state.monotone_assessment = mono_result.get("assessment", "Not enough voice data.")
+                with open(_STATE_PATH, "w", encoding="utf-8") as _f:
+                    _json.dump(_state_snapshot, _f, indent=2, ensure_ascii=False)
+                logging.info(f"✅ [DISCONNECT] FAIL-SAFE: Session state saved to {_STATE_PATH} ({len(state.session_log)} events)")
+            except Exception as critical_err:
+                logging.error(f"🚨 [DISCONNECT CRITICAL] Could not write file in finally block: {critical_err}")
 
-                # 2. Build transcript — use pitch_history as fallback if STT produced nothing
-                #    (can happen when session is very short or user ended before speaking)
-                transcript = state.full_transcript.strip()
-                if not transcript:
-                    if state.pitch_history:
-                        transcript = " ".join(state.pitch_history)
-                        logging.warning("[OFFLINE REPORT] full_transcript empty — using pitch_history as fallback.")
-                    else:
-                        logging.warning("[OFFLINE REPORT] Skipping report — no speech data captured (session too short).")
-                        # Still disconnect cleanly even if no report
-                        await asyncio.sleep(0.5)
-                        try:
-                            await ctx.room.disconnect()
-                        except Exception:
-                            pass
-                        return
+        # ── 4. Disconnect the Agent from the Room ────────────────────────────────
+        async def cleanup_room():
+            await asyncio.sleep(0.5)
+            try:
+                await ctx.room.disconnect()
+                logging.info("[DISCONNECT] Agent cleanly disconnected from room.")
+            except Exception as disc_err:
+                logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
 
-                logging.info("[OFFLINE REPORT] Building report via LLM...")
+        asyncio.create_task(cleanup_room())
 
-                # 3. Trigger the main report builder
-                report = await _safe_thread_call(
-                    build_investment_readiness_report,
-                    state.session_log,
-                    state.grammar_buffer,
-                    state.structured_claims,
-                    state.pitch_history,
-                    state.diligence_answered,
-                    transcript,
-                    getattr(state, 'monotone_assessment', ''),
-                )
 
-                # 4. Save it to JSON
-                if report:
-                    import json as _json
-                    with open(_SESSION_REPORT_PATH, "w", encoding="utf-8") as f:
-                        _json.dump(report, f, indent=2, ensure_ascii=False)
-                    logging.info(f"✅ [OFFLINE REPORT] Successfully saved to {_SESSION_REPORT_PATH}")
-                else:
-                    logging.warning("⚠️ [OFFLINE REPORT] LLM returned empty report.")
-
-            except Exception as e:
-                logging.error(f"[OFFLINE REPORT] Failed: {e}")
-
-            finally:
-                # 5. ALWAYS disconnect the agent from the room after report is done.
-                #    This is the key fix for the double-agent problem: the agent must
-                #    leave its room so the next session gets a clean agent.
-                await asyncio.sleep(1)  # brief pause so LiveKit can flush any pending audio
-                try:
-                    await ctx.room.disconnect()
-                    logging.info("[DISCONNECT] Agent disconnected from room. Session fully closed.")
-                except Exception as disc_err:
-                    logging.warning(f"[DISCONNECT] room.disconnect() failed: {disc_err}")
-
-        # Fire off the generation + cleanup task
-        asyncio.create_task(generate_offline_report())
     # ── Start session ─────────────────────────────────────────────────────────
     await session.start(room=ctx.room, agent=agent)
 
