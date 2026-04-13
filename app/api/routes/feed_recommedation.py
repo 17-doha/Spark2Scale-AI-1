@@ -5,7 +5,7 @@ Key change: both /similar-investors and /recommend now run tag-filtered
 Qdrant searches via the LangGraph pipeline — no new endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from app.core.limiter import api_limiter
 from app.core.logger import get_logger
 from app.graph.feed_recommedation_agent.schema import (
@@ -35,7 +35,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny
 import os
 
 from fastapi import BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, json
 from app.graph.feed_recommedation_agent.rewards import REWARD_MATRIX, InteractionType
 from app.core.supabase_client import supabase
 from neo4j import GraphDatabase
@@ -133,6 +133,10 @@ async def get_similar_investors(request: Request, investor_id: str, k: int = TOP
 
     return SimilarInvestorsResponse(investor_id=investor_id, results=results, k=k)
 
+# ════════════════════════════════════════════════════════════════════════════
+#  INTERACTIONS - Tags
+# ════════════════════════════════════════════════════════════════════════════
+
 @router.post("/interactions")
 async def handle_interaction(payload: InteractionPayload, background_tasks: BackgroundTasks):
     # 1. Determine RL Action
@@ -152,16 +156,21 @@ async def handle_interaction(payload: InteractionPayload, background_tasks: Back
 
     # 2. Fetch the 'tags' array directly from the pitchdecks table
     try:
-        # Changed 'main_tag' to 'tags'
-        response = supabase.table("pitchdecks").select("tags").eq("pitchdeckid", payload.pitch_id).single().execute()
+        response = supabase.table("pitchdecks").select("analysis").eq("pitchdeckid", payload.pitch_id).single().execute()
         
-        if not response.data or not response.data.get("tags"):
-            logger.warning(f"[Interaction] Pitch {payload.pitch_id} missing tags.")
-            raise HTTPException(status_code=404, detail="Pitch deck tags not found.")
+        analysis = response.data.get("analysis", {})
+        if isinstance(analysis, str):
+            analysis = json.loads(analysis)
             
-        parent_tags = response.data["tags"] # This is now a list of strings
-        logger.info(f"[Interaction] Resolved Tags: {parent_tags} for Pitch {payload.pitch_id}")
+        tags_dict = analysis.get("sub_tags", {})
         
+        parent_tags = list(tags_dict.keys())
+        
+        # Flatten the dictionary values into a single list of subtags
+        sub_tags = []
+        for st_list in tags_dict.values():
+            sub_tags.extend(st_list)
+            
     except Exception as e:
         logger.error(f"Failed to fetch tags for pitch {payload.pitch_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -173,9 +182,10 @@ async def handle_interaction(payload: InteractionPayload, background_tasks: Back
 
     # Fire ONE atomic Neo4j Graph Update for ALL tags attached to the pitch deck
     background_tasks.add_task(
-        update_graph_edge_weights, # Make sure this matches the new function name (plural 'weights')
+        update_graph_edge_weights,
         user_id=payload.user_id,
-        tag_names=parent_tags,     # Pass the entire list at once
+        tag_names=parent_tags, 
+        subtag_names=sub_tags,   # <-- Pass the new flattened list here
         reward=config.reward,
         alpha=config.alpha
     )
@@ -296,6 +306,33 @@ async def verify_full_sync():
         "discrepancy_count": len(discrepancies),
         "discrepancies": discrepancies
     }
+
+@router.get("/investors/{user_id}/subtags")
+async def fetch_investor_subtags(
+    user_id: str,
+    hate_threshold: float = Query(
+        default=0.01, 
+        description="Filters out SubTags if their Parent Tag's weight is below this decimal (e.g., 0.01 for 1%)."
+    )
+):
+    """
+    Retrieves the globally sorted list of SubTags for a specific investor.
+    - Mathematically sorts from most-loved to least-loved.
+    - Filters out categories the investor has repeatedly disliked.
+    """
+    try:
+        # Call the Neo4j tool we just wrote
+        subtags = get_investor_subtags(user_id=user_id, hate_threshold=hate_threshold)
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "hate_threshold_applied": hate_threshold,
+            "subtag_count": len(subtags),
+            "subtags": subtags
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error while fetching subtags: {str(e)}")
 # ════════════════════════════════════════════════════════════════════════════
 #  RECOMMEND  — full filtered LangGraph pipeline
 # ════════════════════════════════════════════════════════════════════════════
