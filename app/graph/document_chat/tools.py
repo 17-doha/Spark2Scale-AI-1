@@ -2,13 +2,15 @@
 tools.py — Pure utility classes (no LangChain / LangGraph dependencies).
 
 Contains:
-  - DocumentParser   : routes file types and parses them into annotated text.
+  - DocumentParser   : routes file types (local, JSON, and URLs) and parses them into annotated text.
   - SecurityGuardrails : sanitises PII and caps query length.
 """
 
 import json
 import os
 import re
+import tempfile
+import requests
 
 import fitz  # PyMuPDF
 from pptx import Presentation
@@ -25,15 +27,20 @@ class DocumentParser:
     def route_and_parse(file_data: str) -> str:
         """
         Accept either:
-          a) a raw JSON string payload sent directly from the frontend, or
-          b) a local file path (PDF / PPTX / JSON).
+          a) a raw JSON string payload sent directly from the frontend,
+          b) a remote HTTP/HTTPS URL (e.g., from Supabase), or
+          c) a local file path (PDF / PPTX / JSON).
         Returns a single block of spatially-annotated plain text.
         """
-        # 1. Detect inline JSON payload
+        # 1. Detect inline JSON payload (Fastest path)
         if file_data.strip().startswith("{") or file_data.strip().startswith("["):
             return DocumentParser._parse_json_string(file_data)
 
-        # 2. Treat as a local file path
+        # 2. Detect remote Supabase URL
+        if file_data.startswith("http://") or file_data.startswith("https://"):
+            return DocumentParser._download_and_parse(file_data)
+
+        # 3. Treat as a local file path
         ext = os.path.splitext(file_data)[1].lower()
         if ext == ".pdf":
             return DocumentParser._parse_pdf(file_data)
@@ -47,6 +54,40 @@ class DocumentParser:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _download_and_parse(url: str) -> str:
+        """Downloads a remote file to a temporary location, parses it, and cleans up."""
+        # Extract extension, ignoring any URL query parameters
+        clean_url = url.split("?")[0]
+        ext = os.path.splitext(clean_url)[1].lower()
+        
+        try:
+            # Download the file
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            
+            # Write to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_file:
+                temp_file.write(response.content)
+                temp_file_path = temp_file.name
+                
+            # Route to the correct parser
+            if ext == ".pdf":
+                parsed_text = DocumentParser._parse_pdf(temp_file_path)
+            elif ext == ".pptx":
+                parsed_text = DocumentParser._parse_pptx(temp_file_path)
+            elif ext == ".json":
+                parsed_text = DocumentParser._parse_json(temp_file_path)
+            else:
+                parsed_text = "Unsupported remote file type."
+                
+            # Clean up the temp file so your server doesn't run out of storage
+            os.remove(temp_file_path)
+            return parsed_text
+            
+        except Exception as e:
+            raise ValueError(f"Failed to download and parse remote document: {e}")
 
     @staticmethod
     def _normalize(text: str) -> str:
