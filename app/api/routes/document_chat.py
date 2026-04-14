@@ -3,13 +3,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.graph.document_chat.schema import (
-    DocumentQARequest,
-    DocumentQAResponse,
-    EnhanceRequest,
-    EnhanceResponse,
-)
-from app.graph.document_chat.workflow import document_chat_app, enhance_app
+from app.graph.document_chat.schema import DocumentQARequest, DocumentQAResponse
+from app.graph.document_chat.workflow import app as document_chat_graph
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +19,10 @@ async def test_document_qa(request: DocumentQARequest):
     """
     Document context extraction and QA pipeline powered by the
     document_chat LangGraph workflow.
+
+    Steps (handled internally by the graph):
+      1. parse_document_node  — parse file / payload, sanitise PII, cap query.
+      2. answer_query_node    — invoke the LangChain QA chain and return the answer.
     """
     # --- Guardrail: file must exist on disk ---
     if not os.path.exists(request.file_path):
@@ -57,7 +56,7 @@ async def test_document_qa(request: DocumentQARequest):
             "model_name": request.model_name,
         }
 
-        result = document_chat_app.invoke(initial_state)
+        result = document_chat_graph.invoke(initial_state)
 
         return DocumentQAResponse(
             status="success",
@@ -74,42 +73,4 @@ async def test_document_qa(request: DocumentQARequest):
         raise HTTPException(
             status_code=500,
             detail=f"An error occurred during inference: {e}",
-        )
-
-
-@router.post("/enhance", response_model=EnhanceResponse)
-async def enhance_document_based_on_chat(request: EnhanceRequest):
-    """
-    Analyse the conversation history to produce structured enhancement
-    instructions for the document, using the enhance LangGraph workflow.
-    """
-    try:
-        logger.info(
-            f"Invoking enhance graph | startup={request.startup_id} "
-            f"document={request.document_type!r}"
-        )
-
-        initial_state = {
-            "startup_id": request.startup_id,
-            "document_type": request.document_type,
-            "chat_history": request.chat_history,
-            "specific_edits": request.specific_edits,
-            "provider": request.provider,
-            "model_name": request.model_name,
-        }
-
-        result = enhance_app.invoke(initial_state)
-
-        return EnhanceResponse(
-            status="success",
-            document_type=request.document_type,
-            enhancement_instructions=result["enhancement_instructions"],
-        )
-
-    except Exception as e:
-        logger.error(f"Enhance inference error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred during enhancement inference: {e}",
-        )
-
+        )
