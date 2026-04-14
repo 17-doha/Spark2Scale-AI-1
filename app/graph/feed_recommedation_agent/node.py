@@ -13,6 +13,7 @@ from app.graph.feed_recommedation_agent.tools.embedding_tools import sync_tags_t
 from app.graph.feed_recommedation_agent.tools.tag_tools import (
     fetch_investor_tags,
     get_investor_subtags,
+    get_sibling_subtags,
 )
 from app.graph.feed_recommedation_agent.tools import (
     build_investor_embedding,
@@ -24,7 +25,7 @@ from app.graph.feed_recommedation_agent.schema import FeedRecommendationState
 
 logger = get_logger(__name__)
 TOP_K: int = int(os.getenv("TOP_K", "10"))
-
+FALLBACK_SIBLING_LIMIT: int = int(os.getenv("FALLBACK_SIBLING_LIMIT", "30"))
 
 # ════════════════════════════════════════════════════════════════════════════
 #  Original investor embedding nodes  (used by the embed workflow)
@@ -76,19 +77,51 @@ async def generate_filter_tags_node(state: FilteredSearchState) -> dict:
 
 
 async def build_investor_vector_node(state: FilteredSearchState) -> dict:
-    """NODE 2 — Investor aggregated tag embedding."""
-    tags = fetch_investor_tags(state["investor_id"])
+    """
+    NODE 2 — Investor query vector.
+
+    Priority order:
+      1. UCB sub-vector (Task 4) — if [investor_sub_vectors] is populated,
+         picks the under-explored MainTag sub-vector via UCB.
+      2. Aggregated fallback      — simple mean of all tag embeddings,
+         used when sub-vectors haven't been built yet.
+
+    Choosing the UCB sub-vector here means every Qdrant search in Node 3
+    already benefits from multi-vector diversity without changing anything
+    downstream.
+    """
+    from app.graph.feed_recommedation_agent.tools.contrastive import (
+        select_query_vector_ucb,
+        increment_sub_vector_impressions,
+    )
+
+    investor_id = state["investor_id"]
+
+    # ── Attempt 1: UCB sub-vector ────────────────────────────────────────────
+    ucb_vector, selected_tag = select_query_vector_ucb(investor_id)
+    if ucb_vector is not None:
+        increment_sub_vector_impressions(investor_id, selected_tag)
+        logger.info("[Node2] UCB sub-vector selected: tag='%s'.", selected_tag)
+        return {"investor_vector": ucb_vector}
+
+    # ── Attempt 2: aggregated fallback ───────────────────────────────────────
+    tags = fetch_investor_tags(investor_id)
     if not tags:
-        return {"investor_vector": None, "errors": [f"Investor {state['investor_id']} has no tags."]}
+        return {
+            "investor_vector": None,
+            "errors": [f"Investor {investor_id} has no tags."],
+        }
 
     tag_map = await sync_tags_to_qdrant(tags)
     vecs    = [tag_map[t] for t in tags if t in tag_map]
     if not vecs:
-        return {"investor_vector": None, "errors": ["Tag embeddings unavailable."]}
+        return {
+            "investor_vector": None,
+            "errors": ["Tag embeddings unavailable."],
+        }
 
-    logger.info("[Node2] Built vector for investor %s (%d tags).", state["investor_id"], len(tags))
+    logger.info("[Node2] Aggregated fallback vector used for investor %s.", investor_id)
     return {"investor_vector": aggregate_embeddings(vecs, strategy="mean")}
-
 
 async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
     """
@@ -158,3 +191,93 @@ async def format_output_node(state: FilteredSearchState) -> dict:
     results = state.get("final_results", [])
     logger.info("[Node5] Returning %d results for investor %s.", len(results), state["investor_id"])
     return {"final_results": results}
+
+
+async def sibling_fallback_node(state: FilteredSearchState) -> dict:
+    """
+    NODE 3b — Triggered when filtered_vector_search returned fewer than TOP_K
+    candidates. Widens the search by:
+
+      1. Querying Neo4j for SubTag siblings (share a parent Tag with filter_tags).
+      2. Running a second Qdrant ANN search filtered to those sibling tags.
+      3. Merging new hits into the existing candidate list (no duplicates).
+
+    The original candidates are preserved — we only append, never replace.
+    """
+    current_candidates = state.get("candidates", [])
+    filter_tags        = state.get("filter_tags", [])
+    investor_vector    = state.get("investor_vector")
+
+    if investor_vector is None:
+        return {
+            "fallback_triggered": False,
+            "sibling_tags": [],
+            "errors": ["Sibling fallback skipped: no investor vector."],
+        }
+
+    # 1. How many more do we need?
+    needed = TOP_K - len(current_candidates)
+    if needed <= 0:
+        return {"fallback_triggered": False, "sibling_tags": []}
+
+    # 2. Get siblings, excluding tags already searched
+    already_seen_ids = {c["pitchdeck_id"] for c in current_candidates}
+    siblings = get_sibling_subtags(
+        subtag_names=filter_tags,
+        exclude=filter_tags,            # don't re-search the same tags
+        limit=FALLBACK_SIBLING_LIMIT,
+    )
+
+    if not siblings:
+        logger.warning(
+            "[FallbackNode] No siblings found for filter_tags=%s", filter_tags
+        )
+        return {
+            "fallback_triggered": True,
+            "sibling_tags": [],
+            "errors": ["Sibling fallback: no Neo4j siblings found."],
+        }
+
+    # 3. Second Qdrant search — filtered to sibling tags only
+    sibling_filter = Filter(
+        should=[FieldCondition(key="tags", match=MatchAny(any=siblings))]
+    )
+
+    try:
+        res = get_qdrant().query_points(
+            collection_name = "pitchdecks",
+            query           = investor_vector,
+            query_filter    = sibling_filter,
+            limit           = needed * 2,       # fetch extra; reranker trims later
+            with_payload    = True,
+        )
+        new_hits = [
+            {
+                "pitchdeck_id"     : h.payload.get("pitchdeck_id"),
+                "startup_id"       : h.payload.get("startup_id"),
+                "tags"             : h.payload.get("tags", []),
+                "vector_score"     : round(h.score, 4),
+                "from_fallback"    : True,      # tag origin for observability
+            }
+            for h in res.points
+            if h.payload.get("pitchdeck_id") not in already_seen_ids
+        ]
+    except Exception as e:
+        logger.error("[FallbackNode] Qdrant sibling search failed: %s", e)
+        return {
+            "fallback_triggered": True,
+            "sibling_tags": siblings,
+            "errors": [f"Sibling fallback Qdrant error: {e}"],
+        }
+
+    merged = current_candidates + new_hits
+    logger.info(
+        "[FallbackNode] Merged %d original + %d sibling hits = %d total candidates.",
+        len(current_candidates), len(new_hits), len(merged),
+    )
+
+    return {
+        "candidates"        : merged,
+        "fallback_triggered": True,
+        "sibling_tags"      : siblings,
+    }

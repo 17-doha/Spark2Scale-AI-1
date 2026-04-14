@@ -29,6 +29,10 @@ from app.graph.feed_recommedation_agent.tools import (
     build_and_store_investor_embedding,
     build_investor_embedding,
 )
+from app.graph.feed_recommedation_agent.tools.contrastive import (
+    build_investor_sub_vectors,
+    update_sub_vector_from_interaction,
+)
 from app.graph.feed_recommedation_agent.workflow import filtered_search_app
 from app.core.qdrant_client import get_qdrant
 from qdrant_client.models import Filter, FieldCondition, MatchAny
@@ -139,60 +143,81 @@ async def get_similar_investors(request: Request, investor_id: str, k: int = TOP
 
 @router.post("/interactions")
 async def handle_interaction(payload: InteractionPayload, background_tasks: BackgroundTasks):
-    # 1. Determine RL Action
     if payload.contacted:
-        action_type = InteractionType.CONTACT
+        action_type  = InteractionType.CONTACT
+        interaction  = "contact"
     elif payload.liked:
-        action_type = InteractionType.LIKE
+        action_type  = InteractionType.LIKE
+        interaction  = "like"
     else:
-        action_type = InteractionType.DISLIKE
+        action_type  = InteractionType.DISLIKE
+        interaction  = "dislike"
 
-    config = REWARD_MATRIX.get(action_type)
-    
-    logger.info(
-        f"[Interaction] User {payload.user_id} -> Pitch {payload.pitch_id} | "
-        f"Action: {action_type.name} | Reward: {config.reward} | Alpha: {config.alpha}"
-    )
+    config_rl = REWARD_MATRIX.get(action_type)
 
-    # 2. Fetch the 'tags' array directly from the pitchdecks table
+    # Fetch pitchdeck analysis (tags + subtags)
     try:
-        response = supabase.table("pitchdecks").select("analysis").eq("pitchdeckid", payload.pitch_id).single().execute()
-        
-        analysis = response.data.get("analysis", {})
+        response  = supabase.table("pitchdecks").select("analysis, tags").eq(
+            "pitchdeckid", payload.pitch_id
+        ).single().execute()
+
+        raw_tags  = response.data.get("tags") or []           # MainTag list
+        analysis  = response.data.get("analysis", {})
         if isinstance(analysis, str):
-            analysis = json.loads(analysis)
-            
-        tags_dict = analysis.get("sub_tags", {})
-        
+            import json as _json
+            analysis = _json.loads(analysis)
+
+        tags_dict  = analysis.get("sub_tags", {}) if isinstance(analysis, dict) else {}
         parent_tags = list(tags_dict.keys())
-        
-        # Flatten the dictionary values into a single list of subtags
-        sub_tags = []
-        for st_list in tags_dict.values():
-            sub_tags.extend(st_list)
-            
+        sub_tags    = [st for sts in tags_dict.values() for st in sts]
+
     except Exception as e:
-        logger.error(f"Failed to fetch tags for pitch {payload.pitch_id}: {e}")
+        logger.error("Failed to fetch tags for pitch %s: %s", payload.pitch_id, e)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    # 3. Fire Neo4j Graph Update for EVERY tag attached to the pitch deck
-    except Exception as e:
-        logger.error(f"Failed to fetch tags for pitch {payload.pitch_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-    # Fire ONE atomic Neo4j Graph Update for ALL tags attached to the pitch deck
+    # Task 3 (existing): update Neo4j graph edge weights
     background_tasks.add_task(
         update_graph_edge_weights,
-        user_id=payload.user_id,
-        tag_names=parent_tags, 
-        subtag_names=sub_tags,   # <-- Pass the new flattened list here
-        reward=config.reward,
-        alpha=config.alpha
+        user_id     = payload.user_id,
+        tag_names   = parent_tags,
+        subtag_names = sub_tags,
+        reward      = config_rl.reward,
+        alpha       = config_rl.alpha,
+    )
+
+    # Task 4 (new): triplet sub-vector update
+    background_tasks.add_task(
+        update_sub_vector_from_interaction,
+        investor_id    = payload.user_id,
+        pitchdeck_id   = payload.pitch_id,
+        interaction    = interaction,
+        pitchdeck_tags = raw_tags or parent_tags,
     )
 
     return {
-        "status": "success", 
-        "message": f"Registered {action_type.value}. Neo4j learning in background for tags: {', '.join(parent_tags)}."
+        "status"  : "success",
+        "message" : (
+            f"Registered {action_type.value}. "
+            f"Neo4j + sub-vector update running in background for tags: {', '.join(parent_tags)}."
+        ),
+    }
+
+@router.post("/sub-vectors/build/{investor_id}")
+@api_limiter.limit("10/minute")
+async def build_sub_vectors(request: Request, investor_id: str):
+    """
+    Build or rebuild per-MainTag sub-vectors for one investor.
+    Call this once after onboarding, then let the /interactions endpoint
+    keep vectors current via triplet updates.
+    """
+    results = await build_investor_sub_vectors(investor_id)
+    ok      = sum(v for v in results.values())
+    return {
+        "investor_id": investor_id,
+        "total"      : len(results),
+        "stored"     : ok,
+        "failed"     : len(results) - ok,
+        "detail"     : results,
     }
 @router.post("/admin/sync-neo4j")
 async def trigger_manual_neo4j_sync(background_tasks: BackgroundTasks):
@@ -310,29 +335,23 @@ async def verify_full_sync():
 @router.get("/investors/{user_id}/subtags")
 async def fetch_investor_subtags(
     user_id: str,
-    hate_threshold: float = Query(
-        default=0.01, 
-        description="Filters out SubTags if their Parent Tag's weight is below this decimal (e.g., 0.01 for 1%)."
-    )
+    hate_threshold: float = Query(default=0.01),
+    limit: int = Query(default=50, ge=1, le=200),
 ):
-    """
-    Retrieves the globally sorted list of SubTags for a specific investor.
-    - Mathematically sorts from most-loved to least-loved.
-    - Filters out categories the investor has repeatedly disliked.
-    """
-    try:
-        # Call the Neo4j tool we just wrote
-        subtags = get_investor_subtags(user_id=user_id, hate_threshold=hate_threshold)
-        
-        return {
-            "status": "success",
-            "user_id": user_id,
-            "hate_threshold_applied": hate_threshold,
-            "subtag_count": len(subtags),
-            "subtags": subtags
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error while fetching subtags: {str(e)}")
+    subtags = get_investor_subtags(
+        user_id=user_id,
+        hate_threshold=hate_threshold,
+        limit=limit,
+    )
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "hate_threshold_applied": hate_threshold,
+        "limit": limit,
+        "subtag_count": len(subtags),
+        "subtags": subtags,
+    }
+
 # ════════════════════════════════════════════════════════════════════════════
 #  RECOMMEND  — full filtered LangGraph pipeline
 # ════════════════════════════════════════════════════════════════════════════

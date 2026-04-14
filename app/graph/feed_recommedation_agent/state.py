@@ -14,3 +14,5 @@ class FilteredSearchState(TypedDict):
     candidates     : list[dict]
     final_results  : list[dict]
     errors         : Annotated[list[str], operator.add]
+    fallback_triggered : bool
+    sibling_tags       : list[str]
