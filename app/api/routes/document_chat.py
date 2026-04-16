@@ -41,7 +41,7 @@ async def test_document_qa(request: DocumentQARequest):
                 response.raise_for_status()
                 
                 # Save to a temporary file
-                fd, temp_path = tempfile.mkstemp(suffix=".pdf") # Defaulting to pdf extension
+                fd, temp_path = tempfile.mkstemp(suffix=".pdf") 
                 with os.fdopen(fd, 'wb') as f:
                     f.write(response.content)
                 
@@ -72,12 +72,10 @@ async def test_document_qa(request: DocumentQARequest):
                 detail=f"File not found at path: {actual_file_path}",
             )
 
-        # --- Guardrail: cap file size to prevent container memory overflow ---
+        # --- Guardrail: cap file size ---
         file_size_bytes = os.path.getsize(actual_file_path)
         if file_size_bytes > MAX_FILE_SIZE_MB * 1024 * 1024:
-            logger.warning(
-                f"Rejected file {actual_file_path}: exceeds {MAX_FILE_SIZE_MB} MB limit."
-            )
+            logger.warning(f"Rejected file {actual_file_path}: exceeds {MAX_FILE_SIZE_MB} MB limit.")
             raise HTTPException(
                 status_code=413,
                 detail=f"Payload Too Large. Maximum allowed file size is {MAX_FILE_SIZE_MB} MB.",
@@ -90,10 +88,11 @@ async def test_document_qa(request: DocumentQARequest):
         )
 
         initial_state = {
-            "file_path": actual_file_path,  # Now guaranteed to be a valid local path
+            "file_path": actual_file_path,
             "query": request.query,
             "provider": request.provider,
             "model_name": request.model_name,
+            "chat_history": request.chat_history or [] 
         }
 
         result = document_chat_graph.invoke(initial_state)
@@ -101,12 +100,12 @@ async def test_document_qa(request: DocumentQARequest):
         return DocumentQAResponse(
             status="success",
             provider_used=request.provider,
-            query=result["query"],   # may have been sanitised by the graph
+            query=result["query"],   
             answer=result["answer"],
         )
 
     except HTTPException:
-        raise  # Re-raise FastApi exceptions so they return correct status codes
+        raise  
     except ValueError as e:
         logger.error(f"Parsing error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -118,7 +117,6 @@ async def test_document_qa(request: DocumentQARequest):
         )
     finally:
         # --- CLEANUP ---
-        # Ensure temporary files are deleted so the Azure server doesn't run out of storage
         if is_temp_file and actual_file_path and os.path.exists(actual_file_path):
             try:
                 os.remove(actual_file_path)

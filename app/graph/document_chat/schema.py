@@ -8,6 +8,8 @@ class DocumentQARequest(BaseModel):
     query: str
     provider: str = "gemini"
     model_name: str | None = None
+    # NEW: Accept a list of previous messages
+    chat_history: list[dict] | None = None
 
 
 class DocumentQAResponse(BaseModel):

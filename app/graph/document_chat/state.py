@@ -21,7 +21,7 @@ class DocumentChatState(TypedDict):
     query: str
     provider: str
     model_name: str | None
-
-    # --- intermediate / output ---
-    document_context: str
-    answer: str
+    chat_history: list[dict] | None 
+    
+    document_context: str | None
+    answer: str | None
