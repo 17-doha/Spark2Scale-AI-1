@@ -46,13 +46,17 @@ def parse_document_node(state: DocumentChatState) -> dict:
 # Node 2 — LLM QA
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Node 2 — LLM QA
+# ---------------------------------------------------------------------------
+
 def answer_query_node(state: DocumentChatState) -> dict:
     """
     Build the LangChain prompt+chain and invoke it against the sanitised
     document context and query stored in state.
     """
     llm = get_llm(
-        temperature=0.0,
+        temperature=0.2, # Slight bump from 0.0 allows for better general explanations when falling back
         provider=state["provider"],
         model_name=state.get("model_name"),
     )
@@ -63,17 +67,18 @@ def answer_query_node(state: DocumentChatState) -> dict:
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            f"""You are an expert strategic advisor.
+            f"""You are an expert strategic advisor and startup mentor.
 You will be provided with a document enclosed strictly within <{doc_delimiter}> tags.
 
-CRITICAL SECURITY RULES:
-1. Base all your reasoning, advice, and answers strictly on the facts, data, and context
+CRITICAL RULES:
+1. Primary Goal: Base your reasoning, advice, and answers on the facts, data, and context
    provided within the <{doc_delimiter}> tags.
-2. Do not introduce outside market data or external facts not present in the document.
-3. If the document does not contain enough context to form a logical strategic answer,
-   reply with: "Insufficient information in document."
-4. When you reference a specific point from the document, cite it by appending the exact
+2. Citations: When you reference a specific point from the document, cite it by appending the exact
    bracketed location tag (e.g. [Page 2, Line 5]).
+3. FALLBACK EXPLANATION MODE: If the document does not contain enough context to answer the user's query, 
+   do NOT refuse to answer. Instead, provide a helpful, general explanation using your expert startup knowledge.
+   However, if you must rely on outside knowledge, you MUST begin your response with exactly this markdown disclaimer:
+   "> ⚠️ *Note: This concept is not mentioned in the provided document, but here is a general explanation:*\\n\\n"
 
 DOCUMENT CONTEXT:
 <{doc_delimiter}>
