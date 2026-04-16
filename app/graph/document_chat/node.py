@@ -13,7 +13,7 @@ answer_query_node    : Runs the LangChain QA chain and produces the final answer
 import uuid
 
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from app.core.llm import get_llm
 from app.graph.document_chat.state import DocumentChatState
@@ -50,49 +50,54 @@ def parse_document_node(state: DocumentChatState) -> dict:
 # Node 2 — LLM QA
 # ---------------------------------------------------------------------------
 
-def answer_query_node(state: DocumentChatState) -> dict:
-    """
-    Build the LangChain prompt+chain and invoke it against the sanitised
-    document context and query stored in state.
-    """
+def answer_query_node(state: dict) -> dict: # Update to use your specific state typing
     llm = get_llm(
-        temperature=0.2, # Slight bump from 0.0 allows for better general explanations when falling back
+        temperature=0.2, 
         provider=state["provider"],
         model_name=state.get("model_name"),
     )
 
-    # Dynamic delimiter per invocation to prevent prompt-injection guessing
     doc_delimiter = f"doc_{uuid.uuid4().hex[:8]}"
 
+    # We use MessagesPlaceholder to inject the chat history dynamically
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
             f"""You are an expert strategic advisor and startup mentor.
-You will be provided with a document enclosed strictly within <{doc_delimiter}> tags.
-
-CRITICAL RULES:
-1. Primary Goal: Base your reasoning, advice, and answers on the facts, data, and context
-   provided within the <{doc_delimiter}> tags.
-2. Citations: When you reference a specific point from the document, cite it by appending the exact
-   bracketed location tag (e.g. [Page 2, Line 5]).
-3. FALLBACK EXPLANATION MODE: If the document does not contain enough context to answer the user's query, 
-   do NOT refuse to answer. Instead, provide a helpful, general explanation using your expert startup knowledge.
-   However, if you must rely on outside knowledge, you MUST begin your response with exactly this markdown disclaimer:
-   "> ⚠️ *Note: This concept is not mentioned in the provided document, but here is a general explanation:*\\n\\n"
+You are assisting a founder who is reviewing their startup document.
 
 DOCUMENT CONTEXT:
 <{doc_delimiter}>
 {{context}}
-</{doc_delimiter}>""",
+</{doc_delimiter}>
+
+CRITICAL RULES:
+1. Try to answer the user's question using ONLY the provided document context. 
+2. If you use the document, you MUST cite it using the bracketed location (e.g., [Page 2, Line 5]).
+3. FALLBACK: If the answer is NOT in the document (or if the user is asking a general follow-up question or asking to explain a concept), rely on your expert startup knowledge.
+4. If you use the FALLBACK mode, you MUST start your response with: "*(General Startup Knowledge)*\\n\\n" and DO NOT apologize or mention that the document doesn't contain the answer. Just answer the question directly.
+5. Keep your answers concise, direct, and highly actionable. No fluff. Use bullet points if necessary. Do not use emojis in your fallback disclaimer."""
         ),
-        ("human", "QUERY: {query}"),
+        MessagesPlaceholder(variable_name="chat_history"), # Inject memory here!
+        ("human", "{query}"),
     ])
 
     chain = prompt | llm | StrOutputParser()
 
+    # Format history if it exists in your state, otherwise pass empty list
+    # Assuming your history is a list of dicts like [{"role": "user", "content": "..."}]
+    raw_history = state.get("chat_history", [])
+    formatted_history = []
+    for msg in raw_history[-4:]: # Only grab the last 4 messages to save tokens
+        if msg["role"] == "user":
+            formatted_history.append(("human", msg["content"]))
+        else:
+            formatted_history.append(("assistant", msg["content"]))
+
     answer = chain.invoke({
-        "context": state["document_context"],
-        "query": state["query"],
+        "context": state.get("document_context", ""),
+        "chat_history": formatted_history,
+        "query": state.get("query", ""),
     })
 
     return {"answer": answer}
