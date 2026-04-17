@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 # Added document_qa to your existing imports
-from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix, pitch_analyzer, document_chat, bmc
+from app.api.routes import ppt_generation, evaluation, market_research, recommendation, pdf_extraction, chat, swot_generation, competitor_matrix, pitch_analyzer, document_chat, bmc, chat_summarizer
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -44,6 +44,7 @@ app.include_router(competitor_matrix.router, prefix="/api/v1/competitor-matrix",
 app.include_router(pitch_analyzer.router, prefix="/api/v1/pitch-analyzer", tags=["Pitch Analyzer"])
 app.include_router(document_chat.router, prefix="/api/v1/document-chat", tags=["Document Chat"])
 app.include_router(bmc.router, prefix="/api/v1/bmc", tags=["Business Model Canvas"])
+app.include_router(chat_summarizer.router, prefix="/api/v1/chat-summarizer", tags=["Chat Summarizer"])
 
 @app.get("/")
 def read_root():
