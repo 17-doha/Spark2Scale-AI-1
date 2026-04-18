@@ -65,7 +65,8 @@ def generate_swot_document(idea_name: str, swot_context: dict, provider: str = D
             "opportunities_context": opportunities_str,
             "threats_context": threats_str,
             "tows_strategies": tows_str,
-            "strategic_verdict": verdict_str
+            "strategic_verdict": verdict_str,
+            "user_comment": swot_context.get("user_comment", "")
         })
         
         json_content = response.content.replace("```json", "").replace("```", "").strip()

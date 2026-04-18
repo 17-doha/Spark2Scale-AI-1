@@ -17,6 +17,7 @@ class SWOTRequest(BaseModel):
     idea_description: str
     region: Optional[str] = "Global"
     market_research: dict
+    comment: Optional[str] = None
 
 class SWOTResponse(BaseModel):
     message: str
@@ -28,6 +29,7 @@ class CompetitorAnalysisRequest(BaseModel):
     idea_description: str
     region: Optional[str] = "Global"
     market_research: dict
+    comment: Optional[str] = None
 
 class CompetitorAnalysisResponse(BaseModel):
     message: str
