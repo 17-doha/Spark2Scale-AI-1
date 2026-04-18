@@ -209,7 +209,9 @@ async def edit_ppt(
     startup_id: str = Form(..., description="The UUID of the startup"),
     ppt_file: UploadFile = File(..., description="The existing PPTX file to edit"),
     logo: Optional[UploadFile] = File(None),
-    use_default_colors: bool = Form(True)
+    use_default_colors: bool = Form(True),
+    user_instructions: Optional[str] = Form(None, description="Instructions from the user on what to edit"),
+    chat_summary: Optional[str] = Form(None, description="JSON string from the chat summarizer containing document_changes")
 ):
     """Refine an existing PPTX file to match pitch standards."""
     temp_dir = tempfile.mkdtemp()
@@ -230,6 +232,24 @@ async def edit_ppt(
             with open(logo_path, "wb") as f:
                 f.write(await logo.read())
 
+        final_instructions = user_instructions or ""
+        
+        if chat_summary:
+            try:
+                summary_data = json.loads(chat_summary)
+                changes = summary_data.get("document_changes", [])
+                if not changes and "summary" in summary_data:
+                    changes = summary_data["summary"].get("document_changes", [])
+                
+                if changes:
+                    changes_text = "\n".join(f"- {c}" for c in changes)
+                    if final_instructions:
+                        final_instructions += f"\n\nAdditional requested changes from chat:\n{changes_text}"
+                    else:
+                        final_instructions = f"Requested changes from chat:\n{changes_text}"
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse chat_summary JSON")
+        
         initial_state: PPTGenerationState = {
             "research_data": extracted_text,
             "logo_path": logo_path,
@@ -239,7 +259,8 @@ async def edit_ppt(
             "critique": None,
             "iteration": 0,
             "ppt_path": pptx_path,
-            "mode": "edit"
+            "mode": "edit",
+            "user_instructions": final_instructions if final_instructions else None
         }
 
         return await run_ppt_generation(initial_state, startup_id)
