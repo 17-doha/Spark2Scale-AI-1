@@ -11,7 +11,7 @@ logger = get_logger("DocumentGeneratorNodes")
 
 def scrape_competitors_node(state: DocumentGeneratorState) -> dict:
     logger.info("--- Node: scrape_competitors_node ---")
-    reviews = scrape_competitor_reviews(state["idea_name"], state["market_research"])
+    reviews = scrape_competitor_reviews(state["idea_name"], state["market_research"], state.get("comment"))
     if not reviews:
         return {"errors": ["scrape_competitors_node failed to return reviews."]}
     return {"reviews_data": reviews}
@@ -25,14 +25,14 @@ def analyze_gaps_node(state: DocumentGeneratorState) -> dict:
 
 def scrape_barriers_node(state: DocumentGeneratorState) -> dict:
     logger.info("--- Node: scrape_barriers_node ---")
-    barriers = scrape_regulatory_barriers(state["idea_name"], state.get("region", "Global"))
+    barriers = scrape_regulatory_barriers(state["idea_name"], state.get("region", "Global"), state.get("comment"))
     if not barriers:
          return {"errors": ["scrape_barriers_node failed to return barrier data."]}
     return {"barriers_data": barriers}
 
 def analyze_weaknesses_node(state: DocumentGeneratorState) -> dict:
     logger.info("--- Node: analyze_weaknesses_node ---")
-    weaknesses = analyze_weaknesses(state["idea_name"], state["market_research"], state.get("idea_description", ""), state.get("region", "Global"))
+    weaknesses = analyze_weaknesses(state["idea_name"], state["market_research"], state.get("idea_description", ""), state.get("region", "Global"), state.get("comment"))
     if not weaknesses:
          return {"errors": ["analyze_weaknesses_node failed to return weakness data."]}
     return {"weaknesses_data": weaknesses}
@@ -46,7 +46,8 @@ def assemble_swot_context_node(state: DocumentGeneratorState) -> dict:
         reviews_data=state.get("reviews_data", {}),
         gap_data=state.get("gap_data", {}),
         barrier_data=state.get("barriers_data", {}),
-        tows_data=None # Not yet generated
+        tows_data=None, # Not yet generated
+        comment=state.get("comment")
     )
     if swot_context and "error" in swot_context:
         return {"errors": [swot_context["error"]]}
@@ -66,7 +67,8 @@ def synthesize_tows_node(state: DocumentGeneratorState) -> dict:
         reviews_data=state.get("reviews_data", {}),
         gap_data=state.get("gap_data", {}),
         barrier_data=state.get("barriers_data", {}),
-        tows_data=tows_data
+        tows_data=tows_data,
+        comment=state.get("comment")
     )     
     return {"tows_data": tows_data, "swot_context": updated_swot_context}
 

@@ -17,7 +17,8 @@ def extract_swot_data(
     reviews_data: dict = None,
     gap_data: dict = None,
     barrier_data: dict = None,
-    tows_data: dict = None
+    tows_data: dict = None,
+    comment: str = None
 ) -> dict:
     """
     Extracts baseline data for SWOT quadrants from the given Market Research JSON
@@ -66,7 +67,8 @@ def extract_swot_data(
             "opportunities_context": [],
             "threats_context": [],
             "tows_strategies": [],
-            "strategic_verdict": ""
+            "strategic_verdict": "",
+            "user_comment": comment or ""
         }
         
         # --- Strengths (Internal / Product Validations) ---

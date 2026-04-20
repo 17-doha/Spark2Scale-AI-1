@@ -1,3 +1,8 @@
+import sys, os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import requests
 import json
 import os
@@ -22,7 +27,8 @@ def test_swot_api():
         "idea_name": "ai app to help startups",
         "idea_description": market_research_data.get("executive_summary", "Validating startup ideas."),
         "region": "Global",
-        "market_research": market_research_data
+        "market_research": market_research_data,
+        "comment": "i think the weakness should be more about the idea itself not the market"
     }
     
     print(f"Sending POST request to {API_URL}...")

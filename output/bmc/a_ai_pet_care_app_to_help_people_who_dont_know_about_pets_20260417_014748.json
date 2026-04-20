@@ -1,0 +1,53 @@
+{
+  "business_model_canvas": {
+    "value_proposition": [
+      "Solves knowledge workers' struggle with invisible mental fatigue and focus.",
+      "Provides a 'visible feedback loop' to optimize brain activity during work.",
+      "Differentiated as 'invisible' hardware for 8-hour workdays.",
+      "Integrates directly with existing productivity applications."
+    ],
+    "customer_segments": [
+      "Remote software engineers optimizing daily billable output.",
+      "Technical writers tracking personal metrics like sleep and steps.",
+      "Knowledge workers relying on coffee, unaware of brainwave optimization."
+    ],
+    "revenue_streams": [
+      "Current pricing model is 'Freemium' with a $0 price point.",
+      "This model is flagged as a deal-breaker due to no clear path to money.",
+      "Customer feedback indicates price sensitivity for the hardware."
+    ],
+    "channels": [
+      "Initial acquisition relies on 'Word of mouth / Community Direct Sales'.",
+      "This channel is noted as unsuitable for high-trust buyers.",
+      "Founder-led sales and customer interviews are critical for early learning."
+    ],
+    "customer_relationships": [
+      "Retention driven by a daily 'Focus ROI' report showing productivity gains.",
+      "Report proves faster work completion by following brainwave prompts.",
+      "Growth depends on demonstrating clear value over existing tools."
+    ],
+    "key_resources": [
+      "Founder's PhD in Neuroscience and 4 years of EEG research expertise.",
+      "Proprietary knowledge of specific 'neural signatures' for focus.",
+      "Access to AI engineering talent for software development.",
+      "Initial capital for app/website development ($150,000)."
+    ],
+    "key_activities": [
+      "Conduct customer interviews to validate willingness to pay.",
+      "Develop a clear traction plan for user and revenue acquisition.",
+      "Fix churn issues before attempting to scale the user base.",
+      "Tie all spending to explicit, measurable milestones."
+    ],
+    "key_partnerships": [
+      "Partnerships with existing productivity application platforms for integration.",
+      "Collaborations with smart office or smart home device manufacturers.",
+      "Potential academic institutions for ongoing EEG research."
+    ],
+    "cost_structure": [
+      "High startup costs for app/website development ($150,000).",
+      "Significant monthly fixed costs from staff salaries ($30,000).",
+      "Ongoing monthly marketing ad spend ($15,000) and server costs ($2,000).",
+      "A $50,000 contingency fund is allocated for unforeseen expenses."
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "business_model_canvas": {
+    "value_proposition": [
+      "Solves the problem of knowledge workers struggling with invisible mental fatigue.",
+      "Helps users achieve a productive flow state without relying on stimulants.",
+      "Offers 'invisible' hardware designed for 8-hour workdays, unlike bulky headbands.",
+      "Integrates directly with existing productivity applications for seamless use."
+    ],
+    "customer_segments": [
+      "Targets remote software engineers optimizing daily billable output.",
+      "Focuses on technical writers who track personal metrics like sleep.",
+      "Addresses knowledge workers currently relying on coffee for focus."
+    ],
+    "revenue_streams": [
+      "Projected monthly revenue is $45,000 from 100 daily customers.",
+      "Assumes an average ticket price of $15 per customer.",
+      "Current pricing model is 'Freemium' with a $0 price point.",
+      "The $0 pricing model indicates no clear path to making money."
+    ],
+    "channels": [
+      "Customer acquisition plans are currently generic and unrealistic.",
+      "Founder-led sales may be part of the initial sales motion.",
+      "Word-of-mouth and community direct sales are considered for acquisition.",
+      "Digital solutions offer high scalability to reach a broad user base."
+    ],
+    "customer_relationships": [
+      "Retain customers via a daily 'Focus ROI' report showing productivity gains.",
+      "Provides real-time brainwave prompts for breaks or deep work.",
+      "Aims to prove users finish work 20% faster with app guidance.",
+      "Potential customers are interested if the product helps them work faster."
+    ],
+    "key_resources": [
+      "Founder's PhD in Neuroscience and 4 years of EEG research experience.",
+      "Proprietary knowledge of 'neural signatures' for high-output focus.",
+      "Access to AI engineering expertise for product development.",
+      "Financial capital for initial startup costs and monthly expenses."
+    ],
+    "key_activities": [
+      "Founder to personally lead critical execution loops like sales and interviews.",
+      "Validate willingness to pay with at least 10 target buyers.",
+      "Develop and maintain sophisticated AI for brainwave analysis and prompts.",
+      "Fix churn and tie spending to explicit milestones before scaling.",
+      "Develop a clear and realistic traction plan for user acquisition."
+    ],
+    "key_partnerships": [
+      "Hardware manufacturers for EEG tracking devices.",
+      "Software platform providers for productivity app integrations.",
+      "Research institutions for ongoing neuroscience collaboration.",
+      "Distributors for reaching the target global market."
+    ],
+    "cost_structure": [
+      "Startup costs include $150,000 for app and website development.",
+      "Initial marketing launch campaigns require $75,000.",
+      "Monthly fixed costs are $30,000 for staff salaries.",
+      "Monthly marketing ad spend is $15,000.",
+      "Server and cloud infrastructure costs $2,000 monthly."
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "business_model_canvas": {
+    "value_proposition": [
+      "Solves the problem of knowledge workers struggling with invisible mental fatigue.",
+      "Helps workers optimize focus, enabling productive flow states.",
+      "Differentiated as \"invisible\" hardware built for 8-hour workdays.",
+      "Integrates directly with existing productivity applications."
+    ],
+    "customer_segments": [
+      "Targets remote software engineers optimizing daily billable output.",
+      "Focuses on technical writers who track personal health metrics.",
+      "Serves individuals unaware of brainwave states like \"alpha waves.\"",
+      "Catters to those already using gadgets like Apple Watch for optimization."
+    ],
+    "revenue_streams": [
+      "Projected monthly revenue is $45,000 from 100 daily customers.",
+      "Average ticket price is $15 per customer.",
+      "Current pricing model is Freemium with a $0 price point.",
+      "This pricing indicates a lack of clear path to making money."
+    ],
+    "channels": [
+      "Digital solutions allow reaching a broad global user base.",
+      "App store presence is implied by competitor offerings.",
+      "Word-of-mouth and community direct sales are primary acquisition channels.",
+      "Current customer acquisition plan is generic and unrealistic."
+    ],
+    "customer_relationships": [
+      "Retain customers through a daily \"Focus ROI\" report.",
+      "Report proves faster work completion via real-time brainwave prompts.",
+      "Customers are acquired by demonstrating tangible productivity benefits.",
+      "Addresses customer desire to work faster and optimize output."
+    ],
+    "key_resources": [
+      "Founder has a PhD in Neuroscience and 4 years of EEG research.",
+      "Expertise in identifying \"neural signatures\" of high-output focus.",
+      "Team possesses relevant AI engineering experience.",
+      "Initial financial capital of $295,000 for startup costs."
+    ],
+    "key_activities": [
+      "Founder must personally lead sales, hiring, and customer interviews.",
+      "Validate customer willingness to pay with at least 10 buyers.",
+      "Prioritize fixing customer churn before attempting to scale.",
+      "Develop a clear and realistic traction plan for user acquisition."
+    ],
+    "key_partnerships": [
+      "Digital distribution platforms, such as app stores, are essential.",
+      "Potential data suppliers for pet care information and AI training.",
+      "Technology partners for AI development and infrastructure.",
+      "Regulatory bodies for compliance in pet care advice."
+    ],
+    "cost_structure": [
+      "Startup costs include $150,000 for app/website development.",
+      "Initial marketing launch campaign costs $75,000.",
+      "Monthly fixed costs include $30,000 for staff salaries.",
+      "Monthly marketing ad spend is $15,000.",
+      "Server and cloud infrastructure costs $2,000 monthly."
+    ]
+  }
+}

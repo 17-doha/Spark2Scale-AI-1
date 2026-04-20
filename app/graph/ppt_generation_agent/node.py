@@ -20,6 +20,9 @@ def generator_node(state: PPTGenerationState) -> PPTGenerationState:
     
     if mode == "edit":
         human_msg = f"Improve this existing presentation to match elite pitch standards while keeping its original sequence:\n\n{research_content}"
+        user_instructions = state.get("user_instructions")
+        if user_instructions:
+            human_msg += f"\n\nAdditionally, please follow these specific instructions from the user:\n{user_instructions}"
     else:
         human_msg = f"Create a premium pitch presentation from this research:\n\n{research_content}"
 

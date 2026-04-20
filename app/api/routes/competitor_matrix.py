@@ -83,7 +83,8 @@ async def generate_competitor_matrix(request: CompetitorAnalysisRequest):
             "idea_description": request.idea_description,
             "region": request.region,
             "market_research_type": type(mr_data).__name__,
-            "market_research": mr_data
+            "market_research": mr_data,
+            "comment": request.comment
         })
 
         # ── STEP 7: Build state and run graph ─────────────────────────────────
@@ -92,7 +93,8 @@ async def generate_competitor_matrix(request: CompetitorAnalysisRequest):
             "idea_name": request.idea_name,
             "idea_description": request.idea_description,
             "region": request.region or "Global",
-            "market_research": mr_data
+            "market_research": mr_data,
+            "comment": request.comment
         }
 
         result = await document_generator_app.ainvoke(initial_state)

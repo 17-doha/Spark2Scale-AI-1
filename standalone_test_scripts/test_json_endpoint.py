@@ -1,3 +1,8 @@
+import sys, os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import requests
 import json
 
@@ -22,12 +27,9 @@ headers = {"Content-Type": "application/json"}
 print(f"Sending request to {url} (this make take a few minutes)...")
 response = requests.post(url, json=payload, headers=headers)
 
-print(f"Status Code: {response.status_code}")
 if response.status_code == 200:
-    print("Success! Response snippet:")
+    print("Success! JSON payload snippet:")
     data = response.json()
-    doc = data.get("competitor_analysis_document", {})
-    md = doc.get("markdown", "NO MARKDOWN FOUND")
-    print(md[:1000] + "\n... (truncated)")
+    print(json.dumps(data, indent=2)[:1500] + "\n... (truncated)")
 else:
-    print(f"Error: {response.text}")
+    print(f"Error: {response.status_code}\n{response.text}")

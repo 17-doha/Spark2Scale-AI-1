@@ -189,7 +189,8 @@ def enrich_market_intelligence(state: DocumentGeneratorState) -> dict:
         )
  
     batched_evidence_text = "\n\n---\n\n".join(batched_evidence)
-    prompt = enrich_market_intelligence_prompt(batched_evidence_text)
+    user_comment = state.get("comment", "")
+    prompt = enrich_market_intelligence_prompt(batched_evidence_text, user_comment)
  
     try:
         response = call_gemini(prompt)
@@ -297,7 +298,8 @@ def enrich_product_reality(state: DocumentGeneratorState) -> dict:
         batched_evidence.append(f"### Competitor: {name}\n{evidence_text}")
  
     batched_evidence_text = "\n\n---\n\n".join(batched_evidence)
-    prompt = enrich_product_reality_prompt(batched_evidence_text)
+    user_comment = state.get("comment", "")
+    prompt = enrich_product_reality_prompt(batched_evidence_text, user_comment)
  
     try:
         response = call_gemini(prompt)
