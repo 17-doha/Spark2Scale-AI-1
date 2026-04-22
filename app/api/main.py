@@ -16,7 +16,6 @@ app = FastAPI(title="Spark2Scale AI Agent")
 
 # Configure slowapi rate limiting (per-IP).
 app.state.limiter = api_limiter
-app.add_middleware(SlowAPIMiddleware)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
@@ -25,13 +24,27 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Rate limit exceeded. Please try again later."},
     )
 
+@app.exception_handler(ValueError)
+def value_error_handler(request: Request, exc: ValueError):
+    # slowapi raises ValueError when it cannot parse the rate-limit key
+    # (e.g. missing/malformed X-Forwarded-For behind Azure's proxy).
+    # Return 429 so it doesn't bubble up as a 500.
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000"], 
+    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# SlowAPIMiddleware must be added AFTER CORSMiddleware so that CORS headers
+# are set even on rate-limited (429) responses.
+app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(ppt_generation.router, prefix="/api/v1/ppt", tags=["Presentation Generation"])
 app.include_router(evaluation.router, prefix="/api/v1/evaluation", tags=["Evaluation"])
