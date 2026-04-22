@@ -1,0 +1,133 @@
+﻿venv\Scripts\python.exe : C:\Dahdouha\Year 4 - Sem 
+2\Spark2Scale-AI-1\test_qwen_max.py:7: 
+SyntaxWarning: invalid escape sequence '\S'
+At line:1 char:32
++ ... CODING="utf-8"; venv\Scripts\python.exe 
+test_qwen_max.py 2>&1 | Out-F ...
++                     
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Dahd 
+   ouha\Yea...e sequence '\S':String) [], RemoteExc  
+  eption
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  Run with: venv\Scripts\python.exe test_qwen_max.py
+Failed to multipart ingest runs: 
+langsmith.utils.LangSmithError: Failed to POST 
+https://api.smith.langchain.com/runs/multipart in 
+LangSmith API. HTTPError('403 Client Error: 
+Forbidden for url: 
+https://api.smith.langchain.com/runs/multipart', 
+'{"error":"Forbidden"}\n')
+Failed to send compressed multipart ingest: 
+langsmith.utils.LangSmithError: Failed to POST 
+https://api.smith.langchain.com/runs/multipart in 
+LangSmith API. HTTPError('403 Client Error: 
+Forbidden for url: 
+https://api.smith.langchain.com/runs/multipart', 
+'{"error":"Forbidden"}\n')
+Failed to send compressed multipart ingest: 
+langsmith.utils.LangSmithError: Failed to POST 
+https://api.smith.langchain.com/runs/multipart in 
+LangSmith API. HTTPError('403 Client Error: 
+Forbidden for url: 
+https://api.smith.langchain.com/runs/multipart', 
+'{"error":"Forbidden"}\n')
+Failed to send compressed multipart ingest: 
+langsmith.utils.LangSmithError: Failed to POST 
+https://api.smith.langchain.com/runs/multipart in 
+LangSmith API. HTTPError('403 Client Error: 
+Forbidden for url: 
+https://api.smith.langchain.com/runs/multipart', 
+'{"error":"Forbidden"}\n')
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+  qwen-turbo-2025-04-28 (DashScope) Integration Tests
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+
+ÔûÂ TEST 1: DASHSCOPE_API_KEY in environment
+  Ô£à PASS  DASHSCOPE_API_KEY set
+         ÔåÆ value: sk-daaebed50...
+
+ÔûÂ TEST 2: Direct HTTP ping to DashScope API
+  Ô£à PASS  DashScope responds OK (latency=1.12s)
+         ÔåÆ response: {"ok": true}
+
+ÔûÂ TEST 3: _get_fast_llm() is configured for qwen-turbo-2025-04-28
+  Ô£à PASS  model is qwen-turbo-2025-04-28
+  Ô£à PASS  base_url is DashScope
+  Ô£à PASS  NOT Groq endpoint
+
+ÔûÂ TEST 4: extract_claims() ÔÇö end-to-end with a sample transcript
+  Ôä╣´©Å  latency: 2.42s
+  Ôä╣´©Å  result: {
+  "traction": {
+    "users": "5k",
+    "revenue": "$120k MRR",
+    "growth": "30% month-over-month"
+  },
+  "ask": {
+    "amount": "$2M",
+    "valuation": "$10M"
+  },
+  "economics": {
+    "cac": "$40",
+    "ltv": "$600",
+    "churn": null
+  },
+  "gtm": {
+    "channels": []
+  },
+  "moat": {
+    "claims": []
+  },
+  "raw_numbers": []
+}
+  Ô£à PASS  returns dict
+  Ô£à PASS  traction.users present
+  Ô£à PASS  ask.amount present
+  Ô£à PASS  economics.cac present
+
+ÔûÂ TEST 5: check_consistency_logic() ÔÇö contradiction detection
+  Ôä╣´©Å  latency: 2.04s
+  Ôä╣´©Å  result: {
+  "contradiction": true,
+  "is_critical": true,
+  "error_type": "Self-Contradiction",
+  "evidence": [
+    "We have 500 paying users | Our MRR is $50k",
+    "We have zero paying users and no revenue yet."
+  ],
+  "conflicting_claim": "Number of paying users and MRR",
+  "recommended_interrupt": "Wait
+  Ô£à PASS  returns dict with 'contradiction' key
+  Ô£à PASS  detected contradiction correctly
+         ÔåÆ expected True ÔÇö '500 users and $50k MRR' vs 'zero users, no revenue'
+
+ÔûÂ TEST 6: check_investor_essentials() ÔÇö coverage check
+  Ôä╣´©Å  latency: 0.89s
+  Ôä╣´©Å  covered: ['problem', 'solution', 'market_size', 'traction', 'team', 'ask', 'use_of_funds', 'business_model']
+  Ôä╣´©Å  missing: []
+  Ô£à PASS  returns covered/missing keys
+  Ô£à PASS  found some covered essentials
+
+ÔûÂ TEST 7: build_investment_readiness_report() ÔÇö full report pipeline
+  Ôä╣´©Å  latency: 10.77s
+  Ôä╣´©Å  grade:   C+  score: 65/100
+  Ô£à PASS  report has grade
+  Ô£à PASS  report has rubric
+  Ô£à PASS  report has strengths
+  Ô£à PASS  essentials_checklist present
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+  Results: 17/17 passed
+  ­ƒÄë All qwen-turbo-2025-04-28 tests passed ÔÇö safe to deploy!
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+
+Failed to send compressed multipart ingest: 
+langsmith.utils.LangSmithError: Failed to POST 
+https://api.smith.langchain.com/runs/multipart in 
+LangSmith API. HTTPError('403 Client Error: 
+Forbidden for url: 
+https://api.smith.langchain.com/runs/multipart', 
+'{"error":"Forbidden"}\n')

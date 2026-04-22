@@ -114,18 +114,18 @@ def fetch_tavily_news(country: str, sector: str, stage: str, api_key: str) -> Li
         queries = []
         if country and sector:
             queries.extend([
-                f"{country} startup investment climate 2025",
-                f"{sector} funding {country} 2025",
-                f"{country} business regulation 2025"
+                f"{country} startup investment climate 2026",
+                f"{sector} funding {country} 2026",
+                f"{country} business regulation 2026"
             ])
         elif country:
             queries.extend([
-                 f"{country} startup investment climate 2025",
-                 f"{country} business regulation changes 2025"
+                 f"{country} startup investment climate 2026",
+                 f"{country} business regulation changes 2026"
             ])
         elif sector:
             queries.extend([
-                f"global {sector} startup funding trends 2025"
+                f"global {sector} startup funding trends 2026"
             ])
             
         all_results = []
@@ -217,7 +217,7 @@ def run_market_intel(insights: Dict[str, Any], tavily_api_key: str = None) -> Di
          
     # 4. Calculate Confidence
     sources_count = (1 if country_risk else 0) + (1 if news_signals else 0)
-    confidence = "high" if sources_count == 3 else "medium" if sources_count == 2 else "low"
+    confidence = "high" if sources_count == 2 else "medium" if sources_count == 1 else "low"
     
     return {
         "country_risk": country_risk,

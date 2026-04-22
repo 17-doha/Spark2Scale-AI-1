@@ -1,0 +1,104 @@
+﻿venv\Scripts\python.exe : 
+C:\Dahdouha\Year 4 - Sem 2\Spark2Scale-
+AI-1\test_fixes_locally.py:6: 
+SyntaxWarning: invalid escape sequence 
+'\S'
+At line:1 char:32
++ ... NG="utf-8"; 
+venv\Scripts\python.exe 
+test_fixes_locally.py 2>&1 | Out- ...
++                 ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpeci 
+   fied: (C:\Dahdouha\Yea...e sequenc  
+  e '\S':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCo 
+   mmandError
+ 
+  Run with: venv\Scripts\python.exe 
+test_fixes_locally.py
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+  Spark2Scale ÔÇö Pitch Analyzer Fix Verification (v2)
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+
+ÔûÂ TEST 1: _phase_watcher exits on state.phase='done' (double-agent fix)
+  [92mÔ£à PASS[0m  _phase_watcher has done-guard at top of while loop
+         Look for 'if state.phase == "done": return' in _phase_watcher
+
+ÔûÂ TEST 2: on_participant_disconnected sets phase=done immediately (double-agent fix)
+  [92mÔ£à PASS[0m  phase='done' set inside on_participant_disconnected
+  [92mÔ£à PASS[0m  phase='done' set BEFORE asyncio.create_task
+         phase=done must come before create_task to stop watchers synchronously
+
+ÔûÂ TEST 3: agent calls ctx.room.disconnect() after report (removes agent from room)
+  [92mÔ£à PASS[0m  ctx.room.disconnect() in handler
+  [92mÔ£à PASS[0m  disconnect() inside finally block (always runs)
+
+ÔûÂ TEST 4: pitch_history fallback for empty full_transcript (report fix)
+  [92mÔ£à PASS[0m  pitch_history used as fallback when full_transcript empty
+  [92mÔ£à PASS[0m  skips report gracefully if no speech at all
+
+ÔûÂ TEST 5: /stop endpoint added to API routes
+  [92mÔ£à PASS[0m  @router.post('/stop') exists
+  [92mÔ£à PASS[0m  terminate() called on worker process
+  [92mÔ£à PASS[0m  kill() fallback if terminate times out
+  [92mÔ£à PASS[0m  worker_process reset to None after stop
+
+ÔûÂ TEST 6: TokenRequest class and /token route still intact
+  [92mÔ£à PASS[0m  class TokenRequest(BaseModel) present
+  [92mÔ£à PASS[0m  @router.post('/token') present
+  [92mÔ£à PASS[0m  room_name field in TokenRequest
+
+ÔûÂ TEST 7: API routes file imports without syntax errors
+  [91mÔØî FAIL[0m  pitch_analyzer.py parses without syntax errors
+         Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import ast; ast.parse(open('app/api/routes/pitch_analyzer.py').read()); print('OK')
+                          ~~~~~~~~~~~~
+  [91mÔØî FAIL[0m  workflow.py parses without syntax errors
+         Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import ast; ast.parse(open('app/graph/pitch_analyzer/workflow.py').read()); print('OK')
+                          ~~~~~~~~
+
+ÔûÂ TEST 8: Subprocess startup (worker registers, no crash)
+  [94mÔä╣´©Å  INFO[0m  Using Python: C:\Dahdouha\Year 4 - Sem 2\Spark2Scale-AI-1\venv\Scripts\python.exe
+
+  First ~25 lines:
+    2026-04-08 19:52:29,900 - INFO - Loading Company Context documents...
+    2026-04-08 19:52:29,900 - INFO - [CACHE HIT] Loading cheat sheet from cache: cheat_sheet_cache.json
+    2026-04-08 19:52:29,901 - INFO - VCCheatSheet ready. Starting LiveKit worker...
+    2026-04-08 19:52:29,901 - INFO - [STARTUP] _PREFLIGHT loaded: 45 chars in cheat_sheet.
+    2026-04-08 19:52:29,913 - INFO - livekit_ffi::server:152:livekit_ffi::server - initializing ffi server v0.12.50
+    2026-04-08 19:52:29,913 - INFO - livekit_ffi::cabi:50:livekit_ffi::cabi - initializing ffi server v0.12.50
+    2026-04-08 19:52:29,921 - DEBUG - Using proactor: IocpProactor
+        19:52:29.921 DEBUG├óÔé¼┬ª asyncio            Using proactor: IocpProactor
+    2026-04-08 19:52:29,926 - DEV - Watching C:\Dahdouha\Year 4 - Sem 2\Spark2Scale-AI-1\app\graph\pitch_analyzer
+        19:52:29.926 DEV  ├óÔé¼┬ª livekit.agents     Watching C:\Dahdouha\Year 4 - Sem
+                                               2\Spark2Scale-AI-1\app\graph\pitc├óÔé¼┬ª
+    2026-04-08 19:52:33,325 - INFO - livekit_ffi::server:152:livekit_ffi::server - initializing ffi server v0.12.50
+    2026-04-08 19:52:33,326 - INFO - livekit_ffi::cabi:50:livekit_ffi::cabi - initializing ffi server v0.12.50
+    2026-04-08 19:52:33,326 - DEBUG - Using proactor: IocpProactor
+        19:52:33.326 DEBUG├óÔé¼┬ª asyncio            Using proactor: IocpProactor
+    2026-04-08 19:52:33,336 - INFO - starting worker
+        19:52:33.336 INFO ├óÔé¼┬ª livekit.agents     starting worker
+                                             {"version": "1.5.1", "rtc-version":
+    "1.1.3"}
+    2026-04-08 19:52:33,339 - INFO - HTTP server listening on :63346
+        19:52:33.339 INFO ├óÔé¼┬ª livekit.agents     HTTP server listening on :63346
+    2026-04-08 19:52:33,343 - INFO - initializing job runner
+        19:52:33.343 INFO ├óÔé¼┬ª livekit.agents     initializing job runner
+                                             {"tid": 11740}
+    2026-04-08 19:52:33,344 - DEBUG - Using proactor: IocpProactor
+
+  [92mÔ£à PASS[0m  No STARTUP ABORT
+  [92mÔ£à PASS[0m  Worker registered with LiveKit
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+  Results: 16/18 passed
+  [91mÔÜá´©Å  Fix before deploying:[0m
+     ÔÇó pitch_analyzer.py parses without syntax errors
+     ÔÇó workflow.py parses without syntax errors
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+

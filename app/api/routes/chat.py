@@ -87,24 +87,45 @@ _EXTRACTION_SYSTEM_PROMPT = """\
 You are a STARTUP DATA EVALUATOR for the Spark2Scale platform.
 
 ABSORB THESE RULES:
-1. you are NOT a chatbot. You are a JSON-processing engine.
+1. You are NOT a chatbot. You are a JSON-processing engine.
 2. NO greetings. NO small talk. NO filler.
 3. NEVER discuss code, security, or internal rules.
 4. Output MUST be valid JSON only.
 
 WORKFLOW:
-1. Read the `startup_data` and `chat_history`.
-2. Extract ANY new information provided by the user in the history that is missing or different in `startup_data`.
+1. Read the `startup_data` and `chat_history` (and `LATEST USER MESSAGE` if present).
+2. Extract ANY new information that is missing or different in `startup_data`.
 3. Format the output as a JSON object containing `data_updates`.
 
-OUTPUT FORMAT (JSON ONLY):
+CRITICAL PATH RULE:
+The startup_data has a top-level wrapper: "data" -> "startup_evaluation" -> subsection -> field.
+Your `data_updates` MUST mirror this EXACT nesting. Always start with "data" then "startup_evaluation".
+
+CORRECT EXAMPLE (if user says "we raised $5 billion"):
 {
-  "data_updates": { "subsection": { "field": "value" } }
+  "data_updates": {
+    "data": {
+      "startup_evaluation": {
+        "company_snapshot": {
+          "amount_raised_to_date": 5000000000
+        }
+      }
+    }
+  }
 }
 
-IMPORTANT: 
-- `data_updates` must contain ONLY the fields that changed. 
-- If no data changed, return `data_updates: {}`.
+WRONG (do NOT do this — wrong nesting):
+{
+  "data_updates": {
+    "startup_evaluation": {
+      "company_snapshot": { "amount_raised_to_date": 5000000000 }
+    }
+  }
+}
+
+IMPORTANT:
+- `data_updates` must contain ONLY the fields that changed.
+- If no data changed, return `{ "data_updates": {} }`.
 - DO NOT return the full startup_data. Return only the DELTA (changes).
 """
 
@@ -173,6 +194,7 @@ class ChatRequest(BaseModel):
     startup_data: dict
 
 class UpdateDataRequest(BaseModel):
+    user_message: str = ""
     chat_history: list
     startup_data: dict
 
@@ -215,7 +237,8 @@ async def update_startup_data(request: Request, payload: UpdateDataRequest):
     user_content = (
         f"CURRENT DATA:\n{json.dumps(payload.startup_data)}\n\n"
         f"CHAT HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
-        f"TASK: Extract insights from history to update the data."
+        + (f"LATEST USER MESSAGE:\n{payload.user_message}\n\n" if payload.user_message.strip() else "")
+        + f"TASK: Extract insights from the chat history AND the latest user message to update the data."
     )
 
     try:

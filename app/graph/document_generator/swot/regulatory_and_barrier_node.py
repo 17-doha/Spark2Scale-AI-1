@@ -11,7 +11,7 @@ from app.graph.document_generator.config import (
 
 logger = get_logger("RegulatoryBarrierMiner")
 
-def scrape_regulatory_barriers(idea_name: str, region: str = "Global") -> dict:
+def scrape_regulatory_barriers(idea_name: str, region: str = "Global", comment: str = None) -> dict:
     """
     Scrapes the web for legal, compliance, and economic barriers in the given region.
     Summarizes them using an LLM to feed into the SWOT Threats quadrant.

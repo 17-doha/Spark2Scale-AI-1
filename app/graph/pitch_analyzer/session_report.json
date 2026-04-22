@@ -1,0 +1,95 @@
+{
+  "grade": "F",
+  "score": 25,
+  "max_score": 100,
+  "rubric": {
+    "team": {
+      "score": 3,
+      "notes": "The founder is a solo founder, but mentions having a team with skills in front end, back end, and AI. There's no clarity on the actual team structure or roles."
+    },
+    "problem": {
+      "score": 2,
+      "notes": "The problem is not clearly defined. The pitch mentions evaluating startup ideas, but it's unclear what specific pain point this addresses."
+    },
+    "product": {
+      "score": 2,
+      "notes": "There is no clear description of the product. The pitch only vaguely mentions being a 'matching agent between founders and investors.'"
+    },
+    "market": {
+      "score": 3,
+      "notes": "The market size and target audience are not discussed. The pitch does not provide any information about the potential market or customer segments."
+    },
+    "traction": {
+      "score": 1,
+      "notes": "The traction claims are contradictory. The founder states they have 10k users and $5M in revenue, but also repeatedly says they have no money. This inconsistency is a major red flag."
+    },
+    "financials": {
+      "score": 1,
+      "notes": "Financials are highly inconsistent. The founder claims both $5M in revenue and having no money, which is confusing and untrustworthy."
+    },
+    "vision": {
+      "score": 4,
+      "notes": "The vision is somewhat vague. The founder mentions being the first to do something, but it's not clear what that is or why it's significant."
+    },
+    "communication": {
+      "score": 2,
+      "notes": "The communication is very poor. The pitch is filled with self-contradictions, repetitions, and a lack of clarity. The founder seems unprepared and unsure."
+    },
+    "diligence": {
+      "score": 3,
+      "notes": "No diligence questions were answered, and the provided information is highly inconsistent and unreliable."
+    }
+  },
+  "strengths": [],
+  "critical_weaknesses": [
+    "team",
+    "problem",
+    "product",
+    "market",
+    "traction",
+    "financials",
+    "communication"
+  ],
+  "essentials_checklist": {
+    "covered": [
+      "problem",
+      "solution",
+      "traction"
+    ],
+    "missing": [
+      "market_size",
+      "team",
+      "ask",
+      "business_model",
+      "moat"
+    ]
+  },
+  "investor_killer_moments": [
+    {
+      "timestamp_s": 81.1,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 97.3,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 110.4,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    },
+    {
+      "timestamp_s": 188.0,
+      "type": "Self-Contradiction",
+      "detail": "Hard factual self-contradiction detected."
+    }
+  ],
+  "recommended_actions": [
+    "Clarify the team structure and roles. Provide a detailed background of each team member and their contributions.",
+    "Define the problem and the specific pain point your solution addresses. Clearly articulate the value proposition for your target customers.",
+    "Provide consistent and verifiable traction metrics. If you have $5M in revenue and 10k users, be prepared to back these claims with data and financial statements."
+  ],
+  "final_verdict": "I would not invest in this company due to the significant inconsistencies in the pitch, lack of clarity on the problem, product, and market, and poor communication from the founder."
+}

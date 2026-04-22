@@ -13,6 +13,7 @@ from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
 from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
+from app.graph.ppt_generation_agent.tools.input_loader import load_input_directory
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
 
@@ -58,9 +59,28 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
         local_path = await generate_pptx_file(final_draft, output_path)
 
         storage_path = local_path  # fallback
+        logger.info(f"Checking Supabase client: {'initialized' if supabase else 'NOT initialized'}")
         if supabase:
+            logger.info(f"Starting database insertion for startup: {startup_id}")
+            # First, insert into documents to get the auto-generated did
+            doc_payload = {
+                "startup_id": startup_id,
+                "document_name": final_draft.title or "Pitch Deck",
+                "type": "Pitch Deck (PPT)",
+                "json_response": final_draft.model_dump(),
+                "current_path": "pending"  # placeholder
+            }
+            insert_result = supabase.table("documents").insert(doc_payload).execute()
+            
+            if not insert_result.data:
+                raise HTTPException(status_code=500, detail="Failed to insert record into documents table.")
+            
+            document_id = insert_result.data[0].get("did")
+            logger.info(f"Inserted into documents, got document_id: {document_id}")
+
             file_name = f"{uuid.uuid4().hex}.pptx"
-            supabase_storage_path = f"{startup_id}/{file_name}"
+            # Structured path: {startup_id}/{document_id}/{file_name}
+            supabase_storage_path = f"{startup_id}/{document_id}/{file_name}"
 
             with open(local_path, "rb") as f:
                 upload_result = supabase.storage.from_("ppts").upload(
@@ -74,16 +94,15 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
 
             logger.info(f"Supabase upload result: {upload_result}")
             storage_path = supabase.storage.from_("ppts").get_public_url(supabase_storage_path)
-            logger.info(f"PPT uploaded to Supabase: {storage_path}")
-            doc_payload = {
-                "startup_id": startup_id,
-                "document_name": final_draft.title or "Pitch Deck",
-                "type": "ppt",
-                "current_path": storage_path,
-                "json_response": final_draft.model_dump(),
-            }
-            insert_result = supabase.table("documents").insert(doc_payload).execute()
-            logger.info(f"Document record inserted: {insert_result}")
+            logger.info(f"Supabase Public URL generated: {storage_path}")
+            
+            # Update the documents record with the final public URL
+            update_result = supabase.table("documents").update({"current_path": storage_path}).eq("did", document_id).execute()
+            logger.info(f"Updated documents record with current_path. Result: {update_result}")
+        else:
+            logger.error("Supabase client is not initialized. Storage upload skipped.")
+            # If the user strictly wants Supabase, we could raise an error here
+            # raise HTTPException(status_code=500, detail="Supabase storage not configured.")
 
         return PPTGenerationResponse(
             status="success",
@@ -156,12 +175,43 @@ async def generate_ppt_from_files(
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
 
+async def generate_deck_from_local_files(output_dir: str) -> dict:
+    """Helper for CLI/local script usage."""
+    # Use a default test startup_id if not providing one via API
+    test_startup_id = "00000000-0000-0000-0000-000000000000"
+    
+    # Resolve the standard input directory
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    input_dir = os.path.join(base_dir, "app", "graph", "ppt_generation_agent", "input")
+    
+    logger.info(f"Loading local data from {input_dir}")
+    loaded = load_input_directory(input_dir)
+    
+    if not loaded.flat_data:
+        return {"status": "error", "message": f"No data found in {input_dir}"}
+        
+    initial_state: PPTGenerationState = {
+        "research_data": loaded.research_data,
+        "logo_path": os.path.join(input_dir, "Logo.jpg") if os.path.exists(os.path.join(input_dir, "Logo.jpg")) else None,
+        "color_palette": None,
+        "use_default_colors": True,
+        "draft": None,
+        "critique": None,
+        "iteration": 0,
+        "ppt_path": None,
+    }
+    
+    response = await run_ppt_generation(initial_state, test_startup_id)
+    return response.model_dump()
+
 @router.post("/edit", response_model=PPTGenerationResponse)
 async def edit_ppt(
     startup_id: str = Form(..., description="The UUID of the startup"),
     ppt_file: UploadFile = File(..., description="The existing PPTX file to edit"),
     logo: Optional[UploadFile] = File(None),
-    use_default_colors: bool = Form(True)
+    use_default_colors: bool = Form(True),
+    user_instructions: Optional[str] = Form(None, description="Instructions from the user on what to edit"),
+    chat_summary: Optional[str] = Form(None, description="JSON string from the chat summarizer containing document_changes")
 ):
     """Refine an existing PPTX file to match pitch standards."""
     temp_dir = tempfile.mkdtemp()
@@ -182,6 +232,24 @@ async def edit_ppt(
             with open(logo_path, "wb") as f:
                 f.write(await logo.read())
 
+        final_instructions = user_instructions or ""
+        
+        if chat_summary:
+            try:
+                summary_data = json.loads(chat_summary)
+                changes = summary_data.get("document_changes", [])
+                if not changes and "summary" in summary_data:
+                    changes = summary_data["summary"].get("document_changes", [])
+                
+                if changes:
+                    changes_text = "\n".join(f"- {c}" for c in changes)
+                    if final_instructions:
+                        final_instructions += f"\n\nAdditional requested changes from chat:\n{changes_text}"
+                    else:
+                        final_instructions = f"Requested changes from chat:\n{changes_text}"
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse chat_summary JSON")
+        
         initial_state: PPTGenerationState = {
             "research_data": extracted_text,
             "logo_path": logo_path,
@@ -191,7 +259,8 @@ async def edit_ppt(
             "critique": None,
             "iteration": 0,
             "ppt_path": pptx_path,
-            "mode": "edit"
+            "mode": "edit",
+            "user_instructions": final_instructions if final_instructions else None
         }
 
         return await run_ppt_generation(initial_state, startup_id)

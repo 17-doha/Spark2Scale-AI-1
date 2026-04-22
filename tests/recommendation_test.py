@@ -341,7 +341,7 @@ def test_improve_statements_handles_markdown_wrapper(mock_client_class):
     result = agent.improve_statements({"problem_statement": "x", "customer_quotes": []})
 
     assert result["problem_statement"]["recommended"] == "y"
-
+    
 
 @patch("app.graph.recommendation_agent.node.genai.Client")
 def test_synthesize_report_returns_text(mock_client_class):

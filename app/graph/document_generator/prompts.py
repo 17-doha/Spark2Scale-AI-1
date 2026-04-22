@@ -27,6 +27,10 @@ Extracted Opportunities Context:
 Extracted Threats Context:
 {threats_context}
 
+USER FEEDBACK / COMMENT:
+"{user_comment}"
+(If a user feedback comment is provided above, please deeply consider it in your analysis. Emphasize or generate SWOT points that specifically address this user's concern, if logically possible.)
+
 Format Requirements:
 Return ONLY STRICT JSON in the following format (NO MARKDOWN WRAPPERS):
 {{
@@ -252,8 +256,9 @@ Example format:
 }}
 """
 
-def enrich_market_intelligence_prompt(batched_evidence_text: str) -> str:
-    return f"""You are a senior competitive intelligence analyst writing a startup competitor analysis.
+def enrich_market_intelligence_prompt(batched_evidence_text: str, user_comment: str = "") -> str:
+    comment_instruction = f"\n\nUSER FEEDBACK / COMMENT:\n\"{user_comment}\"\n(Please consider this user comment when extracting data, emphasizing things the user cares about if found in the evidence.)\n" if user_comment else ""
+    return f"""You are a senior competitive intelligence analyst writing a startup competitor analysis.{comment_instruction}
 
 ## Raw Evidence for Multiple Competitors (web snippets — treat these as ground truth)
 {batched_evidence_text}
@@ -272,8 +277,9 @@ Reply ONLY with a STRICT JSON object mapping the competitor name to their fields
 }}
 """
 
-def enrich_product_reality_prompt(batched_evidence_text: str) -> str:
-    return f"""You are a senior competitive intelligence analyst preparing a startup competitor analysis.
+def enrich_product_reality_prompt(batched_evidence_text: str, user_comment: str = "") -> str:
+    comment_instruction = f"\n\nUSER FEEDBACK / COMMENT:\n\"{user_comment}\"\n(Please consider this user comment deeply when extracting strengths/weaknesses and features, emphasizing what the user asked for if the evidence supports it.)\n" if user_comment else ""
+    return f"""You are a senior competitive intelligence analyst preparing a startup competitor analysis.{comment_instruction}
 
 ## Raw Evidence for Multiple Competitors (web snippets — treat these as ground truth)
 {batched_evidence_text}
