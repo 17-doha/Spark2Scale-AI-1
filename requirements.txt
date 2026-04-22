@@ -201,3 +201,4 @@ yfinance==1.1.0
 zipp==3.23.0
 zstandard==0.25.0
 qdrant-client==1.17.1
+PyMuPDF==1.27.2.2
