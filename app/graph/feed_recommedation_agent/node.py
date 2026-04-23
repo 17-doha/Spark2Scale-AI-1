@@ -216,7 +216,7 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
         }
 
     # 1. How many more do we need?
-    needed = TOP_K - len(current_candidates)
+    needed = 3 # TOP_K - len(current_candidates)
     if needed <= 0:
         return {"fallback_triggered": False, "sibling_tags": []}
 
