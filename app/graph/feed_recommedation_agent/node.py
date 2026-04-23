@@ -124,10 +124,6 @@ async def build_investor_vector_node(state: FilteredSearchState) -> dict:
     return {"investor_vector": aggregate_embeddings(vecs, strategy="mean")}
 
 async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
-    """
-    NODE 3 — Qdrant ANN search within the tag-filtered subset only.
-    Payload filter (MatchAny) runs before ANN — nearly free performance-wise.
-    """
     if state.get("investor_vector") is None:
         return {"candidates": [], "errors": ["No investor vector — skipping search."]}
 
@@ -137,6 +133,18 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
         if filter_tags else None
     )
 
+
+    def _parse_hits(points) -> list[dict]:
+        return [
+            {
+                "pitchdeck_id": h.payload.get("pitchdeck_id"),
+                "startup_id"  : h.payload.get("startup_id"),
+                "tags"        : h.payload.get("tags", []),
+                "vector_score": round(h.score, 4),
+            }
+            for h in points
+        ]
+
     try:
         res = get_qdrant().query_points(
             collection_name = "pitchdecks",
@@ -145,21 +153,26 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
             limit           = RERANK_FETCH_K,
             with_payload    = True,
         )
-        candidates = [
-            {
-                "pitchdeck_id": h.payload.get("pitchdeck_id"),
-                "startup_id"  : h.payload.get("startup_id"),
-                "tags"        : h.payload.get("tags", []),
-                "vector_score": round(h.score, 4),
-            }
-            for h in res.points
-        ]
-        logger.info("[Node3] filter_tags=%s → %d candidates.", filter_tags, len(candidates))
+        candidates = _parse_hits(res.points)
+        logger.info("[Node3] Filtered search → %d candidates.", len(candidates))
+
+        # Filter returned nothing — retry without tag filter
+        if not candidates and filter_tags:
+            logger.warning("[Node3] 0 filtered results — retrying unfiltered.")
+            res = get_qdrant().query_points(
+                collection_name = "pitchdecks",
+                query           = state["investor_vector"],
+                limit           = RERANK_FETCH_K,
+                with_payload    = True,
+            )
+            candidates = _parse_hits(res.points)
+            logger.info("[Node3] Unfiltered fallback → %d candidates.", len(candidates))
+
         return {"candidates": candidates}
     except Exception as e:
         logger.error("[Node3] Qdrant search failed: %s", e)
         return {"candidates": [], "errors": [f"Qdrant search failed: {e}"]}
-
+        
 
 async def rerank_candidates_node(state: FilteredSearchState) -> dict:
     """NODE 4 — Jina cross-encoder re-scores candidates → top-K. Non-fatal fallback on failure."""
@@ -217,6 +230,8 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
 
     # 1. How many more do we need?
     needed = 3 # TOP_K - len(current_candidates)
+    logger.info("[FallbackNode] %s", current_candidates)
+    logger.info("[FallbackNode] %s", len(current_candidates))
     if needed <= 0:
         return {"fallback_triggered": False, "sibling_tags": []}
 

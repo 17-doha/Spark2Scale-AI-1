@@ -47,23 +47,51 @@ def _pitchdeck_uuid(pitchdeck_id: str) -> str:
 # ── Supabase fetchers ─────────────────────────────────────────────────────────
 
 def fetch_pitchdeck_tags(pitchdeck_id: str) -> tuple[list[str], Optional[str]]:
-    """Return (tags, startup_id) for a single pitchdeck row."""
+    """Return (subtags, startup_id) for a single pitchdeck row."""
     if not supabase:
         logger.error("[PitchdeckTools] Supabase client not initialised.")
         return [], None
 
     resp = (
         supabase.table("pitchdecks")
-        .select("tags, startup_id")
+        .select("tags, analysis, startup_id")
         .eq("pitchdeckid", pitchdeck_id)
         .single()
         .execute()
     )
     row        = resp.data or {}
-    tags       = [t.strip().lower() for t in (row.get("tags") or []) if t.strip()]
     startup_id = row.get("startup_id")
-    logger.info("[PitchdeckTools] Pitchdeck %s → %d tags.", pitchdeck_id, len(tags))
-    return tags, startup_id
+
+    # Extract subtags from analysis.sub_tags (same taxonomy as investor Neo4j subtags)
+    subtags = _extract_subtags(row.get("analysis"))
+
+    # Fall back to main tags only if analysis has no subtags
+    if not subtags:
+        subtags = [t.strip().lower() for t in (row.get("tags") or []) if t.strip()]
+        logger.warning("[PitchdeckTools] Pitchdeck %s has no subtags — using main tags.", pitchdeck_id)
+    else:
+        logger.info("[PitchdeckTools] Pitchdeck %s → %d subtags.", pitchdeck_id, len(subtags))
+
+    return subtags, startup_id
+
+
+def _extract_subtags(analysis) -> list[str]:
+    """Flatten analysis.sub_tags dict into a list of subtag strings."""
+    if not analysis:
+        return []
+    if isinstance(analysis, str):
+        import json
+        try:
+            analysis = json.loads(analysis)
+        except Exception:
+            return []
+    sub_tags_dict = analysis.get("sub_tags", {}) if isinstance(analysis, dict) else {}
+    return [
+        st.strip().lower()
+        for subtags in sub_tags_dict.values()
+        for st in subtags
+        if st.strip()
+    ]
 
 
 def fetch_all_pitchdecks() -> list[dict]:

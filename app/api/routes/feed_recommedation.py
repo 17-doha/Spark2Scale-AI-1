@@ -381,9 +381,6 @@ async def recommend_pitchdecks(request: Request, investor_id: str, k: int = TOP_
     final_results = result.get("final_results", [])
     errors        = result.get("errors", [])
 
-    if not final_results and errors:
-        raise HTTPException(status_code=404, detail=errors[0])
-
     return RecommendedPitchdecksResponse(
         investor_id = investor_id,
         results     = final_results[:k],
