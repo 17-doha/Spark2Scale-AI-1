@@ -30,6 +30,8 @@ _OPTIONAL_STUBS = [
     "langchain_community.chat_models.ChatOllama",
     "pptx",
     "fitz",                     # PyMuPDF
+    "neo4j",
+    "neo4j.time",
 ]
 for _mod in _OPTIONAL_STUBS:
     if _mod not in sys.modules:
