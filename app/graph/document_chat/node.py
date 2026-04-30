@@ -58,6 +58,27 @@ def answer_query_node(state: dict) -> dict: # Update to use your specific state 
     )
 
     doc_delimiter = f"doc_{uuid.uuid4().hex[:8]}"
+    document_type = (state.get("document_type") or "").lower()
+
+    # Build a document-type-specific section for the system prompt
+    if document_type == "bmc":
+        doc_type_instructions = (
+            "\n\nBUSINESS MODEL CANVAS (BMC) CONTEXT:\n"
+            "- You are helping a founder review and improve their Business Model Canvas.\n"
+            "- The BMC has 9 blocks: Value Proposition, Customer Segments, Revenue Streams, "
+            "Channels, Customer Relationships, Key Resources, Key Activities, Key Partnerships, Cost Structure.\n"
+            "- When the founder asks to ADD, CHANGE, REMOVE, or MODIFY anything in the BMC "
+            "(e.g. 'add El-sewedy as a competitor', 'update Revenue Streams'), acknowledge the "
+            "request clearly and tell them: "
+            "'Noted! Click the **Enhance** button to capture this change, then click "
+            "**Apply changes to BMC** to update your canvas.'\n"
+            "- You CANNOT directly edit the BMC — the Enhance workflow does that. "
+            "Your job is to DISCUSS and ADVISE only.\n"
+            "- If a requested change is ambiguous, ask a clarifying question before "
+            "the founder hits Enhance."
+        )
+    else:
+        doc_type_instructions = ""
 
     # We use MessagesPlaceholder to inject the chat history dynamically
     prompt = ChatPromptTemplate.from_messages([
@@ -70,6 +91,7 @@ DOCUMENT CONTEXT:
 <{doc_delimiter}>
 {{context}}
 </{doc_delimiter}>
+{doc_type_instructions}
 
 CRITICAL RULES:
 1. Try to answer the user's question using ONLY the provided document context. 

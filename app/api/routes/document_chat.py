@@ -92,7 +92,8 @@ async def test_document_qa(request: DocumentQARequest):
             "query": request.query,
             "provider": request.provider,
             "model_name": request.model_name,
-            "chat_history": request.chat_history or [] 
+            "chat_history": request.chat_history or [],
+            "document_type": request.document_type or None,
         }
 
         result = document_chat_graph.invoke(initial_state)
