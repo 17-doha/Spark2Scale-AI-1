@@ -82,7 +82,7 @@ async def enhance_bmc_endpoint(request: BMCEnhanceRequest):
         raise HTTPException(status_code=400, detail="current_bmc must be a non-empty object.")
 
     try:
-        result = enhance_bmc(
+        result = await enhance_bmc(
             idea_name=request.idea_name,
             idea_description=request.idea_description,
             region=request.region or "Global",

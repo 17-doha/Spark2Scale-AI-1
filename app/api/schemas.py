@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 
 class ResearchRequest(BaseModel):
     idea: str
@@ -40,9 +40,9 @@ class BMCRequest(BaseModel):
     idea_name: str
     idea_description: str
     region: Optional[str] = "Global"
-    market_research: dict
-    evaluation: Optional[dict] = None
-    recommendation: Optional[dict] = None
+    market_research: Any
+    evaluation: Optional[Any] = None
+    recommendation: Optional[Any] = None
 
 class BMCResponse(BaseModel):
     message: str
@@ -59,7 +59,7 @@ class BMCEnhanceRequest(BaseModel):
     idea_name: str
     idea_description: str
     region: Optional[str] = "Global"
-    current_bmc: dict              # The existing Business Model Canvas (9-block dict).
+    current_bmc: Any              # The existing Business Model Canvas (9-block dict).
     document_changes: list[str]    # Ordered list of founder change requests.
 
 

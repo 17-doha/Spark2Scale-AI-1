@@ -94,7 +94,7 @@ def generate_bmc_node(state: BMCState) -> Dict[str, Any]:
         return {"business_model_canvas": None, "errors": errors}
 
 
-def enhance_bmc(
+async def enhance_bmc(
     idea_name: str,
     idea_description: str,
     region: str,
@@ -122,7 +122,7 @@ def enhance_bmc(
 
     try:
         llm = get_llm(provider="gemini", temperature=0.2)
-        response = llm.invoke([
+        response = await llm.ainvoke([
             SystemMessage(content=ENHANCE_SYSTEM_PROMPT),
             HumanMessage(content=prompt_user),
         ])
