@@ -47,7 +47,7 @@ async def summarize_chat(request: ChatSummarizerRequest):
 
     raw_output = ""
     try:
-        llm = get_llm(provider="gemini", temperature=0.1)
+        llm = get_llm(provider="groq", temperature=0.1)
 
         # Merge system instructions + conversation into ONE HumanMessage.
         # This avoids convert_system_message_to_human=True in ChatGoogleGenerativeAI
