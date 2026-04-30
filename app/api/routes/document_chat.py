@@ -96,7 +96,7 @@ async def test_document_qa(request: DocumentQARequest):
             "document_type": request.document_type or None,
         }
 
-        result = document_chat_graph.invoke(initial_state)
+        result = await document_chat_graph.ainvoke(initial_state)
 
         return DocumentQAResponse(
             status="success",

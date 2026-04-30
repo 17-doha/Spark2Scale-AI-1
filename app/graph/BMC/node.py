@@ -70,7 +70,7 @@ def generate_bmc_node(state: BMCState) -> Dict[str, Any]:
     )
 
     try:
-        llm = get_llm(provider="gemini", temperature=0.2)
+        llm = get_llm(provider="groq", temperature=0.2)
         response = llm.invoke([
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=prompt_user),
@@ -121,7 +121,7 @@ async def enhance_bmc(
     )
 
     try:
-        llm = get_llm(provider="gemini", temperature=0.2)
+        llm = get_llm(provider="groq", temperature=0.2)
         response = await llm.ainvoke([
             SystemMessage(content=ENHANCE_SYSTEM_PROMPT),
             HumanMessage(content=prompt_user),
