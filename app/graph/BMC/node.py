@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from json_repair import repair_json
@@ -8,7 +8,12 @@ from pydantic import ValidationError
 from app.core.llm import get_llm
 from app.core.logger import get_logger
 from .helpers import extract_bmc_context
-from .prompts import SYSTEM_PROMPT, USER_TEMPLATE
+from .prompts import (
+    SYSTEM_PROMPT,
+    USER_TEMPLATE,
+    ENHANCE_SYSTEM_PROMPT,
+    ENHANCE_USER_TEMPLATE,
+)
 from .schema import BMCEnvelope
 from .state import BMCState
 
@@ -87,3 +92,64 @@ def generate_bmc_node(state: BMCState) -> Dict[str, Any]:
         logger.error("[BMC] %s", msg)
         errors.append(msg)
         return {"business_model_canvas": None, "errors": errors}
+
+
+def enhance_bmc(
+    idea_name: str,
+    idea_description: str,
+    region: str,
+    current_bmc: Dict[str, Any],
+    document_changes: List[str],
+) -> Dict[str, Any]:
+    """Single Gemini call that refines an existing BMC using founder-requested changes.
+
+    Returns a dict of the form:
+        {
+            "business_model_canvas": {...} | None,
+            "change_log": [...],
+            "errors": [...]
+        }
+    """
+    errors: List[str] = []
+
+    prompt_user = ENHANCE_USER_TEMPLATE.format(
+        idea_name=idea_name or "",
+        idea_description=idea_description or "",
+        region=region or "Global",
+        current_bmc_json=json.dumps(current_bmc or {}, indent=2, default=str),
+        document_changes_json=json.dumps(document_changes or [], indent=2, ensure_ascii=False),
+    )
+
+    try:
+        llm = get_llm(provider="gemini", temperature=0.2)
+        response = llm.invoke([
+            SystemMessage(content=ENHANCE_SYSTEM_PROMPT),
+            HumanMessage(content=prompt_user),
+        ])
+        raw = response.content if hasattr(response, "content") else str(response)
+        logger.info("[BMC] Enhance returned %d chars.", len(raw or ""))
+
+        parsed = _parse_llm_json(raw)
+
+        # Validate only the canvas block — change_log is free-form.
+        envelope = BMCEnvelope(business_model_canvas=parsed.get("business_model_canvas", {}))
+        change_log = parsed.get("change_log") or []
+        if not isinstance(change_log, list):
+            change_log = [str(change_log)]
+
+        return {
+            "business_model_canvas": envelope.business_model_canvas.model_dump(),
+            "change_log": [str(x) for x in change_log],
+            "errors": errors,
+        }
+
+    except ValidationError as ve:
+        msg = f"BMC enhance schema validation failed: {ve}"
+        logger.error("[BMC] %s", msg)
+        errors.append(msg)
+        return {"business_model_canvas": None, "change_log": [], "errors": errors}
+    except Exception as e:
+        msg = f"BMC enhance failed: {e}"
+        logger.error("[BMC] %s", msg)
+        errors.append(msg)
+        return {"business_model_canvas": None, "change_log": [], "errors": errors}

@@ -46,3 +46,23 @@ class BMCResponse(BaseModel):
     message: str
     business_model_canvas: Optional[dict] = None
     errors: Optional[list] = None
+
+
+class BMCEnhanceRequest(BaseModel):
+    """Request body for POST /api/v1/bmc/enhance.
+
+    Refines an existing BMC using the founder's document change requests
+    (typically produced by the chat-summarizer endpoint).
+    """
+    idea_name: str
+    idea_description: str
+    region: Optional[str] = "Global"
+    current_bmc: dict              # The existing Business Model Canvas (9-block dict).
+    document_changes: list[str]    # Ordered list of founder change requests.
+
+
+class BMCEnhanceResponse(BaseModel):
+    message: str
+    business_model_canvas: Optional[dict] = None
+    change_log: Optional[list[str]] = None   # Per-block summary of what was updated.
+    errors: Optional[list] = None
