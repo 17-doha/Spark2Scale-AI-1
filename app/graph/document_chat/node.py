@@ -11,14 +11,14 @@ answer_query_node    : Runs the LangChain QA chain and produces the final answer
 """
 
 import uuid
-
+import time
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from app.core.llm import get_llm
 from app.graph.document_chat.state import DocumentChatState
 from app.graph.document_chat.tools import DocumentParser, SecurityGuardrails
-
+from app.core.llm import get_llm, get_gemma_insight
 
 # ---------------------------------------------------------------------------
 # Node 1 — Document parsing
@@ -50,9 +50,26 @@ def parse_document_node(state: DocumentChatState) -> dict:
 # Node 2 — LLM QA
 # ---------------------------------------------------------------------------
 
-def answer_query_node(state: dict) -> dict: # Update to use your specific state typing
+def answer_query_node(state: dict) -> dict:
+    start_time = time.time()
+    # ── Optional Gemma enrichment ──────────────────────────────────────────
+    # If the provider is "gemma", route entirely to the finetuned model.
+    # Otherwise, use it as an optional enrichment signal alongside the main LLM.
+    if state.get("provider") == "gemma":
+        answer = get_gemma_insight(
+            context  = state.get("document_context", ""),
+            question = state.get("query", ""),
+            json_mode      = state.get("json_mode", False),
+            temperature    = 1.0,
+            max_new_tokens = 512,
+        )
+        inference_time = round(time.time() - start_time, 2)
+        print(f"DEBUG - Node calculated time: {inference_time}") 
+        return {"answer": answer, "inference_time": inference_time}
+
+    # ── Standard LLM path (gemini / groq / ollama) ─────────────────────────
     llm = get_llm(
-        temperature=0.2, 
+        temperature=0.2,
         provider=state["provider"],
         model_name=state.get("model_name"),
     )
@@ -100,4 +117,7 @@ CRITICAL RULES:
         "query": state.get("query", ""),
     })
 
-    return {"answer": answer}
+    inference_time = round(time.time() - start_time, 2)
+
+    # Return the new metric in the state
+    return {"answer": answer, "inference_time": inference_time}

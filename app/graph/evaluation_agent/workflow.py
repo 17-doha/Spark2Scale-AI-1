@@ -19,6 +19,7 @@ from .node import (
     product_risk_node,
     product_final_scoring_node,
     t5_insight_node,
+    gemma_insight_node,      # <-- Gemma vLLM parallel node
     final_node
 )
 
@@ -53,7 +54,8 @@ def create_evaluation_graph():
     workflow.add_node("gtm_node", gtm_node)
     workflow.add_node("business_node", business_node)
     workflow.add_node("operations_node", operations_node)
-    workflow.add_node("t5_insight_node", t5_insight_node)  # <-- T5-3B parallel node
+    workflow.add_node("t5_insight_node",    t5_insight_node)     # <-- T5-3B parallel node
+    workflow.add_node("gemma_insight_node", gemma_insight_node)  # <-- Gemma vLLM parallel node
     workflow.add_node("final_node", final_node)
 
     # =========================================================
@@ -73,7 +75,8 @@ def create_evaluation_graph():
     workflow.add_edge("planner_node", "business_node")
     workflow.add_edge("planner_node", "operations_node")
     workflow.add_edge("planner_node", "product_tools_node")
-    workflow.add_edge("planner_node", "t5_insight_node")  # <-- T5 starts in parallel
+    workflow.add_edge("planner_node", "t5_insight_node")     # <-- T5 starts in parallel
+    workflow.add_edge("planner_node", "gemma_insight_node")  # <-- Gemma starts in parallel
 
     # Step 3: Product chain stays sequential (each step feeds the next)
     workflow.add_edge("product_tools_node", "product_contradiction_node")
@@ -90,7 +93,8 @@ def create_evaluation_graph():
     workflow.add_edge("business_node", "final_node")
     workflow.add_edge("operations_node", "final_node")
     workflow.add_edge("product_final_scoring_node", "final_node")
-    workflow.add_edge("t5_insight_node", "final_node")  # <-- T5 converges here
+    workflow.add_edge("t5_insight_node",    "final_node")  # <-- T5 converges here
+    workflow.add_edge("gemma_insight_node", "final_node")  # <-- Gemma converges here
 
     # Step 5: Final -> END
     workflow.add_edge("final_node", END)

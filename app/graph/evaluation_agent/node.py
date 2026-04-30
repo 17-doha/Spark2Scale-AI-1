@@ -2,7 +2,7 @@ import asyncio
 import json
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from app.core.llm import get_llm, get_t5_insight
+from app.core.llm import get_llm, get_t5_insight, get_gemma_vllm_async
 from .state import AgentState
 from .tools.business_tools import (
     business_risk_agent,
@@ -557,6 +557,109 @@ async def t5_insight_node(state: AgentState):
     logger.info("🧠 T5 Insight Generation Complete. Output:\n%s", insight_text)
     return {"t5_deep_insight": insight_text}
 
+
+# =========================================================
+# GEMMA INSIGHT NODE  (vLLM via ngrok — GEMMA_NGROK_URL)
+# =========================================================
+
+_GEMMA_SYSTEM_PROMPT = """\
+You are Spark2Scale's AI evaluation partner — a seasoned early-stage VC analyst
+who has reviewed 10,000+ startups. You receive a compact startup profile and
+return a concise, structured second-opinion insight covering:
+
+1. OVERALL IMPRESSION  (1-2 sentences, brutally honest)
+2. TOP 3 STRENGTHS     (bullet points)
+3. TOP 3 RISKS         (bullet points)
+4. SUGGESTED FOCUS     (one concrete action for the founder)
+
+Be direct. No fluff. Max 400 words.
+"""
+
+async def gemma_insight_node(state: AgentState):
+    """
+    Calls the finetuned Gemma model running on Colab via ngrok (vLLM).
+
+    This node runs in parallel with all other domain agents during the fan-out
+    phase.  It uses the OpenAI-compatible  /v1/chat/completions  endpoint
+    exposed by vLLM, which handles async requests and long inference times.
+
+    The result is stored in ``gemma_deep_insight`` and injected into the final
+    synthesis prompt alongside the T5 insight.
+
+    Environment variable required:
+        GEMMA_NGROK_URL = https://<your-ngrok-id>.ngrok-free.app
+    """
+    logger.info("[Gemma-Node] ▶ gemma_insight_node started")
+
+    user_data   = state.get("user_data", {})
+    startup_eval = user_data.get("startup_evaluation", {})
+    snapshot    = startup_eval.get("company_snapshot", {})
+    problem     = startup_eval.get("problem_definition", {})
+    product     = startup_eval.get("product_and_solution", {})
+    traction    = startup_eval.get("traction_metrics", {})
+    founders    = startup_eval.get("founder_and_team", {}).get("founders", [])
+
+    # ── Build a compact startup profile (avoid huge payloads) ─────────────
+    company_name = snapshot.get("company_name", "Unknown Startup")
+    stage        = snapshot.get("current_stage", "Pre-Seed")
+    location     = snapshot.get("hq_location", "Unknown")
+
+    logger.info(
+        "[Gemma-Node] Building profile for '%s' | stage=%s | location=%s",
+        company_name, stage, location,
+    )
+
+    compact_profile = {
+        "company": company_name,
+        "stage":   stage,
+        "location": location,
+        "founded":  snapshot.get("date_founded", "N/A"),
+        "problem_statement": problem.get("problem_statement", "N/A"),
+        "current_solution":  problem.get("current_solution", "N/A"),
+        "product_stage":     product.get("product_stage", "N/A"),
+        "differentiation":   product.get("differentiation", "N/A"),
+        "moat":              product.get("defensibility_moat", "N/A"),
+        "users":      traction.get("user_count", 0),
+        "early_revenue": traction.get("early_revenue", 0),
+        "founders": [
+            {
+                "role": f.get("role"),
+                "years_experience": f.get("years_direct_experience"),
+                "fit": f.get("founder_market_fit_statement"),
+            }
+            for f in founders[:3]  # limit to first 3 founders
+        ],
+    }
+
+    user_message = json.dumps(compact_profile, indent=2)
+    logger.info(
+        "[Gemma-Node] Compact profile built | payload_chars=%d",
+        len(user_message),
+    )
+
+    # ── Call vLLM via ngrok ───────────────────────────────────────────────
+    logger.info("[Gemma-Node] Dispatching to get_gemma_vllm_async...")
+    try:
+        insight_text = await get_gemma_vllm_async(
+            system_prompt=_GEMMA_SYSTEM_PROMPT,
+            user_message=user_message,
+            temperature=0.3,
+            max_tokens=600,
+        )
+        logger.info(
+            "[Gemma-Node] ✔ Gemma response received | chars=%d",
+            len(insight_text),
+        )
+    except Exception as exc:
+        # Never crash the whole graph — degrade gracefully
+        logger.exception(
+            "[Gemma-Node] ✗ Unexpected error calling get_gemma_vllm_async: %s", exc
+        )
+        insight_text = f"Gemma insight node failed unexpectedly: {str(exc)}"
+
+    logger.info("[Gemma-Node] ■ gemma_insight_node complete")
+    return {"gemma_deep_insight": insight_text}
+
 def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, str, dict]:
     # 1. Normalize 0-100 to 0-5
     rubric = {k: (v / 20.0) for k, v in scores.items()}
@@ -622,8 +725,16 @@ async def final_node(state: AgentState):
         """
 
     # Inject T5-3B deep insight so Groq can synthesize it
-    t5_insight = state.get("t5_deep_insight", "No T5 insight available.")
+    t5_insight    = state.get("t5_deep_insight",    "No T5 insight available.")
+    gemma_insight = state.get("gemma_deep_insight", "No Gemma insight available.")
+
+    logger.info(
+        "[final_node] Injecting model insights | t5_chars=%d | gemma_chars=%d",
+        len(t5_insight), len(gemma_insight),
+    )
+
     agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
+    agent_summaries += f"\n=== SPARK2SCALE GEMMA DEEP INSIGHT (vLLM) ===\n{gemma_insight}\n"
 
     # 4. Generate with LLM
     llm = get_llm(temperature=0, provider="groq") 

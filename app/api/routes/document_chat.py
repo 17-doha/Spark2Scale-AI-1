@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.graph.document_chat.schema import DocumentQARequest, DocumentQAResponse
 from app.graph.document_chat.workflow import app as document_chat_graph
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -96,6 +97,8 @@ async def test_document_qa(request: DocumentQARequest):
         }
 
         result = document_chat_graph.invoke(initial_state)
+        inference_time = result.get("inference_time", 0.0)
+        logger.info(f"Model Inference Time: {inference_time} seconds")
 
         return DocumentQAResponse(
             status="success",

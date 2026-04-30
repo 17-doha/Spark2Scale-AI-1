@@ -40,3 +40,6 @@ class AgentState(TypedDict):
 
     # --- T5-3B MODEL OUTPUT ---
     t5_deep_insight: Annotated[str, replace_reducer]
+
+    # --- GEMMA (vLLM via ngrok) MODEL OUTPUT ---
+    gemma_deep_insight: Annotated[str, replace_reducer]

@@ -25,3 +25,4 @@ class DocumentChatState(TypedDict):
     
     document_context: str | None
     answer: str | None
+    inference_time: float
