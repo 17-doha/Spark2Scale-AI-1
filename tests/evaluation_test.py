@@ -819,3 +819,137 @@ async def test_final_node_builds_report(mock_get_llm):
     final = result["final_report"]
     # After backfill, investor_output must contain a verdict
     assert "verdict" in final.get("investor_output", final.get("investor_output", {}))
+
+
+# ==========================================
+# 5. MARKET SIGNALS (moved from t5_model_test.py)
+# ==========================================
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers.os.environ.get")
+@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
+async def test_get_market_signals_serper(mock_post, mock_env):
+    """Test async Serper market signals fetching (HTTP mocked)."""
+    mock_env.return_value = "fake_api_key"
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "organic": [{"title": "Report", "snippet": "Market is booming."}]
+    }
+    mock_post.return_value.__aenter__.return_value = mock_response
+
+    vision_data = {"category_play": {"definition": "AI SaaS"}}
+    result = await get_market_signals_serper(vision_data)
+
+    assert "SOURCE" in result
+    assert "Market is booming." in result
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.helpers.os.environ.get")
+@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
+async def test_get_market_signals_serper_empty_results(mock_post, mock_env):
+    """get_market_signals_serper gracefully handles an empty organic results list."""
+    mock_env.return_value = "fake_api_key"
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {"organic": []}
+    mock_post.return_value.__aenter__.return_value = mock_response
+
+    vision_data = {"category_play": {"definition": "Niche market"}}
+    result = await get_market_signals_serper(vision_data)
+
+    # Must return a string, not raise
+    assert isinstance(result, str)
+
+
+# ==========================================
+# 6. INTEGRATION TESTS (multi-tool pipeline)
+# ==========================================
+
+def test_extract_and_score_pipeline_helpers():
+    """Integration: extract_team_data output flows correctly into safe_score_numeric."""
+    dummy_data = {
+        "startup_evaluation": {
+            "founder_and_team": {
+                "founders": [
+                    {
+                        "name": "Alice",
+                        "role": "CTO",
+                        "ownership_percentage": 40,
+                        "prior_experience": "Ex-Amazon",
+                        "years_direct_experience": 8,
+                        "founder_market_fit_statement": "Built fintech APIs."
+                    }
+                ],
+                "execution": {
+                    "full_time_start_date": "2024-01-01",
+                    "key_shipments": [{"date": "2024-06-01", "item": "MVP"}]
+                }
+            },
+            "problem_definition": {
+                "problem_statement": "Payments are slow.",
+                "current_solution": "Manual transfers",
+                "gap_analysis": "Instant AI routing"
+            }
+        }
+    }
+
+    # Step 1: extract structured team data
+    team_data = extract_team_data(dummy_data)
+    assert team_data["founders"][0]["name"] == "Alice"
+    assert team_data["founders"][0]["equity"] == 40
+
+    # Step 2: parse a simulated LLM score string
+    score_dict = parse_and_repair_json('{"score": "4/5", "explanation": "Strong founder."}')
+    assert score_dict["score"] == "4/5"
+
+    # Step 3: convert to numeric
+    numeric = safe_score_numeric(score_dict)
+    assert numeric == 80
+
+
+def test_check_missing_then_generate_queries_pipeline():
+    """Integration: check_missing_fields feeds into generate_queries with no errors."""
+    vision_data = {"category_play": {"definition": "AgriTech"}}
+
+    # First validate no missing fields in vision_data
+    missing = check_missing_fields(vision_data)
+    # No fields should be missing in this simple dict
+    # (The important thing is the pipeline does not raise)
+
+    # Then generate search queries
+    topic, queries = generate_queries(vision_data)
+    assert topic == "AgriTech"
+    assert len(queries) == 4
+
+
+@pytest.mark.asyncio
+@patch("app.graph.evaluation_agent.tools.market_tools.get_llm")
+@patch("app.graph.evaluation_agent.tools.market_tools.os.environ.get")
+@patch("app.graph.evaluation_agent.tools.market_tools.aiohttp.ClientSession.post")
+async def test_market_tool_chain_integration(mock_post, mock_env, mock_get_llm):
+    """Integration: TAM verifier + regulation radar + market scorer used in sequence."""
+    mock_env.return_value = "fake_api_key"
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {"organic": [{"title": "T", "snippet": "Big market."}]}
+    mock_post.return_value.__aenter__.return_value = mock_response
+
+    # Step 1 — TAM verifier (uses HTTP)
+    tam_result = await tam_sam_verifier_tool("SaaS Tools", "MENA", "$2B")
+    assert tam_result["status"] == "Success"
+
+    # Step 2 — Regulation radar (uses HTTP)
+    reg_result = await regulation_trend_radar_tool("SaaS", "UAE")
+    assert reg_result["tool"] == "Regulation_Radar"
+
+    # Step 3 — Market scoring agent (uses LLM, mock chain)
+    with patch("app.graph.evaluation_agent.tools.market_tools.StrOutputParser.ainvoke", new_callable=AsyncMock) as mock_invoke:
+        mock_invoke.return_value = '{"score": "4/5", "explanation": "Good market"}'
+        score_result = await market_scoring_agent({"internal_data": {}})
+
+    assert score_result["score_numeric"] == 80

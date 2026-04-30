@@ -490,3 +490,79 @@ class TestPDFExtractorWorkflow:
         assert pdf_extractor_app is not None
         assert isinstance(TARGET_SCHEMA, dict)
         assert PDFExtractorState is not None
+
+
+# ---------------------------------------------------------------------------
+# 7. Integration tests — full graph invoke (all external calls mocked)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@patch("app.graph.pdf_extractor.node.get_llm")
+async def test_full_pdf_extractor_pipeline_success(mock_get_llm):
+    """Integration: runs the full 3-node graph with mocked PDF reader and LLM.
+
+    Verifies:
+    - State flows through extract_text → llm_extraction → sanitize_data
+    - final state has no error
+    - sanitized_data is populated and numeric strings are coerced
+    """
+    from app.graph.pdf_extractor.workflow import pdf_extractor_app
+
+    mock_chain = MagicMock()
+    mock_chain.ainvoke = AsyncMock(return_value={
+        "startup_evaluation": {
+            "company_snapshot": {"company_name": "Spark2Scale", "amount_raised_to_date": 0},
+            "business_model": {"monthly_burn": "USD 5000"},
+        }
+    })
+
+    initial_state = {
+        "file_bytes": b"fake pdf bytes",
+        "file_name": "spark2scale.pdf",
+        "document_text": "",
+        "raw_extracted_data": {},
+        "sanitized_data": {},
+        "error": None,
+    }
+
+    with patch(
+        "app.graph.pdf_extractor.node.extract_text_from_pdf",
+        return_value="Company: Spark2Scale. Stage: Pre-Seed."
+    ), patch("app.graph.pdf_extractor.node.PromptTemplate") as mock_prompt, \
+       patch("app.graph.pdf_extractor.node.JsonOutputParser"):
+        mock_prompt.from_template.return_value.__or__ = MagicMock(return_value=mock_chain)
+        mock_chain.__or__ = MagicMock(return_value=mock_chain)
+        final_state = await pdf_extractor_app.ainvoke(initial_state)
+
+    assert final_state.get("error") is None
+    assert "sanitized_data" in final_state
+    assert "startup_evaluation" in final_state["sanitized_data"]
+    # Verify numeric sanitization ran: "USD 5000" → 5000
+    burn = final_state["sanitized_data"]["startup_evaluation"]["business_model"]["monthly_burn"]
+    assert burn == 5000
+
+
+@pytest.mark.asyncio
+@patch("app.graph.pdf_extractor.node.get_llm")
+async def test_full_pipeline_with_empty_pdf(mock_get_llm):
+    """Integration: when PDF yields no text, the error propagates cleanly without crashing."""
+    from app.graph.pdf_extractor.workflow import pdf_extractor_app
+
+    initial_state = {
+        "file_bytes": b"empty",
+        "file_name": "empty.pdf",
+        "document_text": "",
+        "raw_extracted_data": {},
+        "sanitized_data": {},
+        "error": None,
+    }
+
+    with patch(
+        "app.graph.pdf_extractor.node.extract_text_from_pdf",
+        return_value="   "  # whitespace-only — triggers the empty-text branch
+    ):
+        final_state = await pdf_extractor_app.ainvoke(initial_state)
+
+    # Error must be set, not raised
+    assert final_state.get("error") is not None
+    assert "no extractable text" in final_state["error"].lower()

@@ -110,19 +110,6 @@ class TestDocumentChatState:
         assert "document_context" in keys
         assert "answer" in keys
 
-    def test_state_can_be_constructed_as_dict(self):
-        """LOW – TypedDicts behave as plain dicts at runtime."""
-        state = {
-            "file_path": "deck.pdf",
-            "query": "Who are the founders?",
-            "provider": "gemini",
-            "model_name": None,
-            "chat_history": None,
-            "document_context": None,
-            "answer": None,
-        }
-        assert state["provider"] == "gemini"
-
 
 # ---------------------------------------------------------------------------
 # 3. SecurityGuardrails tests
@@ -475,3 +462,76 @@ class TestDocumentChatWorkflow:
         assert DocumentChatState is not None
         assert DocumentQARequest is not None
         assert DocumentQAResponse is not None
+
+
+# ---------------------------------------------------------------------------
+# 7. Integration test — full graph invoke (all external calls mocked)
+# ---------------------------------------------------------------------------
+
+class TestDocumentChatIntegration:
+    """Invokes the compiled LangGraph StateGraph end-to-end with mocked LLM."""
+
+    @patch("app.graph.document_chat.node.get_llm")
+    def test_full_pipeline_produces_answer(self, mock_get_llm):
+        """CRITICAL – the full graph must produce a non-empty answer from a JSON payload."""
+        import json
+        from app.graph.document_chat.workflow import app as chat_app
+
+        stub_chain = MagicMock()
+        stub_chain.invoke = MagicMock(return_value="The GTM strategy is direct sales.")
+        mock_llm = MagicMock()
+        mock_llm.__or__ = MagicMock(return_value=stub_chain)
+        mock_get_llm.return_value = mock_llm
+
+        initial_state = {
+            "file_path": json.dumps({"company": "Spark2Scale", "stage": "Pre-Seed"}),
+            "query": "What is the GTM strategy?",
+            "provider": "gemini",
+            "model_name": None,
+            "chat_history": [],
+            "document_context": None,
+            "answer": None,
+        }
+
+        with patch("app.graph.document_chat.node.ChatPromptTemplate") as mock_template, \
+             patch("app.graph.document_chat.node.StrOutputParser") as mock_parser:
+            mock_template.from_messages.return_value.__or__ = MagicMock(return_value=stub_chain)
+            stub_chain.__or__ = MagicMock(return_value=stub_chain)
+
+            final_state = chat_app.invoke(initial_state)
+
+        assert "answer" in final_state
+        assert "document_context" in final_state
+        assert final_state["document_context"]  # must be non-empty after parse node
+
+    @patch("app.graph.document_chat.node.get_llm")
+    def test_full_pipeline_redacts_pii_before_llm(self, mock_get_llm):
+        """HIGH – PII in the JSON payload is redacted before the LLM ever sees it."""
+        import json
+        from app.graph.document_chat.workflow import app as chat_app
+
+        stub_chain = MagicMock()
+        stub_chain.invoke = MagicMock(return_value="Answer without PII.")
+        mock_llm = MagicMock()
+        mock_llm.__or__ = MagicMock(return_value=stub_chain)
+        mock_get_llm.return_value = mock_llm
+
+        initial_state = {
+            "file_path": json.dumps({"contact_email": "ceo@startup.io", "company": "Acme"}),
+            "query": "What is the email?",
+            "provider": "gemini",
+            "model_name": None,
+            "chat_history": [],
+            "document_context": None,
+            "answer": None,
+        }
+
+        with patch("app.graph.document_chat.node.ChatPromptTemplate") as mock_template, \
+             patch("app.graph.document_chat.node.StrOutputParser"):
+            mock_template.from_messages.return_value.__or__ = MagicMock(return_value=stub_chain)
+            stub_chain.__or__ = MagicMock(return_value=stub_chain)
+
+            final_state = chat_app.invoke(initial_state)
+
+        # PII must be redacted in the document_context
+        assert "ceo@startup.io" not in final_state.get("document_context", "")

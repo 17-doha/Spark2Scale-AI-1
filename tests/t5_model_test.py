@@ -97,25 +97,7 @@ async def test_t5_model_returns_answer():
     )
 
 
-@pytest.mark.asyncio
-@patch("app.graph.evaluation_agent.helpers.os.environ.get")
-@patch("app.graph.evaluation_agent.helpers.aiohttp.ClientSession.post")
-async def test_get_market_signals_serper(mock_post, mock_env):
-    """Test async Serper market signals fetching."""
-    mock_env.return_value = "fake_api_key"
-    
-    mock_response = AsyncMock()
-    mock_response.status = 200
-    mock_response.json.return_value = {
-        "organic": [{"title": "Report", "snippet": "Market is booming."}]
-    }
-    mock_post.return_value.__aenter__.return_value = mock_response
-    
-    vision_data = {"category_play": {"definition": "AI SaaS"}}
-    result = await get_market_signals_serper(vision_data)
-    
-    assert "SOURCE" in result
-    assert "Market is booming." in result
+# test_get_market_signals_serper has been moved to evaluation_test.py
 
 
 # ==========================================
@@ -155,4 +137,39 @@ async def test_fetch_t5_deep_insight_no_client(mock_get_client):
     from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
     result = await fetch_t5_deep_insight({})
     assert "unavailable" in result.lower()
+
+
+@pytest.mark.asyncio
+@patch("app.core.llm._get_t5_client")
+async def test_fetch_t5_deep_insight_predict_raises(mock_get_client):
+    """T5 wrapper returns an error string when client.predict raises an exception."""
+    mock_client = MagicMock()
+    mock_client.predict.side_effect = RuntimeError("Space unavailable")
+    mock_get_client.return_value = mock_client
+
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight({"startup_evaluation": {"company_snapshot": {"company_name": "TestCo"}}})
+
+    assert isinstance(result, str)
+    # Must not propagate the exception — must return a graceful fallback
+    assert len(result) > 0
+
+
+@pytest.mark.asyncio
+@patch("app.core.llm._get_t5_client")
+async def test_fetch_t5_deep_insight_empty_result(mock_get_client):
+    """T5 wrapper handles an empty string returned by the model."""
+    mock_client = MagicMock()
+    mock_client.predict.return_value = ""
+    mock_get_client.return_value = mock_client
+
+    from app.graph.evaluation_agent.helpers import fetch_t5_deep_insight
+    result = await fetch_t5_deep_insight({
+        "startup_evaluation": {
+            "company_snapshot": {"company_name": "TestCo", "current_stage": "Seed"},
+            "problem_definition": {"problem_statement": "Pain point"}
+        }
+    })
+    # Should return the empty string or a fallback — must not raise
+    assert isinstance(result, str)
 

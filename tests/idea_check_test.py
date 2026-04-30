@@ -107,20 +107,6 @@ class TestIdeaCheckState:
                     "search_evidence", "analysis_result", "error"}
         assert expected.issubset(keys)
 
-    def test_state_as_dict(self):
-        """LOW – state behaves as a plain dict at runtime."""
-        state = {
-            "idea": "AI tutor",
-            "problem": "No personalised learning",
-            "region": "Global",
-            "validation_queries": {},
-            "search_evidence": "",
-            "analysis_result": {},
-            "error": None,
-        }
-        assert state["region"] == "Global"
-        assert state["error"] is None
-
 
 # ---------------------------------------------------------------------------
 # 3. Prompt helper tests
@@ -484,3 +470,83 @@ class TestIdeaCheckWorkflow:
         assert IdeaCheckInput is not None
         assert IdeaCheckOutput is not None
         assert IdeaCheckState is not None
+
+
+# ---------------------------------------------------------------------------
+# 7. Integration test — full graph invoke (all external calls mocked)
+# ---------------------------------------------------------------------------
+
+class TestIdeaCheckIntegration:
+    """Invokes the compiled LangGraph StateGraph end-to-end with all external calls mocked."""
+
+    @pytest.mark.asyncio
+    @patch("app.graph.idea_check.node.get_llm")
+    @patch(
+        "app.graph.idea_check.node.execute_search_queries",
+        new_callable=AsyncMock,
+        return_value="Reddit: students struggle with math. Source 1.",
+    )
+    async def test_full_pipeline_produces_analysis(self, mock_search, mock_get_llm):
+        """CRITICAL – the 3-node graph must complete and populate analysis_result."""
+        from app.graph.idea_check.workflow import idea_check_app
+
+        expected_analysis = {
+            "verdict": "VALIDATED",
+            "pain_score": 80,
+            "pain_score_reasoning": "Strong signals from Reddit.",
+            "solution_fit_score": "High",
+            "solution_fit_reasoning": "Direct match.",
+            "reasoning": "Multiple evidence sources.",
+            "evidence_quality_notes": "Recent and credible.",
+        }
+
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(side_effect=[
+            # First call: generate_queries_node returns query dict
+            {"problem_queries": ["site:reddit.com bad tutors"], "solution_queries": ["site:producthunt.com AI tutor"]},
+            # Second call: analyze_pain_points_node returns analysis
+            expected_analysis,
+        ])
+
+        initial_state = {
+            "idea": "AI tutor for K-12",
+            "problem": "Students lack personalised help",
+            "region": "Global",
+            "validation_queries": {},
+            "search_evidence": "",
+            "analysis_result": {},
+            "error": None,
+        }
+
+        with patch("app.graph.idea_check.node.PromptTemplate") as mock_prompt, \
+             patch("app.graph.idea_check.node.JsonOutputParser"):
+            mock_prompt.from_template.return_value.__or__ = MagicMock(return_value=mock_chain)
+            mock_chain.__or__ = MagicMock(return_value=mock_chain)
+
+            final_state = await idea_check_app.ainvoke(initial_state)
+
+        assert final_state.get("error") is None
+        assert "analysis_result" in final_state
+        assert final_state["search_evidence"]  # non-empty after execute_search_node
+
+    @pytest.mark.asyncio
+    @patch("app.graph.idea_check.node.get_llm", side_effect=RuntimeError("LLM down"))
+    async def test_full_pipeline_error_propagation(self, mock_get_llm):
+        """HIGH – an LLM failure in node 1 must propagate error through remaining nodes."""
+        from app.graph.idea_check.workflow import idea_check_app
+
+        initial_state = {
+            "idea": "Fintech app",
+            "problem": "No mobile banking",
+            "region": "MENA",
+            "validation_queries": {},
+            "search_evidence": "",
+            "analysis_result": {},
+            "error": None,
+        }
+
+        final_state = await idea_check_app.ainvoke(initial_state)
+
+        # Error must be captured — not raised as an unhandled exception
+        assert final_state.get("error") is not None
+        assert "failed" in final_state["error"].lower()
