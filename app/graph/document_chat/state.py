@@ -21,7 +21,8 @@ class DocumentChatState(TypedDict):
     query: str
     provider: str
     model_name: str | None
-    chat_history: list[dict] | None 
-    
+    chat_history: list[dict] | None
+    document_type: str | None  # e.g. "bmc", "swot", "competitor_matrix"
+
     document_context: str | None
     answer: str | None

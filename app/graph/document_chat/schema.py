@@ -10,6 +10,8 @@ class DocumentQARequest(BaseModel):
     model_name: str | None = None
     # NEW: Accept a list of previous messages
     chat_history: list[dict] | None = None
+    # The type of document being discussed (e.g. "bmc", "swot", "competitor_matrix")
+    document_type: str | None = None
 
 
 class DocumentQAResponse(BaseModel):
