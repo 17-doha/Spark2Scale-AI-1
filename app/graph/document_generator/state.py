@@ -12,6 +12,8 @@ class DocumentGeneratorState(TypedDict, total=False):
     idea_description: str
     region: str
     market_research: Dict[str, Any]
+    comment: str
+
     
     # Intermediate SWOT Data
     reviews_data: Dict[str, Any]

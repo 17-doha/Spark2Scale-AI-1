@@ -16,3 +16,4 @@ class PPTGenerationState(TypedDict):
     iteration: int
     ppt_path: Optional[str]
     mode: Optional[str] # "create" or "edit"
+    user_instructions: Optional[str]

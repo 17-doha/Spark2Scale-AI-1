@@ -15,8 +15,30 @@ reference to `concurrency_limiter` with a plain `MagicMock` whose
 through without ever touching a real Semaphore.
 """
 
+import sys
+from unittest.mock import MagicMock
+
+# ---------------------------------------------------------------------------
+# Stub optional heavy dependencies that may not be installed in the test venv.
+# This must happen BEFORE any app module is imported so module-level imports
+# like `from langchain_groq import ChatGroq` don't raise ModuleNotFoundError.
+# ---------------------------------------------------------------------------
+_OPTIONAL_STUBS = [
+    "langchain_groq",
+    "langchain_community",
+    "langchain_community.chat_models",
+    "langchain_community.chat_models.ChatOllama",
+    "pptx",
+    "fitz",                     # PyMuPDF
+    "neo4j",
+    "neo4j.time",
+]
+for _mod in _OPTIONAL_STUBS:
+    if _mod not in sys.modules:
+        sys.modules[_mod] = MagicMock()
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 
 def _make_noop_ctx():
@@ -50,10 +72,16 @@ def patch_concurrency_limiter():
     ]
 
     patchers = [patch(target, noop) for target in modules_to_patch]
+    started = []
     for p in patchers:
-        p.start()
+        try:
+            p.start()
+            started.append(p)
+        except AttributeError:
+            # Module not imported in this test session — safe to skip
+            pass
 
     yield
 
-    for p in patchers:
+    for p in started:
         p.stop()

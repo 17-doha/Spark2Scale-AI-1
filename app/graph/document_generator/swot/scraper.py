@@ -23,7 +23,7 @@ def _clean_filename(name: str) -> str:
     """Ensures consistent file naming across all nodes."""
     return name.replace(' ', '_').replace('"', '').replace("'", "")
 
-def generate_review_queries(competitor_name: str) -> List[str]:
+def generate_review_queries(competitor_name: str, comment: str = None) -> List[str]:
     """
     Generates targeted Serper API queries aiming for user pain points
     and negative reviews across Reddit, Trustpilot, and G2.
@@ -36,7 +36,7 @@ def generate_review_queries(competitor_name: str) -> List[str]:
         f"site:g2.com {competitor_name} \"dislike\" OR \"cons\""
     ]
 
-def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
+def scrape_competitor_reviews(idea_name: str, market_research: dict, comment: str = None) -> dict:
     """
     Extracts top competitor names from the market research dict, 
     and searches for targeted user pain points to feed SWOT Weaknesses/Opportunities.
@@ -44,6 +44,7 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
     Args:
         idea_name (str): The business idea name.
         market_research (dict): The output of the market research workflow.
+        comment (str): Optional user comment to focus the scrape.
         
     Returns:
         dict: A dictionary of competitor reviews/snippets.
@@ -100,7 +101,7 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
             continue
             
         logger.info(f"   [SEARCH] Mining pain points for competitor: {competitor}")
-        queries = generate_review_queries(competitor)
+        queries = generate_review_queries(competitor, comment)
         
         # We limit the results from execute_serper_search
         raw_results = execute_serper_search(queries)
@@ -126,7 +127,7 @@ def scrape_competitor_reviews(idea_name: str, market_research: dict) -> dict:
     logger.info(f"[SUCCESS] Extracted competitor review context.")
     return all_reviews_context
 
-def _generate_weakness_queries(idea_name: str, region: str = "Global") -> List[str]:
+def _generate_weakness_queries(idea_name: str, region: str = "Global", comment: str = None) -> List[str]:
     return [
         f'"{idea_name}" startup problems OR challenges OR "why it fails"',
         f'site:reddit.com "{idea_name}" "doesn\'t work" OR "frustrated" OR "gave up" OR "waste of money"',
@@ -136,10 +137,10 @@ def _generate_weakness_queries(idea_name: str, region: str = "Global") -> List[s
     ]
 
 
-def scrape_weaknesses(idea_name: str, region: str = "Global") -> dict:
+def scrape_weaknesses(idea_name: str, region: str = "Global", comment: str = None) -> dict:
     weakness_logger.info(f"\n[WEAKNESS SCRAPER] Scraping weakness signals for: '{idea_name}' [{region}]")
 
-    queries = _generate_weakness_queries(idea_name, region)
+    queries = _generate_weakness_queries(idea_name, region, comment)
     raw_results = execute_serper_search(queries)
 
     if not raw_results:
@@ -313,7 +314,7 @@ def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
     return metrics
 
 
-def analyze_weaknesses(idea_name: str, market_research: dict, idea_description: str = "A new product entering the market.", region: str = "Global") -> dict:
+def analyze_weaknesses(idea_name: str, market_research: dict, idea_description: str = "A new product entering the market.", region: str = "Global", comment: str = None) -> dict:
     """
     Combines scraped weakness signals with live business metrics and passes
     them to the LLM to produce structured, evidence-backed weaknesses for SWOT.
@@ -327,6 +328,7 @@ def analyze_weaknesses(idea_name: str, market_research: dict, idea_description: 
         market_research (dict): Foundational market research data.
         idea_description (str): Short description of the idea for context.
         region (str): The target region for market analysis. Default is "Global".
+        comment (str): Optional user comment to focus the analysis.
 
     Returns:
         dict: The structure of analyzed weaknesses.
@@ -336,7 +338,7 @@ def analyze_weaknesses(idea_name: str, market_research: dict, idea_description: 
     clean_name = _clean_filename(idea_name)
 
     # 1. Scrape new live signals right now (instead of reading from disk)
-    scraped_signals_data = scrape_weaknesses(idea_name, region)
+    scraped_signals_data = scrape_weaknesses(idea_name, region, comment)
     scraped_signals = scraped_signals_data.get("signals", []) if scraped_signals_data else []
 
     # 2. Extract dynamic business metrics from market report

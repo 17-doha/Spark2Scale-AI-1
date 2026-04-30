@@ -1,0 +1,28 @@
+from enum import Enum
+from pydantic import BaseModel
+
+class InteractionType(str, Enum):
+    CONTACT = "contact_founder"
+    LIKE = "like"
+    DISLIKE = "dislike"
+
+class RewardConfig(BaseModel):
+    reward: float
+    alpha: float
+    vector_beta: float
+
+# The Hyperparameter Matrix
+REWARD_MATRIX = {
+    # Target is 1.0. Alpha is 0.3 (Fast learning).
+    # Hit 1: 0.5 + 0.3*(1.0-0.5) = 0.65
+    # Hit 2: 0.65 + 0.3*(1.0-0.65) = 0.755
+    # Hit 3: 0.755 + 0.3*(1.0-0.755) = 0.828
+    InteractionType.CONTACT: RewardConfig(reward=1.0, alpha=0.30, vector_beta=0.15),
+
+    # Target is 0.8. Alpha is 0.15 (Slower learning).
+    # Moves the weight up, but won't ever push it past 0.8.
+    InteractionType.LIKE: RewardConfig(reward=0.8, alpha=0.15, vector_beta=0.05),
+
+    # Target is 0.0 (punishing). Alpha is 0.20.
+    InteractionType.DISLIKE: RewardConfig(reward=0.0, alpha=0.20, vector_beta=0.02),
+}
