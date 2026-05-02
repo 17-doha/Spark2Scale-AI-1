@@ -4,22 +4,25 @@ import numpy as np
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 
-# Import the functions to test
-from app.graph.feed_recommedation_agent.tools.tag_tools import (
+# Import from canonical modules (SOLID: Single Responsibility)
+from app.graph.feed_recommedation_agent.tools.decay import (
     _days_since_updated,
     _apply_decay,
-    get_investor_subtags,
     DECAY_DEFAULT_AGE_DAYS,
-    MIN_DECAYED_WEIGHT
+    MIN_DECAYED_WEIGHT,
 )
+from app.graph.feed_recommedation_agent.tools.neo4j_queries import (
+    get_investor_subtags,
+)
+from app.graph.feed_recommedation_agent.rewards import InteractionType
 from app.graph.feed_recommedation_agent.node import sibling_fallback_node
 from app.graph.feed_recommedation_agent.tools.contrastive import (
     triplet_update,
     _l2_normalize
 )
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "mock_uri")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "mock_uri")
 def test_get_investor_subtags_ucb_split(mock_driver):
     """
     Test that the top 80% are prioritized by decayed_weight (exploitation)
@@ -212,8 +215,8 @@ def test_apply_decay_low_weight_floored():
 #  get_investor_subtags  —  hate threshold filtering
 # ══════════════════════════════════════════════════════════════════════════════
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "mock_uri")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "mock_uri")
 def test_get_investor_subtags_returns_empty_when_no_rows(mock_driver):
     """An investor with no Neo4j edges → empty list (no crash)."""
     mock_session = MagicMock()
@@ -224,8 +227,8 @@ def test_get_investor_subtags_returns_empty_when_no_rows(mock_driver):
     assert result == []
 
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "mock_uri")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "mock_uri")
 def test_get_investor_subtags_exploit_ordering(mock_driver):
     """
     With a limit of 5 and 80% exploit ratio, the top 4 items should be
@@ -431,11 +434,11 @@ def test_increment_sub_vector_missing_point_no_crash(mock_get_qdrant):
 #  get_sibling_subtags  —  mock Neo4j
 # ══════════════════════════════════════════════════════════════════════════════
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "mock_uri")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "mock_uri")
 def test_get_sibling_subtags_returns_siblings(mock_driver):
     """Siblings are returned ordered by shared_parents count (mocked)."""
-    from app.graph.feed_recommedation_agent.tools.tag_tools import get_sibling_subtags
+    from app.graph.feed_recommedation_agent.tools.neo4j_queries import get_sibling_subtags
 
     mock_session = MagicMock()
     mock_driver.return_value.session.return_value.__enter__.return_value = mock_session
@@ -448,18 +451,18 @@ def test_get_sibling_subtags_returns_siblings(mock_driver):
     assert result == ["SiblingA", "SiblingB"]
 
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "")
 def test_get_sibling_subtags_no_uri_returns_empty():
     """If NEO4J_URI is empty → returns [] without connecting."""
-    from app.graph.feed_recommedation_agent.tools.tag_tools import get_sibling_subtags
+    from app.graph.feed_recommedation_agent.tools.neo4j_queries import get_sibling_subtags
     result = get_sibling_subtags(["AnyTag"])
     assert result == []
 
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "mock_uri")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "mock_uri")
 def test_get_sibling_subtags_empty_input_returns_empty():
     """Empty subtag list → returns [] immediately (no Neo4j call)."""
-    from app.graph.feed_recommedation_agent.tools.tag_tools import get_sibling_subtags
+    from app.graph.feed_recommedation_agent.tools.neo4j_queries import get_sibling_subtags
     result = get_sibling_subtags([])
     assert result == []
 
@@ -688,3 +691,28 @@ async def test_sibling_fallback_node_deduplication(mock_get_siblings, mock_get_q
     ids = [c["pitchdeck_id"] for c in result["candidates"]]
     assert ids.count("p1")  == 1    # no duplicate
     assert "p99" in ids             # new hit added
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  InteractionType.from_payload  —  OCP / Liskov factory method
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_from_payload_contact():
+    """contacted=True takes priority over liked."""
+    action, label = InteractionType.from_payload(liked=True, contacted=True)
+    assert action == InteractionType.CONTACT
+    assert label == "contact"
+
+
+def test_from_payload_like():
+    """liked=True, contacted=False → LIKE."""
+    action, label = InteractionType.from_payload(liked=True, contacted=False)
+    assert action == InteractionType.LIKE
+    assert label == "like"
+
+
+def test_from_payload_dislike():
+    """Both False → DISLIKE."""
+    action, label = InteractionType.from_payload(liked=False, contacted=False)
+    assert action == InteractionType.DISLIKE
+    assert label == "dislike"
