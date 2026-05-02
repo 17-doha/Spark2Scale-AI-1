@@ -10,11 +10,17 @@ from app.api.routes import ppt_generation, evaluation, market_research, recommen
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from prometheus_fastapi_instrumentator import Instrumentator
+from app.api.routes import github_webhook
 
 app = FastAPI(title="Spark2Scale AI Agent")
-
-# Configure slowapi rate limiting (per-IP).
 app.state.limiter = api_limiter
+app.include_router(github_webhook.router, prefix="/api/v1/github", tags=["GitHub"])
+
+Instrumentator(
+    should_group_status_codes=True,
+    excluded_handlers=["/metrics"],
+).instrument(app).expose(app)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):

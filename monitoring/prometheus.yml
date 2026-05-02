@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "spark2scale_api"
+    static_configs:
+      - targets: ["host.docker.internal:80"]
+        # Use your actual container name if running in Docker:
+        # - targets: ["spark2scale_app:80"]
+    metrics_path: /metrics
+
+  - job_name: "qdrant"
+    static_configs:
+      - targets: ["host.docker.internal:6333"]
+    metrics_path: /metrics
+
+  - job_name: "neo4j"
+    static_configs:
+      - targets: ["host.docker.internal:2004"]
+    metrics_path: /metrics

@@ -234,3 +234,6 @@ outputs/*
 .env
 second
 pytest.ini
+
+
+monitoring/spark2scale-ci.private-key.pem
