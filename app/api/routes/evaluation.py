@@ -7,12 +7,12 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
-
-# --- Imports ---
 from app.utils.pdf_generator import generate_founder_report, generate_investor_report
 from app.graph.evaluation_agent.helpers import normalize_input_data
 from app.core.logger import get_logger
 from app.graph.evaluation_agent import evaluation_graph
+from app.core.metrics import evaluation_requests, langgraph_duration
+import time
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -28,6 +28,20 @@ class RawInput(BaseModel):
 # 1. BACKGROUND WORKER LOGIC
 # =========================================================
 
+async def run_evaluation_task(job_id: str, normalized_data: dict):
+    start_time = time.time()
+    try:
+        state = await evaluation_graph.ainvoke({"user_data": normalized_data})
+        evaluation_requests.labels(status="success").inc()
+        # ... existing code
+    except Exception as e:
+        evaluation_requests.labels(status="error").inc()
+        raise
+    finally:
+        langgraph_duration.labels(workflow="evaluation").observe(
+            time.time() - start_time
+        )
+        
 async def run_evaluation_task(job_id: str, normalized_data: dict):
     """
     Handles the heavy lifting in the background.

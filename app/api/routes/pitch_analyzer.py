@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
+from app.core.metrics import active_pitch_sessions
 
 from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 
@@ -310,6 +311,7 @@ async def start_agent_worker():
         )
 
     _logging.info("[AGENT START] Worker is alive — pid=%s", worker_process.pid)
+    active_pitch_sessions.inc()
     return {"status": "started", "pid": worker_process.pid}
 
 
@@ -368,7 +370,8 @@ async def stop_agent_worker():
     finally:
         worker_process = None
         _worker_log.clear()
-
+        
+    active_pitch_sessions.dec()
     return {"status": "stopped", "pid": pid}
 
 

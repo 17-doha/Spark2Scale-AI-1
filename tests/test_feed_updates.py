@@ -3,8 +3,6 @@ import math
 import numpy as np
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
-
-# Import from canonical modules (SOLID: Single Responsibility)
 from app.graph.feed_recommedation_agent.tools.decay import (
     _days_since_updated,
     _apply_decay,
