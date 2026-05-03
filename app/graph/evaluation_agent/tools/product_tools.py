@@ -56,7 +56,7 @@ async def tech_stack_detective(url: str):
 async def local_dependency_detective(tech_stack: str, acquisition_channel: str, product_desc: str):
     async with concurrency_limiter:
         logger.info("🕵️ Dependency Detective...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         prompt_text = f"""
         Analyze platform risks for Product: {product_desc}, Tech: {tech_stack}, Channel: {acquisition_channel}.
         Respond ONLY JSON: {{ "risk_level": "High/Medium/Low", "red_flags": ["..."], "search_query_needed": "..." }}
@@ -90,7 +90,7 @@ async def local_dependency_detective(tech_stack: str, acquisition_channel: str, 
 async def product_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("🏆 Product Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(PRODUCT_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         raw_res = await chain.ainvoke({

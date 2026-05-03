@@ -48,7 +48,7 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
 
     # 1. Generate Queries
     async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         query_gen_prompt = f"""
         Search Expert. Convert to 3 Google queries.
         Audience: {target_audience}
@@ -90,7 +90,7 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
 async def loaded_risk_check_with_search(problem_data: dict, search_results: dict, agent_prompt: str) -> str:
     async with concurrency_limiter:
         logger.info("🛡️ Problem Risk Check...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({
             "internal_json": json.dumps(problem_data, indent=2),
@@ -100,7 +100,7 @@ async def loaded_risk_check_with_search(problem_data: dict, search_results: dict
 async def problem_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("🏆 Problem Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(PROBLEM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         inputs = {

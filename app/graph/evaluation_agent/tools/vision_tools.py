@@ -59,7 +59,7 @@ async def analyze_category_future(vision_data: dict) -> dict:
         # LLM Phase (Sequential)
         async with concurrency_limiter:
             logger.info("🌐 Vision Analysis (LLM)...")
-            llm = get_llm(temperature=0, provider="groq")
+            llm = get_llm(temperature=0, provider="modal")
             prompt = PromptTemplate.from_template(CATEGORY_FUTURE_PROMPT)
             chain = prompt | llm | StrOutputParser()
             
@@ -75,7 +75,7 @@ async def analyze_category_future(vision_data: dict) -> dict:
 @retry(**RETRY_CONFIG)
 async def vision_risk_agent(vision_data: dict, market_analysis: dict, template: str) -> str:
     async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
         return await chain.ainvoke({
             "vision_data": json.dumps(vision_data, indent=2),
@@ -110,7 +110,7 @@ async def get_funding_benchmarks(location: str, stage: str, sector: str) -> str:
 async def vision_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("⚖️ Vision Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(VISION_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         raw_res = await chain.ainvoke({

@@ -39,7 +39,7 @@ RETRY_CONFIG = {
 async def team_risk_check(data: dict, agent_prompt: str) -> str:
     async with concurrency_limiter:
         logger.info("📉 Team Risk Check...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({"json_data": json.dumps(data, indent=2)})
 
@@ -48,7 +48,7 @@ async def team_risk_check(data: dict, agent_prompt: str) -> str:
 async def team_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("🏆 Team Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         # Use StrOutputParser + repair_json
         chain = PromptTemplate.from_template(TEAM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         

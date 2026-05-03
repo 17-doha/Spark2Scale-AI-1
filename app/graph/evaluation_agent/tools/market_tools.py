@@ -105,7 +105,7 @@ async def tam_sam_verifier_tool(beachhead: str, location: str, claimed_size: str
 async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result):
     async with concurrency_limiter:
         logger.info("📉 Market Risk...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(VALUATION_RISK_MARKET_PROMPT_TEMPLATE) | llm | StrOutputParser()
         return await chain.ainvoke({
             "internal_json": json.dumps(market_inputs, indent=2),
@@ -118,7 +118,7 @@ async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result)
 async def market_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("⚖️ Market Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(MARKET_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         raw_res = await chain.ainvoke({

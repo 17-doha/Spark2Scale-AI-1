@@ -4,8 +4,10 @@ import asyncio
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-# Allow 2 concurrent LLM calls — safe with 4 rotating API keys (~120 RPM total)
-concurrency_limiter = asyncio.Semaphore(2)
+# Match vLLM's max_num_seqs=32 so all evaluation-agent calls (36 total) hit
+# the GPU in one continuous batch instead of being throttled into waves.
+# vLLM's AsyncLLMEngine handles the queuing internally — flooding it is fine.
+concurrency_limiter = asyncio.Semaphore(32)
 
 # Rate limiter for incoming HTTP requests (per-IP by default).
 # Configure the default rate limit via the API_RATE_LIMIT env var (e.g. "60/minute").

@@ -122,17 +122,16 @@ async def planner_node(state: AgentState):
     """
     user_data = state.get("user_data", {})
     
-    llm = get_llm(temperature=0, provider="groq")
+    llm = get_llm(temperature=0, provider="modal")
     
-    # Structured output binding
-    structured_llm = llm.with_structured_output(Plan)
+    chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
-        plan_obj = await structured_llm.ainvoke(
-            PLANNER_PROMPT.format(user_data=json.dumps(user_data, indent=2))
-        )
-        return {"plan": plan_obj.model_dump()}
+        plan_dict = await chain.ainvoke({"user_data": json.dumps(user_data, indent=2)})
+        # Validate with Pydantic and return dict
+        return {"plan": Plan(**plan_dict).model_dump()}
     except Exception as e:
+        logger.error(f"Planning Failed: {e}")
         # Fallback empty plan if fails
         return {"plan": {"steps": [], "key_risks": ["Planning Failed"], "desired_output_structure": []}}
 
@@ -272,15 +271,14 @@ async def product_final_scoring_node(state: AgentState):
 async def planner_node(state: AgentState):
     """Generates a strategic plan."""
     user_data = state.get("user_data", {})
-    llm = get_llm(temperature=0, provider="groq")  
-    structured_llm = llm.with_structured_output(Plan)
+    llm = get_llm(temperature=0, provider="modal")  
+    chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
-        plan_obj = await structured_llm.ainvoke(
-            PLANNER_PROMPT.format(user_data=json.dumps(user_data, indent=2))
-        )
-        return {"plan": plan_obj.model_dump()}
-    except Exception:
+        plan_dict = await chain.ainvoke({"user_data": json.dumps(user_data, indent=2)})
+        return {"plan": Plan(**plan_dict).model_dump()}
+    except Exception as e:
+        logger.error(f"Planning Failed: {e}")
         return {"plan": {"steps": [], "key_risks": ["Planning Failed"], "desired_output_structure": []}}
 
 async def team_node(state: AgentState):
@@ -626,7 +624,7 @@ async def final_node(state: AgentState):
     agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
 
     # 4. Generate with LLM
-    llm = get_llm(temperature=0, provider="groq") 
+    llm = get_llm(temperature=0, provider="modal") 
     chain = PromptTemplate.from_template(FINAL_SYNTHESIS_PROMPT) | llm | JsonOutputParser()
 
     try:
