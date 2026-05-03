@@ -98,7 +98,7 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
 
     # AI JUDGE
     try:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(ECONOMIC_JUDGEMENT_PROMPT) | llm | StrOutputParser()
         raw_judge = chain.invoke({
             "sector_info": strategy.get("icp_description", "Tech"),
@@ -138,7 +138,7 @@ async def evaluate_business_model_with_context(business_data: dict) -> dict:
         cost_to_serve = price * (1 - (margin_percent / 100)) if price > 0 else 0
 
         # LLM Judge
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(BUSINESS_MODEL_JUDGE_PROMPT) | llm | StrOutputParser()
         
         try:
@@ -169,14 +169,14 @@ async def evaluate_business_model_with_context(business_data: dict) -> dict:
 @retry(**RETRY_CONFIG)
 async def business_risk_agent(business_data: dict, risk_prompt_template: str) -> str:
     async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(risk_prompt_template) | llm | StrOutputParser()
         return await chain.ainvoke({"business_data": json.dumps(business_data, indent=2)})
 @retry(**RETRY_CONFIG)
 async def business_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("🚀 Business Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         business_data = data_package.get("business_data", {})
         stage_raw = business_data.get("context", {}).get("stage", "Pre-Seed").lower()
         template = SCORING_BIZ_PRE_SEED_PROMPT if "pre" in stage_raw else SCORING_BIZ_SEED_PROMPT

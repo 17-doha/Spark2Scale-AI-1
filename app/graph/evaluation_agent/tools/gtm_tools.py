@@ -42,14 +42,14 @@ RETRY_CONFIG = {
 @retry(**RETRY_CONFIG)
 async def gtm_risk_agent(gtm_data: dict, risk_prompt_template: str) -> str:
     async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(risk_prompt_template) | llm | StrOutputParser()
         return await chain.ainvoke({"gtm_json": json.dumps(gtm_data, indent=2)})
 @retry(**RETRY_CONFIG)
 async def gtm_scoring_agent(gtm_data: dict, economics_report: dict, contradiction_report: str, risk_report: str) -> dict:
     async with concurrency_limiter:
         logger.info("🚀 GTM Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         stage_raw = gtm_data.get("context", {}).get("stage", "Pre-Seed").lower()
         template = SCORING_GTM_PRE_SEED_PROMPT if "pre" in stage_raw else SCORING_GTM_SEED_PROMPT
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()

@@ -42,7 +42,7 @@ RETRY_CONFIG = {
 @retry(**RETRY_CONFIG)
 async def operations_risk_agent(operations_data: dict, benchmarks: str, template: str) -> str:
     async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
         return await chain.ainvoke({
             "operations_data": json.dumps(operations_data, indent=2),
@@ -53,7 +53,7 @@ async def operations_risk_agent(operations_data: dict, benchmarks: str, template
 async def operations_scoring_agent(data_package: dict) -> dict:
     async with concurrency_limiter:
         logger.info("⚖️ Operations Scoring...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(OPERATIONS_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         raw_res = await chain.ainvoke({

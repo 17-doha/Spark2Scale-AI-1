@@ -34,7 +34,7 @@ RETRY_CONFIG = {
 async def contradiction_check(data: dict, agent_prompt: str) -> str:
     async with concurrency_limiter:
         logger.info("🤖 Contradiction Check...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({
             "current_date": datetime.now().strftime("%Y-%m-%d"),

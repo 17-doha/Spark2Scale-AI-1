@@ -808,7 +808,7 @@ async def normalize_input_data(raw_input: str) -> dict:
     
     # Use Gemini (Flash or Pro) for this. It's great at long-context understanding.
     # Groq works too but Gemini has larger context window if raw_input is huge.
-    llm = get_llm(temperature=0, provider="groq") 
+    llm = get_llm(temperature=0, provider="modal") 
     
     chain = PromptTemplate.from_template(NORMALIZER_PROMPT) | llm | JsonOutputParser()
 
