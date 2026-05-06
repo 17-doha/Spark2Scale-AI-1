@@ -5,10 +5,8 @@ import tempfile
 import shutil
 from typing import List, Optional
 import uuid
-
 from fastapi import APIRouter, HTTPException, status, File, UploadFile, Form
 from pydantic import BaseModel, Field
-
 from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
 from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
@@ -16,9 +14,23 @@ from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_p
 from app.graph.ppt_generation_agent.tools.input_loader import load_input_directory
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
+from app.core.metrics import ppt_generations, langgraph_duration
+import time
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+async def run_ppt_generation(state, startup_id):
+    start = time.time()
+    try:
+        final_state = await app_graph.ainvoke(state)
+        ppt_generations.labels(status="success").inc()
+        return PPTGenerationResponse(...)
+    except Exception as e:
+        ppt_generations.labels(status="error").inc()
+        raise
+    finally:
+        langgraph_duration.labels(workflow="ppt_generation").observe(time.time() - start)
 
 class PPTInput(BaseModel):
     startup_id: str = Field(..., description="The UUID of the startup")
