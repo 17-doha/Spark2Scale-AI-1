@@ -1,76 +1,62 @@
-from prometheus_client import Counter, Histogram, Gauge
+# app/core/metrics.py  — paste this file into your project
 
-# Agent invocation counters
-ppt_generations = Counter(
-    "ppt_generation_total",
-    "Total PPT generation requests",
-    ["status"]  # success / error
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
+import time
+
+# === COUNTERS ===
+evaluation_requests_total = Counter(
+    "evaluation_requests_total",
+    "Total number of evaluation pipeline runs",
+    ["stage"]  # label: Pre-Seed or Seed
 )
 
-market_research_requests = Counter(
-    "market_research_total",
-    "Total market research requests",
-    ["status"]
+agent_runs_total = Counter(
+    "agent_runs_total",
+    "Total calls per agent node",
+    ["agent_name", "status"]  # status: success | error
 )
 
-evaluation_requests = Counter(
-    "evaluation_total",
-    "Total evaluation requests",
-    ["status"]
+llm_calls_total = Counter(
+    "llm_calls_total",
+    "Total LLM API calls",
+    ["provider", "status"]  # provider: groq | gemini
 )
 
-bmc_requests = Counter(
-    "bmc_generation_total",
-    "Total BMC generation requests",
-    ["status"]
+# === HISTOGRAMS ===
+evaluation_duration_seconds = Histogram(
+    "evaluation_duration_seconds",
+    "Full pipeline duration in seconds",
+    ["stage"],
+    buckets=[10, 20, 30, 45, 60, 90, 120, 180, 240, 300]
 )
 
-# LangGraph execution latency
-langgraph_duration = Histogram(
-    "langgraph_execution_seconds",
-    "Time spent in LangGraph workflows",
-    ["workflow"],  # market_research, evaluation, bmc, swot, etc.
-    buckets=[1, 5, 15, 30, 60, 120, 300]
+agent_duration_seconds = Histogram(
+    "agent_duration_seconds",
+    "Per-agent execution time",
+    ["agent_name"],
+    buckets=[1, 2, 5, 10, 15, 20, 30, 60]
 )
 
-# Qdrant metrics
-qdrant_query_duration = Histogram(
-    "qdrant_query_seconds",
-    "Qdrant ANN search latency",
-    ["collection"],  # investors, pitchdecks, tags
-    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.0]
+llm_latency_seconds = Histogram(
+    "llm_latency_seconds",
+    "LLM API call latency",
+    ["provider"],
+    buckets=[0.5, 1, 2, 3, 5, 10, 20, 30]
 )
 
-qdrant_upsert_duration = Histogram(
-    "qdrant_upsert_seconds",
-    "Qdrant upsert latency",
-    ["collection"]
+# === GAUGES ===
+active_evaluations = Gauge(
+    "active_evaluations",
+    "Number of evaluations currently running"
 )
 
-# Neo4j metrics
-neo4j_query_duration = Histogram(
-    "neo4j_query_seconds",
-    "Neo4j query latency",
-    ["query_type"],  # subtag_fetch, weight_update, sync
-    buckets=[0.05, 0.1, 0.5, 1.0, 5.0]
+weighted_score_gauge = Gauge(
+    "evaluation_weighted_score",
+    "Weighted score of last completed evaluation",
+    ["stage"]
 )
 
-# Rate limiting
-rate_limit_hits = Counter(
-    "rate_limit_hits_total",
-    "Total rate limit hits",
-    ["endpoint"]
-)
-
-# Active LiveKit sessions
-active_pitch_sessions = Gauge(
-    "active_pitch_sessions",
-    "Currently active pitch analyzer sessions"
-)
-
-# LLM provider errors
-llm_errors = Counter(
-    "llm_errors_total",
-    "LLM API errors",
-    ["provider", "error_type"]  # groq/gemini, 429/503/timeout
-)
+# === /metrics ENDPOINT ===
+def metrics_endpoint():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

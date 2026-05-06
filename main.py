@@ -3,6 +3,7 @@ import uvicorn
 from app.api.main import app  # Ensure this import path is correct based on your folder structure
 from app.core.logger import get_logger
 
+
 logger = get_logger("main")
 
 # This wrapper function isn't strictly necessary for Docker but is fine to keep
