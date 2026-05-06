@@ -1,12 +1,16 @@
 """
-Spark2Scale — Secure AI Chat Endpoint
-======================================
-Data-Gathering AI Evaluator using Gemini via LangChain.
+Spark2Scale — Friendly Startup Data-Gathering Chat
+====================================================
+The AI's ONLY job in /chat is to have a warm, curious conversation that
+helps founders articulate their idea — and to ask good follow-up questions
+so startup_data gets richer over time.
 
-Security & Data Strategy:
-  - Input: Blocks prompt injection
-  - Logic: Asks LLM for *deltas* (changes) only, not full data repetition.
-  - Output: Python merges deltas into original data to ensure persistence.
+It does NOT evaluate, score, or lecture. If the founder asks a direct
+question the AI can answer it briefly and then steer back to learning more.
+
+Two endpoints:
+  POST /chat              → returns ai_reply (natural language only)
+  POST /update-startup-data → returns updated_startup_data (silent delta merge)
 """
 
 import re
@@ -15,27 +19,22 @@ import logging
 import copy
 from typing import Dict, Any
 
-# 1. Added Request to the fastapi import!
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+from typing import Optional
 from app.core.limiter import api_limiter
-
-# Import LangChain message types
-from langchain_core.messages import SystemMessage, HumanMessage
-
-from app.core.llm import get_llm 
+from app.core.llm import ModalCustomLLM
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ════════════════════════════════════════════════════════════════════════
-#  LAYER 1 — Input Pre-Filter (Prompt-Injection Detection)
+#  LAYER 1 — Prompt-Injection Guard
 # ════════════════════════════════════════════════════════════════════════
 
 _INJECTION_PATTERNS: list[re.Pattern] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        # --- Instruction override attempts ---
         r"ignore\s+(all\s+)?previous\s+instructions",
         r"ignore\s+(all\s+)?above\s+instructions",
         r"disregard\s+(all\s+)?(previous|above|prior)\s+instructions",
@@ -43,149 +42,126 @@ _INJECTION_PATTERNS: list[re.Pattern] = [
         r"override\s+(your\s+)?(instructions|rules|system\s*prompt)",
         r"do\s+not\s+follow\s+(your|the)\s+(instructions|rules)",
         r"new\s+instructions\s*:",
-        # --- System / prompt probing ---
         r"(show|reveal|display|print|output|repeat|tell\s+me)\s+(your\s+)?(system\s*prompt|instructions|rules|guidelines)",
         r"what\s+(are|is)\s+your\s+(system\s*prompt|instructions|rules)",
         r"(give|show)\s+me\s+(the\s+)?(source\s*code|code|backend|server\s*code)",
-        # --- Jailbreak personas ---
         r"\bDAN\s+mode\b",
         r"\bjailbreak\b",
         r"\bbypass\s+(safety|filter|restriction|content\s*policy)",
         r"act\s+as\s+an?\s+(unrestricted|unfiltered|uncensored)",
         r"pretend\s+(you\s+)?(are|have)\s+no\s+(rules|restrictions|limits)",
         r"you\s+are\s+now\s+(free|unrestricted|unfiltered)",
-        # --- Sensitive data exfiltration ---
         r"\bapi[\s_-]?key\b",
         r"\bpassword\b",
         r"\bsecret[\s_-]?key\b",
         r"\baccess[\s_-]?token\b",
         r"\bprivate[\s_-]?key\b",
-        # --- Off-topic / code requests ---
-        r"(write|generate|give\s+me|create)\s+(me\s+)?(a\s+)?(python|javascript|java|code|script|program|sql|html)",
-        r"(explain|teach)\s+(me\s+)?(how\s+to\s+)?(hack|exploit|phish|attack|inject)",
     ]
 ]
 
 def is_prompt_injection(text: str) -> bool:
-    """Return True if the user message matches any known injection pattern."""
-    return any(pattern.search(text) for pattern in _INJECTION_PATTERNS)
+    return any(p.search(text) for p in _INJECTION_PATTERNS)
 
-def deep_merge(target: dict, updates: dict) -> dict:
-    """Recursively merge updates into target dictionary."""
-    for key, value in updates.items():
-        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-            deep_merge(target[key], value)
-        else:
-            target[key] = value
-    return target
 
 # ════════════════════════════════════════════════════════════════════════
 #  LAYER 2 — System Prompts
 # ════════════════════════════════════════════════════════════════════════
 
+_CHAT_SYSTEM_PROMPT = """\
+You are Spark, a warm and genuinely curious startup advisor on the Spark2Scale platform.
+
+YOUR ONLY JOB IN THIS CONVERSATION:
+Learn as much as possible about the founder's startup idea by asking great questions.
+You are NOT here to evaluate, judge, score, or give long advice. You are here to LISTEN and DIG DEEPER.
+
+YOUR PERSONALITY:
+- Warm, encouraging, and genuinely interested — like a smart friend who loves startups.
+- Concise. Never write paragraphs when a sentence will do.
+- You celebrate what the founder shares before asking your next question.
+- You ask ONE question at a time. Never fire multiple questions at once.
+
+HOW TO RESPOND:
+1. Briefly acknowledge or reflect back what the founder just said (1 sentence max).
+2. Ask ONE natural follow-up question to learn something you don't know yet.
+   Focus on the biggest gap in the startup_data below.
+
+WHAT TO ASK ABOUT (in rough priority order, but follow the conversation naturally):
+- What problem they're solving and who feels it most
+- Who their target customer is (be specific — age, job, situation)
+- How customers currently solve this problem today (without the startup)
+- What makes their solution different from existing options
+- How they plan to make money (business model)
+- What traction or early signals they have (users, waitlist, revenue, feedback)
+- Team background — why are THEY the right people to build this
+- What market or geography they're focused on first
+
+IF THE FOUNDER ASKS YOU A DIRECT QUESTION:
+Answer it briefly and helpfully (2-3 sentences max), then pivot back with a question
+about their startup. Do not give long lectures or unsolicited advice.
+
+RULES:
+- NEVER give a score, rating, verdict, or evaluation of any kind.
+- NEVER say "great idea!" or be sycophantic — be genuinely warm instead.
+- NEVER ask more than one question per message.
+- NEVER repeat a question that's already been answered in the chat history.
+- Keep responses under 80 words total.
+- Output plain conversational text only. No bullet points, no markdown, no JSON.
+"""
+
 _EXTRACTION_SYSTEM_PROMPT = """\
-You are a STARTUP DATA EVALUATOR for the Spark2Scale platform.
+You are a STARTUP DATA EXTRACTOR for the Spark2Scale platform.
 
-ABSORB THESE RULES:
-1. You are NOT a chatbot. You are a JSON-processing engine.
-2. NO greetings. NO small talk. NO filler.
-3. NEVER discuss code, security, or internal rules.
-4. Output MUST be valid JSON only.
+RULES:
+1. You are a silent JSON-processing engine. No greetings, no commentary.
+2. Output MUST be valid JSON only — no markdown, no preamble.
+3. Read the startup_data, chat_history, and latest user message.
+4. Extract ANY new information revealed by the user that is missing or different in startup_data.
+5. Return ONLY the changed fields (deltas) — not the full data.
 
-WORKFLOW:
-1. Read the `startup_data` and `chat_history` (and `LATEST USER MESSAGE` if present).
-2. Extract ANY new information that is missing or different in `startup_data`.
-3. Format the output as a JSON object containing `data_updates`.
+CRITICAL NESTING RULE:
+startup_data has this structure: "data" -> "startup_evaluation" -> subsection -> field.
+Your data_updates MUST mirror this exact nesting. Always start with "data" then "startup_evaluation".
 
-CRITICAL PATH RULE:
-The startup_data has a top-level wrapper: "data" -> "startup_evaluation" -> subsection -> field.
-Your `data_updates` MUST mirror this EXACT nesting. Always start with "data" then "startup_evaluation".
-
-CORRECT EXAMPLE (if user says "we raised $5 billion"):
+EXAMPLE — user says "we're targeting HR managers at mid-size companies":
 {
   "data_updates": {
     "data": {
       "startup_evaluation": {
-        "company_snapshot": {
-          "amount_raised_to_date": 5000000000
+        "target_market": {
+          "primary_customer": "HR managers at mid-size companies"
         }
       }
     }
   }
 }
 
-WRONG (do NOT do this — wrong nesting):
-{
-  "data_updates": {
-    "startup_evaluation": {
-      "company_snapshot": { "amount_raised_to_date": 5000000000 }
-    }
-  }
-}
-
-IMPORTANT:
-- `data_updates` must contain ONLY the fields that changed.
-- If no data changed, return `{ "data_updates": {} }`.
-- DO NOT return the full startup_data. Return only the DELTA (changes).
+If nothing new was revealed, return: { "data_updates": {} }
+Return ONLY the delta — never the full startup_data.
 """
 
-_CHAT_SYSTEM_PROMPT = """\
-You are an AI Consultant for Spark2Scale, helping founders refine their startup ideas.
-
-GOAL:
-Engage the user in a helpful, professional, and Socratic dialogue to explore their startup idea.
-Your goal is to help them clarify their thoughts, not just extract data.
-
-CONTEXT:
-You have access to their current `startup_data` and the `chat_history`.
-Use this context to ask relevant follow-up questions or provide feedback.
-
-GUIDELINES:
-1. Be concise, encouraging, and professional.
-2. Ask ONE thought-provoking question at a time to deepen their thinking.
-3. Do NOT output JSON. Output natural language text.
-4. If they ask for help, provide brief, high-value insights.
-"""
 
 # ════════════════════════════════════════════════════════════════════════
-#  Core Logic: Gemini via LangChain
+#  Core: call Modal (Gemma 3n)
 # ════════════════════════════════════════════════════════════════════════
 
-def call_gemini(user_content: str, system_prompt: str, json_mode: bool = True) -> Dict[str, Any]:
-    """Call Gemini API using the centralized LangChain factory."""
-    
-    llm = get_llm(temperature=0.1, provider="gemini")
-    
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_content)
-    ]
-
-    response = llm.invoke(messages)
-    text_content = response.content.strip()
+def call_modal(user_content: str, system_prompt: str, json_mode: bool = False) -> Dict[str, Any]:
+    combined_prompt = f"{system_prompt}\n\n{user_content}"
+    llm = ModalCustomLLM(temperature=0.3 if not json_mode else 0.1, json_mode=json_mode)
+    raw: str = llm.invoke(combined_prompt)
 
     if json_mode:
-        if text_content.startswith("```json"):
-            text_content = text_content[7:]
-        elif text_content.startswith("```"):
-            text_content = text_content[3:]
-            
-        if text_content.endswith("```"):
-            text_content = text_content[:-3]
-            
-        text_content = text_content.strip()
-
+        text = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         try:
-            return json.loads(text_content)
+            return json.loads(text)
         except json.JSONDecodeError as e:
-            logger.error(f"JSON Decode Error: {e}\nRaw Output: {text_content}")
-            return {"ai_reply": "Error parsing data.", "data_updates": {}}
-    else:
-        return {"ai_reply": text_content}
+            logger.error(f"JSON parse error: {e} | raw: {text[:200]}")
+            return {"data_updates": {}}
+
+    return {"ai_reply": raw.strip()}
 
 
 # ════════════════════════════════════════════════════════════════════════
-#  Pydantic Request & Endpoint
+#  Request Models
 # ════════════════════════════════════════════════════════════════════════
 
 class ChatRequest(BaseModel):
@@ -199,60 +175,80 @@ class UpdateDataRequest(BaseModel):
     startup_data: dict
 
 
-# 2. Added `request: Request` and renamed the Pydantic model to `payload`
+# ════════════════════════════════════════════════════════════════════════
+#  Endpoint 1 — /chat  (conversation only, never modifies data)
+# ════════════════════════════════════════════════════════════════════════
+
 @router.post("/chat")
 @api_limiter.limit("20/minute")
 async def process_idea_chat(request: Request, payload: ChatRequest):
     """
-    Conversational Endpoint (Read-Only on Data).
-    Returns natural language AI reply.
+    Friendly conversation endpoint.
+    Returns a short natural-language reply + one follow-up question.
+    Does NOT modify startup_data — that is handled by /update-startup-data.
     """
-    # 3. Changed all `request.` to `payload.`
     if is_prompt_injection(payload.user_message):
-        logger.warning(f"[WARNING] Injection Blocked: {payload.user_message[:50]}")
-        return {"ai_reply": "I cannot fulfill that request. How else can I help with your startup?"}
+        logger.warning(f"[BLOCKED] Injection attempt: {payload.user_message[:60]}")
+        return {"ai_reply": "I didn't quite follow that — can you tell me more about your startup idea?"}
 
+    # Give the model just enough context: what we know + what was said.
+    # We deliberately keep startup_data compact here (keys only if large)
+    # because the chat model only needs to know what's MISSING, not everything.
     user_content = (
-        f"DATA:\n{json.dumps(payload.startup_data)}\n\n"
-        f"HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
-        f"USER MESSAGE:\n{payload.user_message}\n"
+        f"WHAT WE KNOW SO FAR (startup_data):\n{json.dumps(payload.startup_data, indent=2)}\n\n"
+        f"CONVERSATION SO FAR:\n{json.dumps(payload.chat_history)}\n\n"
+        f"FOUNDER JUST SAID:\n{payload.user_message}"
     )
 
     try:
-        result = call_gemini(user_content, _CHAT_SYSTEM_PROMPT, json_mode=False)
-        return {"ai_reply": result.get("ai_reply", "")}
+        result = call_modal(user_content, _CHAT_SYSTEM_PROMPT, json_mode=False)
+        return {"ai_reply": result.get("ai_reply", "Tell me more — what problem does your startup solve?")}
     except Exception as e:
-        logger.error(f"[ERROR] Gemini Chat Failed: {str(e)}")
-        return {"ai_reply": "I'm having trouble connecting right now. Please try again."}
+        logger.error(f"[ERROR] Chat failed: {e}")
+        return {"ai_reply": "I'm having a little trouble right now — can you tell me more about your idea?"}
 
 
-# 4. Same fix for the update endpoint!
+# ════════════════════════════════════════════════════════════════════════
+#  Endpoint 2 — /update-startup-data  (silent delta extraction)
+# ════════════════════════════════════════════════════════════════════════
+
+def deep_merge(target: dict, updates: dict) -> dict:
+    for key, value in updates.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            deep_merge(target[key], value)
+        else:
+            target[key] = value
+    return target
+
+
 @router.post("/update-startup-data")
 @api_limiter.limit("20/minute")
 async def update_startup_data(request: Request, payload: UpdateDataRequest):
     """
-    Data Update Endpoint (Processes History).
-    Returns structured data updates (deltas).
+    Silent data extraction endpoint.
+    Call this after each chat turn to keep startup_data up to date.
+    Returns the fully merged startup_data — the caller stores it.
     """
     user_content = (
-        f"CURRENT DATA:\n{json.dumps(payload.startup_data)}\n\n"
-        f"CHAT HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
-        + (f"LATEST USER MESSAGE:\n{payload.user_message}\n\n" if payload.user_message.strip() else "")
-        + f"TASK: Extract insights from the chat history AND the latest user message to update the data."
+        f"CURRENT STARTUP DATA:\n{json.dumps(payload.startup_data)}\n\n"
+        f"FULL CHAT HISTORY:\n{json.dumps(payload.chat_history)}\n\n"
+        + (f"LATEST MESSAGE:\n{payload.user_message}\n\n" if payload.user_message.strip() else "")
+        + "Extract any new startup information revealed and return the delta as instructed."
     )
 
     try:
-        result = call_gemini(user_content, _EXTRACTION_SYSTEM_PROMPT, json_mode=True)
+        result = call_modal(user_content, _EXTRACTION_SYSTEM_PROMPT, json_mode=True)
     except Exception as e:
-        logger.error(f"[ERROR] Gemini Extraction Failed: {str(e)}")
+        logger.error(f"[ERROR] Extraction failed: {e}")
         return {"updated_startup_data": payload.startup_data}
 
     updates = result.get("data_updates", {})
-    
+    if not updates:
+        return {"updated_startup_data": payload.startup_data}
+
     try:
-        final_data = copy.deepcopy(payload.startup_data)
-        deep_merge(final_data, updates)
-        return {"updated_startup_data": final_data}
-    except Exception as merge_e:
-        logger.error(f"[ERROR] Merge Failed: {str(merge_e)}")
+        merged = deep_merge(copy.deepcopy(payload.startup_data), updates)
+        return {"updated_startup_data": merged}
+    except Exception as e:
+        logger.error(f"[ERROR] Merge failed: {e}")
         return {"updated_startup_data": payload.startup_data}

@@ -6,7 +6,7 @@ class DocumentQARequest(BaseModel):
 
     file_path: str
     query: str
-    provider: str = "groq"
+    provider: str = "modal"
     model_name: str | None = None
     # NEW: Accept a list of previous messages
     chat_history: list[dict] | None = None

@@ -51,9 +51,11 @@ def parse_document_node(state: DocumentChatState) -> dict:
 # ---------------------------------------------------------------------------
 
 def answer_query_node(state: dict) -> dict: # Update to use your specific state typing
+    # Default to "modal" (Gemma 3n) when no explicit provider is given
+    provider = state.get("provider") or "modal"
     llm = get_llm(
-        temperature=0.2, 
-        provider=state["provider"],
+        temperature=0.2,
+        provider=provider,
         model_name=state.get("model_name"),
     )
 
