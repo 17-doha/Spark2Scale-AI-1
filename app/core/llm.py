@@ -27,8 +27,9 @@ except ImportError:
 # We split on the first double-newline to extract context vs question.
 # If no separator is found the whole text becomes the question.
 
-_MODAL_INFER_URL = (
-    "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-infer.modal.run"
+_MODAL_INFER_URL = os.getenv(
+    "MODAL_INFER_URL",
+    "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-infer.modal.run",
 )
 
 class ModalCustomLLM(LLM):
@@ -36,7 +37,7 @@ class ModalCustomLLM(LLM):
 
     endpoint_url: str = _MODAL_INFER_URL
     temperature:  float = 0.7
-    max_tokens:   int   = 2048
+    max_tokens:   int   = 1024   # output tokens; rest of the 8192 window goes to the prompt
     json_mode:    bool  = False
 
     @property
@@ -132,7 +133,7 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
         return ModalCustomLLM(
             # endpoint_url defaults to _MODAL_INFER_URL
             temperature = final_temp,
-            max_tokens  = 2048,
+            max_tokens  = 1024,   # output reservation; rest of the 8192-token window is for the prompt
             json_mode   = True,   # chains always expect structured JSON output
         )
 

@@ -48,8 +48,6 @@ class LLMEngine:
         print(f"Downloaded to {local_dir}")
 
         # ── Patch config.json ────────────────────────────────────────────────
-        # gradient_clipping fix is still needed; rope_type error no longer
-        # occurs on vllm>=0.8.5 with correct transformers version.
         config_path = os.path.join(local_dir, "config.json")
         with open(config_path) as f:
             config = json.load(f)
@@ -57,17 +55,14 @@ class LLMEngine:
         def patch_config(obj):
             if not isinstance(obj, dict):
                 return
-            # gradient_clipping overflows float16 range if > 65504
             if "gradient_clipping" in obj:
                 val = obj["gradient_clipping"]
                 if isinstance(val, (int, float)) and abs(val) > 60000:
                     print(f"  Patched gradient_clipping: {val} -> 1.0")
                     obj["gradient_clipping"] = 1.0
-            # Force torch_dtype to bfloat16 to avoid float16 vs bfloat16 mixed precision crash in vLLM vision profiler
             if "torch_dtype" in obj and obj["torch_dtype"] == "float16":
                 print("  Patched torch_dtype: float16 -> bfloat16")
                 obj["torch_dtype"] = "bfloat16"
-            # Remove quantization_config so vLLM loads in bfloat16
             if "quantization_config" in obj:
                 print("  Removed quantization_config")
                 del obj["quantization_config"]
@@ -84,16 +79,130 @@ class LLMEngine:
         print("Initialising vLLM AsyncLLMEngine ...")
         engine_args = AsyncEngineArgs(
             model                  = local_dir,
-            dtype                  = "bfloat16",  # A100 supports bfloat16 natively
-            max_model_len          = 4096,         # A100 has headroom for longer ctx
+            dtype                  = "bfloat16",
+            max_model_len          = 8192,   # raised from 4096; A100 KV cache handles this easily
             gpu_memory_utilization = 0.90,
-            max_num_seqs           = 32,           # match allow_concurrent_inputs so all requests batch together
+            max_num_seqs           = 32,
             tensor_parallel_size   = 1,
-            enforce_eager          = True,         # skip CUDA-graph profiling that crashes on Gemma3n mm forward
+            enforce_eager          = True,   # skip CUDA-graph profiling that crashes on Gemma3n mm forward
             trust_remote_code      = True,
         )
         self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+
+        # Store tokenizer for server-side token counting / truncation
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(local_dir, trust_remote_code=True)
+        self.max_model_len = 8192   # keep in sync with engine_args above
         print("Engine ready!")
+
+    # ── Token-aware two-stage truncation ─────────────────────────────────────
+    def _smart_truncate(
+        self,
+        context: str,
+        question: str,
+        json_suffix: str,
+        max_new_tokens: int,
+    ) -> str:
+        """
+        Ensure the full prompt fits within the model's token window.
+
+        Stage 1 — trim CONTEXT (keep tail)
+            Handles evaluation_agent calls where the context block is large
+            but the question/instruction is short.
+
+        Stage 2 — trim QUESTION (keep tail)
+            Handles chat.py calls where the question contains the full
+            startup-data JSON (can be 10k+ tokens).  We keep the TAIL of
+            the question so the actual user message (always at the end) is
+            never dropped.
+
+        Hard-cap fallback
+            Slice raw token IDs so vLLM never crashes with an oversized input,
+            no matter what.
+        """
+        SAFETY_MARGIN = 64
+        token_budget = self.max_model_len - max_new_tokens - SAFETY_MARGIN
+
+        # ── helpers ──────────────────────────────────────────────────────────
+        def _encode(text: str) -> list:
+            return self.tokenizer.encode(text, add_special_tokens=False)
+
+        def _decode(ids: list) -> str:
+            return self.tokenizer.decode(ids, skip_special_tokens=True)
+
+        def _build_prompt(ctx: str, q: str) -> str:
+            user_content = f"Context: {ctx}\n\nQuestion: {q}{json_suffix}"
+            return (
+                "<start_of_turn>user\n"
+                + user_content
+                + "<end_of_turn>\n"
+                + "<start_of_turn>model\n"
+            )
+
+        def _trim_tail(ids: list, max_toks: int, label: str) -> str:
+            """Return decoded text, keeping the last max_toks tokens."""
+            if len(ids) <= max_toks:
+                return _decode(ids)
+            return f"[... {label} trimmed to fit model window ...]\n" + _decode(ids[-max_toks:])
+
+        # ── Quick exit: already fits ─────────────────────────────────────────
+        full_prompt = _build_prompt(context, question)
+        original_tokens = len(_encode(full_prompt))
+        if original_tokens <= token_budget:
+            return full_prompt
+
+        ctx_ids = _encode(context)
+        q_ids   = _encode(question)
+
+        # ── Stage 1: trim context ────────────────────────────────────────────
+        # How much room is left for context once the question+template is fixed?
+        skeleton_tokens = len(_encode(_build_prompt("", question)))
+        available_for_ctx = token_budget - skeleton_tokens
+
+        if available_for_ctx > 0:
+            trimmed_ctx = _trim_tail(ctx_ids, available_for_ctx, "context")
+            stage1_prompt = _build_prompt(trimmed_ctx, question)
+            stage1_tokens = len(_encode(stage1_prompt))
+            print(
+                f"[INFO] Stage-1 (context trim): {original_tokens} → {stage1_tokens} tokens "
+                f"(budget {token_budget})"
+            )
+            if stage1_tokens <= token_budget:
+                return stage1_prompt
+        else:
+            print(
+                f"[INFO] Stage-1 skipped: question alone ({skeleton_tokens} tokens) "
+                f"already exceeds budget ({token_budget}). Moving to Stage 2."
+            )
+
+        # ── Stage 2: trim question (keep tail = user message) ───────────────
+        # Measure the bare template overhead (empty ctx + empty question).
+        bare_overhead = len(_encode(_build_prompt("", "")))
+        available_for_q = token_budget - bare_overhead
+
+        if available_for_q > 0:
+            trimmed_q = _trim_tail(q_ids, available_for_q, "question/data")
+            stage2_prompt = _build_prompt("", trimmed_q)
+            stage2_tokens = len(_encode(stage2_prompt))
+            print(
+                f"[INFO] Stage-2 (question trim): → {stage2_tokens} tokens "
+                f"(budget {token_budget}, kept tail of question)"
+            )
+            if stage2_tokens <= token_budget:
+                return stage2_prompt
+        else:
+            print(
+                f"[WARN] Bare template overhead ({bare_overhead} tokens) already "
+                f"exceeds budget ({token_budget}). Applying hard-cap fallback."
+            )
+            stage2_prompt = _build_prompt("", f"[payload too large — {original_tokens} tokens]")
+
+        # ── Hard-cap fallback: raw token-ID slice ────────────────────────────
+        # Should never be reached, but guarantees vLLM never crashes.
+        all_ids = _encode(stage2_prompt)
+        sliced  = _decode(all_ids[-token_budget:])
+        print(f"[WARN] Hard-cap fallback: sliced to {token_budget} tokens")
+        return sliced
 
     # ── Inference endpoint ────────────────────────────────────────────────────
     @modal.fastapi_endpoint(method="POST")
@@ -109,18 +218,19 @@ class LLMEngine:
         top_p          = payload.get("top_p", 0.95)
         top_k          = payload.get("top_k", 64)
 
-        # Build prompt in the Gemma chat format used during fine-tuning
-        user_content = f"Context: {context}\n\nQuestion: {question}"
-        if json_mode:
-            user_content += (
-                "\n\nOutput only valid JSON. "
-                "Do not include any preamble, explanation, or markdown code blocks."
-            )
-        prompt = (
-            "<start_of_turn>user\n"
-            + user_content
-            + "<end_of_turn>\n"
-            + "<start_of_turn>model\n"
+        # Build the JSON instruction suffix (only in json_mode)
+        json_suffix = (
+            "\n\nOutput only valid JSON. "
+            "Do not include any preamble, explanation, or markdown code blocks."
+            if json_mode else ""
+        )
+
+        # Build + smart-truncate the prompt so it always fits the model window
+        prompt = self._smart_truncate(
+            context        = context,
+            question       = question,
+            json_suffix    = json_suffix,
+            max_new_tokens = max_new_tokens,
         )
 
         sampling_params = SamplingParams(
@@ -171,8 +281,14 @@ def main():
 
     # During `modal run` the URLs carry a -dev suffix.
     # Cold start = model download (~60s) + engine init (~30s) → allow up to 10 min.
-    INFER_URL  = "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-infer-dev.modal.run"
-    HEALTH_URL = "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-health-dev.modal.run"
+    INFER_URL  = os.getenv(
+        "MODAL_INFER_URL_DEV",
+        "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-infer-dev.modal.run",
+    )
+    HEALTH_URL = os.getenv(
+        "MODAL_HEALTH_URL_DEV",
+        "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-health-dev.modal.run",
+    )
 
     TEST_PAYLOAD = {
         "context":       "Simple AI builds AI phone agents for sales automation.",
