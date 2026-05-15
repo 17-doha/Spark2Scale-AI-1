@@ -12,12 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import github_webhook
-from app.core.metrics import metrics_endpoint
+# from app.core.metrics import metrics_endpoint
 
 app = FastAPI(title="Spark2Scale AI Agent")
 app.state.limiter = api_limiter
 app.include_router(github_webhook.router, prefix="/api/v1/github", tags=["GitHub"])
-app.add_route("/metrics", metrics_endpoint)
+# app.add_route("/metrics", metrics_endpoint)
 
 Instrumentator(
     should_group_status_codes=True,

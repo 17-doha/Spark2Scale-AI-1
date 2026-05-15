@@ -20,7 +20,7 @@ from qdrant_client.models import (
     PayloadSchemaType,
 )
 from app.core.logger import get_logger
-from app.core.metrics import qdrant_query_duration, qdrant_upsert_duration
+# from app.core.metrics import qdrant_query_duration, qdrant_upsert_duration
 import time
 
 logger = get_logger(__name__)

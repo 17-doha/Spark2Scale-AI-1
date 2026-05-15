@@ -11,7 +11,7 @@ from app.utils.pdf_generator import generate_founder_report, generate_investor_r
 from app.graph.evaluation_agent.helpers import normalize_input_data
 from app.core.logger import get_logger
 from app.graph.evaluation_agent import evaluation_graph
-from app.core.metrics import evaluation_requests, langgraph_duration
+# from app.core.metrics import evaluation_requests, langgraph_duration
 import time
 
 router = APIRouter()
