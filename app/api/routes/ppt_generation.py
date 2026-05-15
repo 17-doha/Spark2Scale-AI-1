@@ -14,7 +14,7 @@ from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_p
 from app.graph.ppt_generation_agent.tools.input_loader import load_input_directory
 from app.core.logger import get_logger
 from app.core.supabase_client import supabase
-from app.core.metrics import ppt_generations, langgraph_duration
+# from app.core.metrics import ppt_generations, langgraph_duration
 import time
 
 logger = get_logger(__name__)

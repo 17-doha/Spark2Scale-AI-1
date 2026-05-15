@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
-from app.core.metrics import active_pitch_sessions
+# from app.core.metrics import active_pitch_sessions
 
 from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 
