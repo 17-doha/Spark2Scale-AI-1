@@ -38,6 +38,37 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     # 4. AI Nodes
     agent = AgentNodes(api_key)
     replacements = agent.improve_statements(insights)
+
+    # 4b. Fallback: improve_statements returns None when Gemini hits a 429
+    # quota error. Without this, the "Statement Refinements" page would
+    # silently disappear for some startups — making reports structurally
+    # inconsistent. Build a passthrough from the real insights so the
+    # section ALWAYS renders, agent-sourced, for every startup.
+    if not replacements:
+        logger.warning(
+            "Refined statements unavailable (model quota) for request_id "
+            f"{request_id}; using passthrough fallback from insights."
+        )
+        _fallback_why = (
+            "Original retained — AI refinement was unavailable for this run "
+            "(model quota). Regenerate for an enhanced version."
+        )
+        replacements = {
+            key: {
+                "original": str(insights.get(key, "N/A")),
+                "recommended": str(insights.get(key, "N/A")),
+                "why_better": _fallback_why,
+            }
+            for key in (
+                "problem_statement",
+                "founder_market_fit",
+                "differentiation",
+                "core_stickiness",
+                "five_year_vision",
+                "beachhead_market",
+                "gap_analysis",
+            )
+        }
     
     # Run market intelligence before synthesis
     market_signals = run_market_intel(insights, tavily_api_key=Config.TAVILY_API_KEY)
