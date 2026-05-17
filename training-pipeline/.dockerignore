@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+.env
+outputs/
+*.db
+mlruns/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+tests/
+docs/
+*.ipynb
