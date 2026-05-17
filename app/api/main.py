@@ -10,7 +10,7 @@ from app.api.routes import ppt_generation, evaluation, market_research, recommen
 from app.core.limiter import api_limiter
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from prometheus_fastapi_instrumentator import Instrumentator
+# from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import github_webhook
 # from app.core.metrics import metrics_endpoint
 
