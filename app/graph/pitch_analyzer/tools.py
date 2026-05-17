@@ -2,7 +2,7 @@
 tools.py — All tools available to Alex during a live pitch session.
 
 CHANGES IN THIS VERSION:
-  FIX A — _get_fast_llm() now uses qwen-turbo-2025-04-28 (DashScope) instead of Groq llama-3.1-8b.
+  FIX A — _get_fast_llm() now uses qwen3-max (DashScope) instead of Groq llama-3.1-8b.
            Eliminates 429 rate-limit crashes and the LLM narrating its own tool calls.
 
   FIX B — Consistency check prompts tightened to "hard facts only".
@@ -11,7 +11,7 @@ CHANGES IN THIS VERSION:
            speech disfluencies, transcription noise, or aspirational statements.
            Rule: "If not 100% certain → contradiction=false."
 
-  FIX C — Switched intermediate LLM from Groq to qwen-turbo-2025-04-28 (DashScope Alibaba).
+  FIX C — Switched intermediate LLM from Groq to qwen3-max (DashScope Alibaba).
            Uses the OpenAI-compatible endpoint — no extra packages required.
 """
 
@@ -31,14 +31,14 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LLM SINGLETON  (FIX C — qwen-turbo-2025-04-28 via DashScope, not Groq)
+# LLM SINGLETON  (FIX C — qwen3-max via DashScope, not Groq)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _fast_llm = None
 
 def _get_fast_llm():
     """
-    Returns a singleton qwen-turbo-2025-04-28 client for background analysis tools.
+    Returns a singleton qwen3-max client for background analysis tools.
     DashScope exposes an OpenAI-compatible endpoint, so ChatOpenAI works directly.
     """
     global _fast_llm
@@ -47,7 +47,7 @@ def _get_fast_llm():
         _fast_llm = ChatOpenAI(
             api_key=os.getenv("DASHSCOPE_API_KEY", ""),
             base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            model="qwen-turbo-2025-04-28",
+            model="qwen3-max",
             model_kwargs={"response_format": {"type": "json_object"}}
         )
     return _fast_llm
@@ -64,7 +64,7 @@ _LT_AVAILABLE = True   # set to False on first network failure
 
 def extract_claims(text: str) -> Dict[str, Any]:
     """
-    Extracts structured claims from a transcript chunk using qwen-turbo-2025-04-28.
+    Extracts structured claims from a transcript chunk using qwen3-max.
     """
     _BLANK = {
         "traction":  {"users": None, "revenue": None, "growth": None},
@@ -453,7 +453,7 @@ def build_investment_readiness_report(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 5. GRAMMAR CHECK  (LanguageTool REST API + qwen-turbo-2025-04-28 fallback)
+# 5. GRAMMAR CHECK  (LanguageTool REST API + qwen3-max fallback)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _CRITICAL_RULE_IDS = {
@@ -468,7 +468,7 @@ _CRITICAL_RULE_IDS = {
 def execute_grammar_check(text: str) -> dict:
     """
     Runs LanguageTool en-US on the given text via the public REST API.
-    Falls back to qwen-turbo-2025-04-28 if the API is unreachable.
+    Falls back to qwen3-max if the API is unreachable.
     """
     global _LT_AVAILABLE
     issues: list = []
