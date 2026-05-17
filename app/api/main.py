@@ -19,10 +19,10 @@ app.state.limiter = api_limiter
 app.include_router(github_webhook.router, prefix="/api/v1/github", tags=["GitHub"])
 # app.add_route("/metrics", metrics_endpoint)
 
-Instrumentator(
-    should_group_status_codes=True,
-    excluded_handlers=["/metrics"],
-).instrument(app).expose(app)
+# Instrumentator(
+#     should_group_status_codes=True,
+#     excluded_handlers=["/metrics"],
+# ).instrument(app).expose(app)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
