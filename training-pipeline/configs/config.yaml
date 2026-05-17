@@ -1,0 +1,96 @@
+# ─────────────────────────────────────────────
+# Spark2Scale – Central Configuration
+# ─────────────────────────────────────────────
+
+project:
+  name: "Spark2Scale"
+  version: "1.0.0"
+
+# ── Hugging Face ──────────────────────────────
+huggingface:
+  dataset_name: "Dohahemdann/business-qa-analysis"
+  instruct_dataset: "mariaam22/business-qa-json-instruct-modified"
+  t5_base_model: "google/flan-t5-xl"
+  t5_finetuned_repo: "Dohahemdann/business-qa-flan-t5-xl-rope-lora"
+  t5_checkpoint_repo: "Dohahemdann/Spark2Scale"
+  t5_checkpoint_folder: "checkpoint-4000"
+  gemma_base_model: "unsloth/gemma-3n-E2B-it"
+  gemma_finetuned_repo: "Dohahemdann/gemma_3n_spark2scale-4500-6"
+  tinyllama_base_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  tinyllama_finetuned_repo: "mariaam22/tinyllama-business-qa"
+
+# ── T5 Training ───────────────────────────────
+t5_training:
+  output_dir: "./outputs/t5_checkpoints"
+  num_train_epochs: 1
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 4
+  learning_rate: 1.0e-3
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  eval_steps: 500
+  save_steps: 500
+  logging_steps: 1
+  max_input_length: 384
+  max_target_length: 192
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    target_modules: ["q", "v", "k", "o"]
+    bias: "none"
+
+# ── Gemma Finetuning ─────────────────────────
+gemma_finetuning:
+  output_dir: "./outputs/gemma_checkpoints"
+  max_seq_length: 2048
+  load_in_4bit: true
+  num_train_epochs: 1
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 4
+  warmup_steps: 5
+  learning_rate: 1.0e-5
+  weight_decay: 0.001
+  seed: 3407
+  mlflow_experiment: "Spark2Scale_Gemma3_Finetuning"
+  lora:
+    r: 8
+    lora_alpha: 8
+    lora_dropout: 0
+    bias: "none"
+    finetune_language_layers: true
+    finetune_attention_modules: true
+    finetune_mlp_modules: true
+    finetune_vision_layers: false
+
+# ── TinyLlama Finetuning ─────────────────────
+tinyllama_finetuning:
+  output_dir: "./outputs/tinyllama_checkpoints"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  max_length: 1024
+  warmup_steps: 10
+  lr_scheduler_type: "cosine"
+  logging_steps: 10
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    bias: "none"
+
+# ── Evaluation ───────────────────────────────
+evaluation:
+  test_sample_ratio: 0.01
+  seed: 42
+  max_new_tokens: 128
+  output_dir: "./outputs/evaluation"
+  nli_model: "roberta-large-mnli"
+  embedding_model: "all-MiniLM-L6-v2"
+  top_k_chunks: 3
+  entailment_threshold: 0.65
+  contradiction_threshold: 0.5
+  judge_model: "models/gemini-2.5-flash"
