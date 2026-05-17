@@ -238,16 +238,15 @@ def run_pitch_extraction(request: ExtractRequest = Body(default=ExtractRequest()
         _logging.warning(f"[EXTRACT] Could not save session context: {_ctx_err}")
 
     try:
-        docs = load_company_context()
-        # Use cache if it exists (skip=True) — avoids 30-90s LLM call on every page load.
-        _cache_path = Path(os.getcwd()) / "cheat_sheet_cache.json"
-        skip = _cache_path.exists()
-        if skip:
-            _logging.info("[EXTRACT] Cache found — skipping LLM extraction (fast path).")
-        else:
-            _logging.info("[EXTRACT] No cache found — running full LLM extraction...")
-        cheat_sheet, voice_prompt = run_extraction(docs, skip=skip)
-        source = "cache" if skip else "llm"
+        docs = load_company_context(startup_id=request.startup_id)
+        # skip=True → check Supabase cache first (keyed by startup_id), then local file.
+        # Cache miss → full LLM extraction → result saved back to startups.cheat_sheet.
+        cheat_sheet, voice_prompt = run_extraction(
+            docs,
+            skip=True,
+            startup_id=request.startup_id,
+        )
+        source = "cache" if not docs else "llm"
         return {
             "status": "success",
             "source": source,
