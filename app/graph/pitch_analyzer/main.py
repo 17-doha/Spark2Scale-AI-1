@@ -38,123 +38,71 @@ _SESSION_STATE_PATH = _TEMP_DIR / "session_state.json"
 # In a production system, these would be loaded from a database or file upload.
 # For the demo, they are hard-coded here as the ground truth for Sparky.
 
-def load_company_context() -> dict:
-    """Returns the 7 startup documents that form Sparky's Company Context."""
-    return {
-        # 1. Full evaluation report (scores across 9 dimensions)
-        "evaluation": """{
-            "team_report": {"score": "2.0/5", "explanation": "Lack of relevant experience and unclear roles."},
-            "problem_report": {"score": "3.5/5", "explanation": "Clear problem statement, but impact unquantified."},
-            "product_report": {"score": "1/5", "explanation": "Generic AI wrapper, no proprietary moat."},
-            "market_report": {"score": "1/5", "explanation": "TAM claims are delusional, Red Ocean market."},
-            "traction_report": {"score": "0/5", "explanation": "Zero users, zero revenue, zero signal."},
-            "gtm_report": {"score": "1/5", "explanation": "Flawed strategy — TikTok Ads for Ministry of Education."},
-            "business_report": {"score": "1/5", "explanation": "Freemium with no paid tier — charity project."},
-            "vision_report": {"score": "2/5", "explanation": "Ambitious but vague, no clear beachhead."},
-            "operations_report": {"score": "1/5", "explanation": "Ghost Ship: raising money with $0 burn."},
-            "final_report": {
-                "Weighted Score": 14.75,
-                "Verdict": "Pass (Not Ready)",
-                "Top 3 Priorities": [
-                    "Fix the flawed GTM strategy.",
-                    "Build a team with relevant experience.",
-                    "Develop a unique, proprietary solution."
-                ]
-            }
-        }""",
+def load_company_context(startup_id: str = None) -> dict:
+    """Returns the startup documents that form Sparky's Company Context from Supabase."""
+    import tempfile
+    
+    _TEMP_DIR = Path(tempfile.gettempdir())
+    _CONTEXT_PATH = _TEMP_DIR / "spark2scale_session_context.json"
+    
+    if not startup_id and _CONTEXT_PATH.exists():
+        try:
+            ctx = json.loads(_CONTEXT_PATH.read_text(encoding="utf-8"))
+            startup_id = ctx.get("startup_id")
+        except Exception as e:
+            logging.warning(f"Could not read context file: {e}")
+            
+    if not startup_id:
+        logging.warning("No startup_id provided or found in context, returning empty context.")
+        return {}
 
-        # 2. Recommendations report
-        "recommendations": """{
-            "stage": "Pre-Seed",
-            "company_context": "AI-driven startup evaluation platform for MENA founders.",
-            "company_name": "Spark2Scale",
-            "target_raise": "500k",
-            "early_revenue": "0",
-            "founder_experience": "Doha Hemdan (CEO) — AI Engineer at Tabaani; Salma Sherif (CTO) — AI Engineer at Praxilab; Mariam Elghandoor (COO) — ML Engineer; Sarah Elsayed (CFO) — Data Science student",
-            "evaluation_scores": {
-                "team": 4, "problem": 3, "product": 3, "market": 2,
-                "traction": 1, "gtm": 2, "business": 2, "vision": 4, "ops": 3
-            },
-            "matched_patterns": [
-                {"name": "Founder Avoids the Hard Job", "pattern_id": "FP-TEAM-001"},
-                {"name": "Burn Without Milestones", "pattern_id": "FP-ECON-001"},
-                {"name": "Vision Outruns Execution", "pattern_id": "FP-VISION-001"}
-            ]
-        }""",
+    try:
+        # Import the Supabase client from the core module.
+        _project_root = str(Path(__file__).resolve().parents[3])
+        if _project_root not in sys.path:
+            sys.path.insert(0, _project_root)
 
-        # 3. Market research data
-        "market_research": """{
-            "market_sizing": {
-                "tam_value": "$44.1 Billion",
-                "sam_value": "$22.1 Billion",
-                "som_value": "$275.9 Million"
-            },
-            "validation": {
-                "verdict": "MODERATE",
-                "pain_score": 64.2,
-                "confidence": "High"
-            },
-            "competitors": [
-                "IdeaProof AI", "IdeaGlow", "Google Trends", "Ahrefs"
-            ]
-        }""",
+        from app.core.supabase_client import supabase  # type: ignore
 
-        # 4. SWOT Analysis
-        "swot": """{
-            "strengths": [
-                "Technical founding team with AI/ML backgrounds (Tabaani, Praxilab)",
-                "Custom Transformer models tailored for MENA region"
-            ],
-            "weaknesses": [
-                "Zero GTM or enterprise sales experience",
-                "Pricing model is Freemium with no defined paid tier ($0 revenue)",
-                "Stagnant velocity with 0 current users"
-            ],
-            "opportunities": [
-                "Partnering with MENA incubators like Flat6Labs",
-                "Expanding the Pitch Coach feature using Qwen3-Omni-Flash for live feedback"
-            ],
-            "threats": [
-                "Generic AI models (ChatGPT/Claude) releasing specialized VC-agent wrappers",
-                "Running out of runway due to $0 revenue and undefined acquisition strategy"
-            ]
-        }""",
-
-        # 5. Business Plan
-        "business_plan": """{
-            "executive_summary": "Spark2Scale is an AI-driven startup evaluation platform for MENA founders.",
-            "monetization": "Freemium model, no defined paid tier. Current MRR: $0.",
-            "financials": {
-                "current_mrr": 0,
-                "monthly_burn_rate": "$100",
-                "runway_months": 0,
-                "target_raise": "$500,000"
-            },
-            "go_to_market": "TikTok Ads + word-of-mouth. Target: Ministry of Education and Cairo bookstores."
-        }""",
-
-        # 6. Cap Table
-        "cap_table": """{
-            "total_shares": 1000000,
-            "shareholders": [
-                {"name": "Doha Hemdan (CEO)",          "ownership_pct": 12.5},
-                {"name": "Salma Sherif (CTO)",          "ownership_pct": 12.5},
-                {"name": "Mariam Elghandoor (COO)",     "ownership_pct": 12.5},
-                {"name": "Sarah Elsayed (CFO)",         "ownership_pct": 12.5},
-                {"name": "External App Dev Agency",     "ownership_pct": 50.0}
-            ],
-            "notes": "Founders own only 50%. The remaining 50% was given to an agency for MVP development — RED FLAG."
-        }""",
-
-        # 7. Pitch Deck (PPT) slide content
-        "ppt": """{
-            "slide_1": "Title: Spark2Scale - The AI Co-Founder for MENA",
-            "slide_2": "Problem: Founders lack a structured system to validate ideas.",
-            "slide_3": "Solution: A multi-agent AI system that evaluates pitch decks.",
-            "slide_4": "Market Size: $44.1 Billion Global Incubator Market.",
-            "slide_5": "The Ask: Raising $500k Pre-Seed to scale engineering and launch TikTok marketing."
-        }"""
-    }
+        if supabase is None:
+            logging.warning("Supabase client not initialized.")
+            return {}
+        
+        result = supabase.table("documents").select("type, json_response").eq("startup_id", startup_id).execute()
+        
+        docs = {}
+        if result.data:
+            for row in result.data:
+                doc_type = row.get("type", "").lower()
+                json_resp = row.get("json_response")
+                
+                if not json_resp:
+                    continue
+                    
+                # Convert the json_response to a string since the existing LLM extractor expects strings.
+                json_str = json.dumps(json_resp) if isinstance(json_resp, dict) else str(json_resp)
+                
+                if "founder evaluation" in doc_type or "evaluation" in doc_type:
+                    docs["evaluation"] = json_str
+                elif "recommendation" in doc_type:
+                    docs["recommendations"] = json_str
+                elif "market research" in doc_type:
+                    docs["market_research"] = json_str
+                elif "swot" in doc_type:
+                    docs["swot"] = json_str
+                elif "business plan" in doc_type or "bmc" in doc_type:
+                    docs["business_plan"] = json_str
+                elif "cap table" in doc_type:
+                    docs["cap_table"] = json_str
+                elif "ppt" in doc_type or "pitch deck" in doc_type:
+                    docs["ppt"] = json_str
+                elif "competitive analysis" in doc_type or "competitor matrix" in doc_type:
+                    docs["competitive_analysis"] = json_str
+                    
+        return docs
+    except Exception as e:
+        logging.error(f"Failed to fetch from supabase: {e}")
+        return {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
