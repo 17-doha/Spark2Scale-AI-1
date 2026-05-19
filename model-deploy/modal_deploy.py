@@ -40,7 +40,7 @@ class LLMEngine:
         # We force V0 engine to avoid this crash.
         os.environ["VLLM_USE_V1"] = "0"
 
-        model_id = "Dohahemdann/gemma_3n_spark2scale-4500-5-merged"
+        model_id = "Spark2scale/gemma_3n_spark2scale-4500-5-merged"
         hf_token = os.environ.get("HF_TOKEN")
 
         print(f"Downloading {model_id} ...")
