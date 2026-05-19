@@ -177,7 +177,7 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
 # =========================================================
 # T5-3B  (Hugging Face Space via Gradio — lazy-connect)
 # =========================================================
-_T5_SPACE_URL = "Dohahemdann/Spark2Scale-Space"
+_T5_SPACE_URL = "Spark2scale/Spark2Scale-Space"
 _t5_gradio_client = None
 _t5_client_lock = threading.Lock()
 

@@ -51,7 +51,7 @@ async def test_document_qa(request: DocumentQARequest):
                 logger.error(f"Failed to download URL: {e}")
                 raise HTTPException(status_code=400, detail=f"Could not download file from URL: {e}")
 
-        elif actual_file_path.strip().startswith("{") and is_valid_json(actual_file_path):
+        elif actual_file_path.strip().startswith(("{", "[")) and is_valid_json(actual_file_path):
             try:
                 logger.info("Processing raw JSON string payload.")
                 fd, temp_path = tempfile.mkstemp(suffix=".json")
