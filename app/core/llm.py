@@ -125,16 +125,18 @@ def _get_next_groq_key() -> str:
         return next(_groq_key_cycle)
 
 
-def get_llm(temperature=None, provider="gemini", model_name=None):
+def get_llm(temperature=None, provider="gemini", model_name=None, json_mode: bool = False):
     final_temp = temperature if temperature is not None else getattr(Config, 'GEMINI_TEMPERATURE', 0.7)
 
-    # --- NEW OPTION: MODAL (Gemma 3n fine-tuned on A100) ---
+    # --- MODAL (Gemma 3n fine-tuned on A100) ---
     if provider == "modal":
         return ModalCustomLLM(
-            # endpoint_url defaults to _MODAL_INFER_URL
             temperature = final_temp,
-            max_tokens  = 1024,   # output reservation; rest of the 8192-token window is for the prompt
-            json_mode   = True,   # chains always expect structured JSON output
+            max_tokens  = 1024,
+            # json_mode controls whether Modal returns structured JSON (True) or
+            # plain natural-language text (False). Extraction tasks pass True;
+            # conversational tasks (document_chat, etc.) pass False.
+            json_mode   = json_mode,
         )
 
     # --- OPTION 1: GROQ ---
