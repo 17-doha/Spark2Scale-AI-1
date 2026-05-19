@@ -1,0 +1,80 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────
+# Spark2Scale – Docker Compose
+# ─────────────────────────────────────────────
+# Usage:
+#   docker compose run t5-training
+#   docker compose run gemma-finetuning
+#   docker compose run tinyllama-finetuning
+#   docker compose run evaluation
+#   docker compose up mlflow
+# ─────────────────────────────────────────────
+
+x-base: &base
+  build: .
+  volumes:
+    - ./outputs:/app/outputs
+    - ./configs:/app/configs
+  environment:
+    - HF_TOKEN=${HF_TOKEN}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-""}
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+
+  # ── T5 Training ────────────────────────────
+  t5-training:
+    <<: *base
+    container_name: spark2scale-t5-training
+    command: >
+      python -m src.training.t5_trainer
+      --config configs/config.yaml
+      --hf_token ${HF_TOKEN}
+
+  # ── Gemma Fine-tuning ──────────────────────
+  gemma-finetuning:
+    <<: *base
+    container_name: spark2scale-gemma
+    command: >
+      python -m src.finetuning.gemma_finetuner
+      --config configs/config.yaml
+      --hf_token ${HF_TOKEN}
+
+  # ── TinyLlama Fine-tuning ──────────────────
+  tinyllama-finetuning:
+    <<: *base
+    container_name: spark2scale-tinyllama
+    command: >
+      python -m src.finetuning.tinyllama_finetuner
+      --config configs/config.yaml
+      --hf_token ${HF_TOKEN}
+
+  # ── Evaluation ─────────────────────────────
+  evaluation:
+    <<: *base
+    container_name: spark2scale-evaluation
+    command: >
+      python -m src.evaluation.evaluator
+      --config configs/config.yaml
+      --models t5_finetuned t5_base
+      --hf_token ${HF_TOKEN}
+      --gemini_key ${GEMINI_API_KEY:-""}
+
+  # ── MLflow UI ──────────────────────────────
+  mlflow:
+    <<: *base
+    container_name: spark2scale-mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow ui
+      --backend-store-uri sqlite:///mlflow.db
+      --host 0.0.0.0
+      --port 5000

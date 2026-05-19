@@ -15,7 +15,7 @@ that can be exercised in isolation:
   5. MONOTONE DETECTOR
   6. RMS CALIBRATOR
   7. CONSISTENCY CHECK PIPELINE
-  8. INVESTMENT READINESS REPORT
+  8. INVESTMENT READINESS REPORT    
 
 We deliberately do NOT import `workflow.py` (depends on pyaudio + livekit) or
 `node.py` (uses local-style imports `from state import …`). The InterruptLock

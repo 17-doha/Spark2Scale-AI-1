@@ -34,7 +34,7 @@ import tools as tool_functions
 def extract_vc_cheat_sheet(state: PitchState) -> PitchState:
     """
     NODE 1: Compresses the 7 massive startup documents into a structured VCCheatSheet.
-    Uses the qwen-turbo-2025-04-28 LLM via LangChain. Output is a dict matching the VCCheatSheet schema.
+    Uses the qwen3-max LLM via LangChain. Output is a dict matching the VCCheatSheet schema.
     """
     logging.info("--- NODE: COMPRESSING MASSIVE DOCUMENTS ---")
     docs = state["raw_documents"]
@@ -42,7 +42,7 @@ def extract_vc_cheat_sheet(state: PitchState) -> PitchState:
     llm = ChatOpenAI(
         api_key=os.getenv("DASHSCOPE_API_KEY"),
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-        model="qwen-turbo-2025-04-28"   # use qwen-turbo-2025-04-28 for extraction (larger context needed)
+        model="qwen3-max"   # use qwen3-max for extraction (larger context needed)
     )
 
     parser = JsonOutputParser(pydantic_object=VCCheatSheet)
