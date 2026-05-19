@@ -1,5 +1,10 @@
 """
 app/graph/feed_recommedation_agent/node.py
+===========================================
+LangGraph node functions for the feed recommendation pipeline.
+
+Dependency Inversion: all imports are explicit at module level (no lazy imports).
+Single Responsibility: each node handles exactly one pipeline stage.
 """
 
 import os
@@ -20,12 +25,33 @@ from app.graph.feed_recommedation_agent.tools import (
     store_investor_embedding,
     get_top_k_similar_investors,
 )
+from app.graph.feed_recommedation_agent.tools.contrastive import (
+    select_query_vector_ucb,
+    increment_sub_vector_impressions,
+)
 from app.graph.feed_recommedation_agent.state import FilteredSearchState
 from app.graph.feed_recommedation_agent.schema import FeedRecommendationState
 
 logger = get_logger(__name__)
 TOP_K: int = int(os.getenv("TOP_K", "10"))
 FALLBACK_SIBLING_LIMIT: int = int(os.getenv("FALLBACK_SIBLING_LIMIT", "30"))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Shared helpers (extracted for reusability and testability)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _parse_hits(points) -> list[dict]:
+    """Convert Qdrant search hits into standardised candidate dicts."""
+    return [
+        {
+            "pitchdeck_id": h.payload.get("pitchdeck_id"),
+            "startup_id"  : h.payload.get("startup_id"),
+            "tags"        : h.payload.get("tags", []),
+            "vector_score": round(h.score, 4),
+        }
+        for h in points
+    ]
 
 # ════════════════════════════════════════════════════════════════════════════
 #  Original investor embedding nodes  (used by the embed workflow)
@@ -90,10 +116,6 @@ async def build_investor_vector_node(state: FilteredSearchState) -> dict:
     already benefits from multi-vector diversity without changing anything
     downstream.
     """
-    from app.graph.feed_recommedation_agent.tools.contrastive import (
-        select_query_vector_ucb,
-        increment_sub_vector_impressions,
-    )
 
     investor_id = state["investor_id"]
 
@@ -124,6 +146,7 @@ async def build_investor_vector_node(state: FilteredSearchState) -> dict:
     return {"investor_vector": aggregate_embeddings(vecs, strategy="mean")}
 
 async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
+    """NODE 3 — Filtered Qdrant ANN search with automatic unfiltered fallback."""
     if state.get("investor_vector") is None:
         return {"candidates": [], "errors": ["No investor vector — skipping search."]}
 
@@ -132,18 +155,6 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
         Filter(should=[FieldCondition(key="tags", match=MatchAny(any=filter_tags))])
         if filter_tags else None
     )
-
-
-    def _parse_hits(points) -> list[dict]:
-        return [
-            {
-                "pitchdeck_id": h.payload.get("pitchdeck_id"),
-                "startup_id"  : h.payload.get("startup_id"),
-                "tags"        : h.payload.get("tags", []),
-                "vector_score": round(h.score, 4),
-            }
-            for h in points
-        ]
 
     try:
         res = get_qdrant().query_points(
