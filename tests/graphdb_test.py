@@ -65,7 +65,7 @@ def test_apply_decay_old():
     decayed = _apply_decay(weight, neo_dt)
     assert decayed == 0.05  # MIN_DECAYED_WEIGHT
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.supabase")
+@patch("app.graph.feed_recommedation_agent.tools.supabase_tags.supabase")
 def test_fetch_unique_tags(mock_supabase):
     """Test fetching and deduplicating tags from Supabase."""
     mock_resp = MagicMock()
@@ -79,8 +79,8 @@ def test_fetch_unique_tags(mock_supabase):
     unique_tags = fetch_unique_tags()
     assert unique_tags == ["ai", "fintech", "saas"]
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "bolt://fake")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "bolt://fake")
 def test_get_investor_subtags(mock_driver_class):
     """Test UCB logic and sorting when fetching subtags."""
     mock_driver = MagicMock()
@@ -101,8 +101,8 @@ def test_get_investor_subtags(mock_driver_class):
     assert "st1" in subtags
     assert "st2" in subtags
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "bolt://fake")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "bolt://fake")
 def test_get_sibling_subtags(mock_driver_class):
     """Test fetching sibling subtags."""
     mock_driver = MagicMock()
@@ -136,23 +136,21 @@ def test_api_fetch_investor_subtags(mock_get_investor_subtags):
     assert data["hate_threshold_applied"] == 0.05
     assert data["limit"] == 10
 
-@patch("app.api.routes.feed_recommedation.supabase")
-@patch("app.api.routes.feed_recommedation.update_graph_edge_weights")
 @patch("app.api.routes.feed_recommedation.update_sub_vector_from_interaction")
-def test_api_handle_interaction_like(mock_update_vector, mock_update_graph, mock_supabase):
+@patch("app.api.routes.feed_recommedation.update_graph_edge_weights")
+@patch("app.graph.feed_recommedation_agent.services.interaction_service.InteractionService.fetch_pitchdeck_tags")
+def test_api_handle_interaction_like(mock_fetch_tags, mock_update_graph, mock_update_vector):
     """Test the /interactions endpoint for a LIKE action.
 
-    FIX: Patches the actual task functions at the route-module level instead of
-    BackgroundTasks.add_task (class-level patching was unreliable because FastAPI
-    creates a new BackgroundTasks instance per request).
-    TestClient runs background tasks synchronously, so the mocks ARE called.
+    Patches the task functions at the route-module level and the
+    InteractionService.fetch_pitchdeck_tags static method.
+    TestClient runs background tasks synchronously.
     """
-    mock_resp = MagicMock()
-    mock_resp.data = {
-        "tags": ["Fintech"],
-        "analysis": {"sub_tags": {"Fintech": ["Payments"]}}
+    mock_fetch_tags.return_value = {
+        "parent_tags": ["Fintech"],
+        "sub_tags": ["Payments"],
+        "raw_tags": ["Fintech"],
     }
-    mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_resp
 
     payload = {
         "user_id": "u1",
@@ -167,7 +165,7 @@ def test_api_handle_interaction_like(mock_update_vector, mock_update_graph, mock
     assert data["status"] == "success"
     assert "like" in data["message"].lower()
 
-    # TestClient runs background tasks synchronously — both task functions must be called
+    # TestClient runs background tasks synchronously—both task functions must be called
     mock_update_graph.assert_called_once()
     mock_update_vector.assert_called_once()
 
@@ -176,53 +174,27 @@ def test_api_handle_interaction_like(mock_update_vector, mock_update_graph, mock
 # 3. TESTS FOR Admin Validation (Validation Tests)
 # ==========================================
 
-@patch("app.api.routes.feed_recommedation.supabase")
-@patch("app.api.routes.feed_recommedation.GraphDatabase.driver")
-@patch("app.api.routes.feed_recommedation.NEO4J_URI", "bolt://fake")
-def test_api_verify_full_sync_perfect(mock_driver_class, mock_supabase):
+@patch("app.graph.feed_recommedation_agent.services.sync_audit_service.SyncAuditService.verify")
+def test_api_verify_full_sync_perfect(mock_verify):
     """Test /admin/verify-sync when both databases match perfectly."""
-    # Supabase Mock
-    mock_supa_resp = MagicMock()
-    mock_supa_resp.data = [
-        {"pitchdeckid": "p1", "tags": ["AI"], "extracted_subtags": ["ML"]},
-    ]
-    mock_supabase.table.return_value.select.return_value.execute.return_value = mock_supa_resp
-
-    # Neo4j Mock
-    mock_driver = MagicMock()
-    mock_session = MagicMock()
-    mock_driver.session.return_value.__enter__.return_value = mock_session
-    mock_driver_class.return_value = mock_driver
-
-    mock_session.run.return_value = [
-        {"pitch_id": "p1", "tags": ["AI"], "sub_tags": ["ML"]},
-    ]
+    mock_verify.return_value = {"status": "perfect", "discrepancy_count": 0, "discrepancies": []}
 
     response = client.get("/admin/verify-sync")
     assert response.status_code == 200
     assert response.json()["status"] == "perfect"
 
-@patch("app.api.routes.feed_recommedation.supabase")
-@patch("app.api.routes.feed_recommedation.GraphDatabase.driver")
-@patch("app.api.routes.feed_recommedation.NEO4J_URI", "bolt://fake")
-def test_api_verify_full_sync_mismatch(mock_driver_class, mock_supabase):
+@patch("app.graph.feed_recommedation_agent.services.sync_audit_service.SyncAuditService.verify")
+def test_api_verify_full_sync_mismatch(mock_verify):
     """Test /admin/verify-sync when there are discrepancies."""
-    # Supabase Mock
-    mock_supa_resp = MagicMock()
-    mock_supa_resp.data = [
-        {"pitchdeckid": "p1", "tags": ["AI"], "extracted_subtags": ["ML"]},
-    ]
-    mock_supabase.table.return_value.select.return_value.execute.return_value = mock_supa_resp
-
-    # Neo4j Mock
-    mock_driver = MagicMock()
-    mock_session = MagicMock()
-    mock_driver.session.return_value.__enter__.return_value = mock_session
-    mock_driver_class.return_value = mock_driver
-
-    mock_session.run.return_value = [
-        {"pitch_id": "p1", "tags": ["AI", "Blockchain"], "sub_tags": []},
-    ]
+    mock_verify.return_value = {
+        "status": "mismatch_found",
+        "discrepancy_count": 1,
+        "discrepancies": [{
+            "pitch_id": "p1",
+            "tags_issue": {"in_neo4j_only": ["Blockchain"], "in_supabase_only": []},
+            "subtags_issue": {"in_neo4j_only": [], "in_supabase_only": ["ML"]},
+        }]
+    }
 
     response = client.get("/admin/verify-sync")
     assert response.status_code == 200
@@ -236,8 +208,8 @@ def test_api_verify_full_sync_mismatch(mock_driver_class, mock_supabase):
 # 4. ADDITIONAL UNIT TESTS (coverage gap fill)
 # ==========================================
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "bolt://fake")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_queries.NEO4J_URI", "bolt://fake")
 def test_update_graph_edge_weights_like(mock_driver_class):
     """update_graph_edge_weights must call session.run with a weight-increment query on LIKE."""
     mock_driver = MagicMock()
@@ -247,36 +219,39 @@ def test_update_graph_edge_weights_like(mock_driver_class):
 
     update_graph_edge_weights(
         user_id="user_like_test",
-        tags=["Fintech"],
-        subtags=["Payments"],
-        liked=True
+        tag_names=["Fintech"],
+        subtag_names=["Payments"],
+        reward=1.0,
+        alpha=0.1,
     )
 
     # At minimum one Cypher query must have been executed
     assert mock_session.run.call_count >= 1
-    # The query should involve a positive weight change (LIKE)
+    # The query should contain the user_id
     call_args_list = mock_session.run.call_args_list
     cypher_calls = " ".join(str(c) for c in call_args_list)
     assert "user_like_test" in cypher_calls
 
 
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.supabase")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.GraphDatabase.driver")
-@patch("app.graph.feed_recommedation_agent.tools.tag_tools.NEO4J_URI", "bolt://fake")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_sync.supabase")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_sync.GraphDatabase.driver")
+@patch("app.graph.feed_recommedation_agent.tools.neo4j_sync.NEO4J_URI", "bolt://fake")
 def test_sync_supabase_to_neo4j(mock_driver_class, mock_supabase):
-    """sync_supabase_to_neo4j must MERGE each pitch from Supabase into Neo4j."""
-    # Supabase returns one pitch with tags and subtags
-    mock_supa_resp = MagicMock()
-    mock_supa_resp.data = [
-        {
-            "pitchdeckid": "p1",
-            "tags": ["AI"],
-            "extracted_subtags": ["ML"],
-            "analysis": {"sub_tags": {"AI": ["ML"]}}
-        }
+    """sync_supabase_to_neo4j must MERGE each pitch from Supabase into Neo4j.
+    
+    neo4j_sync reads from supabase (investors + pitchdecks) and uses
+    session.execute_write() to call _prune_stale_nodes and _add_pitch_node.
+    """
+    mock_investor_resp = MagicMock()
+    mock_investor_resp.data = []
+    mock_pitch_resp = MagicMock()
+    mock_pitch_resp.data = [
+        {"pitchdeckid": "p1", "tags": ["AI"], "extracted_subtags": ["ML"],
+         "analysis": {"sub_tags": {"AI": ["ML"]}}}
     ]
-    mock_supabase.table.return_value.select.return_value.execute.return_value = mock_supa_resp
-
+    mock_supabase.table.return_value.select.return_value.execute.side_effect = [
+        mock_investor_resp, mock_pitch_resp
+    ]
     mock_driver = MagicMock()
     mock_session = MagicMock()
     mock_driver.session.return_value.__enter__.return_value = mock_session
@@ -284,5 +259,5 @@ def test_sync_supabase_to_neo4j(mock_driver_class, mock_supabase):
 
     sync_supabase_to_neo4j()
 
-    # At least one MERGE/CREATE call expected in Neo4j
-    assert mock_session.run.call_count >= 1
+    # sync uses session.execute_write() for _prune_stale_nodes + _add_pitch_node
+    assert mock_session.execute_write.call_count >= 1

@@ -12,7 +12,8 @@ that is EXPLICITLY stated in the document.
    Do not invent keys like "accuracy", "latency", "toxicity", or anything
    that is not present in the TARGET SCHEMA.
 3. ONLY EXPLICIT DATA: Fill a field ONLY if that exact information is
-   written in the document. If you cannot find the value, use the default:
+   written in the document. Do NOT infer, guess, or extrapolate values.
+   If you cannot find the value, use the default:
      - Strings  → ""
      - Numbers  → 0
      - Arrays   → []

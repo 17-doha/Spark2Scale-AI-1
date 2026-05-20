@@ -12,6 +12,9 @@ try:
 except ImportError:
     _PyPDF2Reader = None
 
+# Public alias kept for backward-compatibility with tests and external callers
+PdfReader = _PyPDF2Reader
+
 try:
     import fitz as _fitz          # pymupdf — used as OCR / scanned-PDF fallback
 except ImportError:
@@ -75,10 +78,10 @@ def force_numeric_types(data: object) -> object:
 
 def _extract_via_pypdf2(file_bytes: bytes) -> str:
     """Digital PDF extraction using PyPDF2 — fast, zero GPU cost."""
-    if _PyPDF2Reader is None:
+    if PdfReader is None:
         return ""
     try:
-        reader = _PyPDF2Reader(io.BytesIO(file_bytes))
+        reader = PdfReader(io.BytesIO(file_bytes))
         pages = [p.extract_text() or "" for p in reader.pages]
         return "\n\n".join(t for t in pages if t.strip())
     except Exception as exc:
