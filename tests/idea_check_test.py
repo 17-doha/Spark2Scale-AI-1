@@ -63,11 +63,12 @@ class TestIdeaCheckOutput:
         """HIGH – all required output fields are accepted."""
         from app.graph.idea_check.schema import IdeaCheckOutput
         out = IdeaCheckOutput(
-            validation_status="VALIDATED",
+            verdict="VALIDATED",
             pain_score=75,
             pain_score_reasoning="Strong Reddit signals",
             solution_fit_score="High",
             solution_fit_reasoning="Direct alignment",
+            reasoning="Strong evidence from multiple sources",
             evidence_quality_notes="5 independent sources",
             key_queries_executed={
                 "problem_queries": ["site:reddit.com bad tutors"],
@@ -75,17 +76,18 @@ class TestIdeaCheckOutput:
             },
         )
         assert out.pain_score == 75
-        assert out.validation_status == "VALIDATED"
+        assert out.verdict == "VALIDATED"
 
     def test_pain_score_is_int(self):
         """MEDIUM – pain_score must be an integer not a float."""
         from app.graph.idea_check.schema import IdeaCheckOutput
         out = IdeaCheckOutput(
-            validation_status="MODERATE",
+            verdict="MODERATE",
             pain_score=50,
             pain_score_reasoning="Some evidence",
             solution_fit_score="Medium",
             solution_fit_reasoning="Partial",
+            reasoning="Limited evidence overall",
             evidence_quality_notes="2 sources",
             key_queries_executed={"problem_queries": [], "solution_queries": []},
         )
@@ -500,12 +502,12 @@ class TestIdeaCheckIntegration:
             "evidence_quality_notes": "Recent and credible.",
         }
 
+        import json as _json
         mock_chain = MagicMock()
         mock_chain.ainvoke = AsyncMock(side_effect=[
-            # First call: generate_queries_node returns query dict
-            {"problem_queries": ["site:reddit.com bad tutors"], "solution_queries": ["site:producthunt.com AI tutor"]},
-            # Second call: analyze_pain_points_node returns analysis
-            expected_analysis,
+            # node uses StrOutputParser → ainvoke returns a JSON STRING, not a dict
+            _json.dumps({"problem_queries": ["site:reddit.com bad tutors"], "solution_queries": ["site:producthunt.com AI tutor"]}),
+            _json.dumps(expected_analysis),
         ])
 
         initial_state = {
@@ -519,7 +521,9 @@ class TestIdeaCheckIntegration:
         }
 
         with patch("app.graph.idea_check.node.PromptTemplate") as mock_prompt, \
-             patch("app.graph.idea_check.node.JsonOutputParser"):
+             patch("app.graph.idea_check.node.StrOutputParser"):
+            # Wire: PromptTemplate.from_template(...) | llm → mock_chain
+            # Wire: mock_chain | StrOutputParser() → mock_chain
             mock_prompt.from_template.return_value.__or__ = MagicMock(return_value=mock_chain)
             mock_chain.__or__ = MagicMock(return_value=mock_chain)
 

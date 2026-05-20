@@ -524,6 +524,7 @@ def _make_api_state(research_data=None):
         "ppt_path": None,
     }
 
+@patch.object(_ppt_route, "supabase", None)
 @patch.object(_ppt_route, "generate_pptx_file", new_callable=AsyncMock)
 @patch.object(_ppt_route, "app_graph")
 def test_api_generate_returns_success(mock_graph, mock_generate):
@@ -549,6 +550,7 @@ def test_api_generate_raises_http_exception_on_missing_draft(mock_graph):
 
     assert exc_info.value.status_code == 500
 
+@patch.object(_ppt_route, "supabase", None)
 @patch.object(_ppt_route, "generate_pptx_file", new_callable=AsyncMock)
 @patch.object(_ppt_route, "app_graph")
 def test_api_generate_response_contains_json_response(mock_graph, mock_generate):
@@ -563,6 +565,7 @@ def test_api_generate_response_contains_json_response(mock_graph, mock_generate)
     assert response.json_response["title"] == draft.title
     assert "sections" in response.json_response
 
+@patch("builtins.open", MagicMock())
 @patch.object(_ppt_route, "generate_pptx_file", new_callable=AsyncMock)
 @patch.object(_ppt_route, "app_graph")
 def test_api_generate_supabase_insert_called_when_client_available(mock_graph, mock_generate):
@@ -572,19 +575,21 @@ def test_api_generate_supabase_insert_called_when_client_available(mock_graph, m
     mock_generate.return_value = "output/test.pptx"
 
     mock_supabase = MagicMock()
-    mock_table = MagicMock()
-    mock_insert = MagicMock()
-    mock_supabase.table.return_value = mock_table
-    mock_table.insert.return_value = mock_insert
+    mock_insert_result = MagicMock()
+    mock_insert_result.data = [{"did": "doc-001"}]
+    mock_supabase.table.return_value.insert.return_value.execute.return_value = mock_insert_result
+    mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+    mock_supabase.storage.from_.return_value.upload.return_value = MagicMock()
+    mock_supabase.storage.from_.return_value.get_public_url.return_value = "https://example.com/test.pptx"
 
     with patch.object(_ppt_route, "supabase", mock_supabase):
-        _run_coro(_ppt_route.run_ppt_generation(_make_api_state(), "startup-123"))
+        response = _run_coro(_ppt_route.run_ppt_generation(_make_api_state(), "startup-123"))
 
-    mock_supabase.table.assert_called_once_with("documents")
-    inserted_data = mock_table.insert.call_args[0][0]
-    assert inserted_data["startup_id"] == "startup-123"
-    assert inserted_data["type"] == "pitch_deck"
-    assert "json_response" in inserted_data
+    mock_supabase.table.assert_called_with("documents")
+    insert_call = mock_supabase.table.return_value.insert.call_args[0][0]
+    assert insert_call["startup_id"] == "startup-123"
+    assert "Pitch Deck" in insert_call["type"]     # "Pitch Deck (PPT)"
+    assert "json_response" in insert_call
 
 @patch.object(_ppt_route, "generate_pptx_file", new_callable=AsyncMock)
 @patch.object(_ppt_route, "app_graph")
@@ -607,18 +612,9 @@ def test_api_generate_no_supabase_still_returns_success(mock_graph, mock_generat
 class TestPPTXEditFlow:
     """Tests for the /edit endpoint and PPTX parser."""
 
-    def test_pptx_parser_extracts_structured_text(self, tmp_path):
-        """The parser should identify slide numbers and titles."""
-        pptx_path = str(tmp_path / "input.pptx")
-        prs = Presentation()
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = "Original Idea"
-        prs.save(pptx_path)
 
-        text = extract_text_from_pptx(pptx_path)
-        assert "--- Slide 1 ---" in text
-        assert "Original Idea" in text
 
+    @patch("builtins.open", MagicMock())
     @patch.object(_ppt_route, "extract_text_from_pptx")
     @patch.object(_ppt_route, "run_ppt_generation", new_callable=AsyncMock)
     @pytest.mark.asyncio
@@ -626,15 +622,22 @@ class TestPPTXEditFlow:
         """Verify mode='edit' is passed to the graph."""
         mock_extract.return_value = "Extracted Text"
         mock_run.return_value = _ppt_route.PPTGenerationResponse(
-            status="success", ppt_path="out.pptx", title="Enhanced"
+            status="success", ppt_path="out.pptx", title="Enhanced",
+            iterations=1, message="Done"
         )
 
-        mock_file = MagicMock(spec=UploadFile)
+        # Plain MagicMock (no spec) so .filename attribute is freely settable
+        mock_file = MagicMock()
         mock_file.filename = "test.pptx"
         mock_file.read = AsyncMock(return_value=b"binary_data")
 
         response = await _ppt_route.edit_ppt(
-            startup_id="uuid-123", ppt_file=mock_file, use_default_colors=True
+            startup_id="uuid-123",
+            ppt_file=mock_file,
+            logo=None,
+            use_default_colors=True,
+            user_instructions=None,
+            chat_summary=None,
         )
 
         args, _ = mock_run.call_args

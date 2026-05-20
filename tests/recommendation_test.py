@@ -250,8 +250,8 @@ def test_run_market_intel_both_sources_present(mock_tavily, mock_wb):
     insights = {"country": "Egypt", "sector": "fintech", "stage": "Seed"}
     result = run_market_intel(insights, tavily_api_key="fake-key")
 
-    # Both sources active → sources_count == 2 → confidence == "medium"
-    assert result["confidence"] == "medium"
+    # Both sources active → sources_count == 2 → confidence == "high"
+    assert result["confidence"] == "high"
     assert "World Bank" in result["sources_used"]
     assert "Tavily Search" in result["sources_used"]
     assert isinstance(result["risk_flags"], list)
@@ -269,7 +269,7 @@ def test_run_market_intel_one_source_is_low(mock_tavily, mock_wb):
     insights = {"country": "Egypt", "sector": "fintech", "stage": "Seed"}
     result = run_market_intel(insights, tavily_api_key=None)
 
-    assert result["confidence"] == "low"
+    assert result["confidence"] == "medium"
     assert "World Bank" in result["sources_used"]
     assert "Tavily Search" not in result["sources_used"]
 

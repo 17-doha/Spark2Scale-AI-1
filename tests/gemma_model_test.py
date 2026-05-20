@@ -26,6 +26,10 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# Mark every test in this file with 'gemma' so CI can skip them by default
+# and run them only when the commit message contains "test-gemma".
+pytestmark = pytest.mark.gemma
+
 # ---------------------------------------------------------------------------
 # 1. ModalCustomLLM — _split_prompt
 # ---------------------------------------------------------------------------
