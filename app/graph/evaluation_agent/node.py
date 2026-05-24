@@ -704,30 +704,53 @@ async def final_node(state: AgentState):
             final_json["founder_output"]["verdict"] = verdict                      # Fix
 
         # ====================================================
-        # 🎯 TOP 3 PRIORITIES BACKFILL (Ensures field always exists)
+        # 🎯 TOP 3 PRIORITIES (Generated programmatically — LLM is unreliable for this)
         # ====================================================
-        founder_for_priorities = final_json.get("founder_output", {})
-        priorities_content = founder_for_priorities.get("Content", founder_for_priorities)
+        scored_dims = []
+        for key in required_dims:
+            report = state.get(f"{key}_report", {})
+            score_val = rubric_5.get(key, 0)
+            red_flags = report.get("red_flags", [])
+            explanation = report.get("explanation", "")
+            scored_dims.append({
+                "dimension": key,
+                "score": score_val,
+                "red_flags": red_flags,
+                "explanation": explanation
+            })
         
-        existing_priorities = (
-            priorities_content.get("top_3_priorities") or 
-            priorities_content.get("Top 3 Priorities") or
-            ""
-        )
+        # Sort by score ascending → worst dimensions first
+        scored_dims.sort(key=lambda x: x["score"])
         
-        if not existing_priorities:
-            logger.debug("Top 3 Priorities missing from LLM output — setting empty for debug.")
-            if "Content" in final_json.get("founder_output", {}):
-                final_json["founder_output"]["Content"]["Top 3 Priorities"] = ""
-            else:
-                final_json["founder_output"]["top_3_priorities"] = ""
+        generated_priorities = []
+        for dim in scored_dims:
+            if len(generated_priorities) >= 3:
+                break
+            dim_name = dim["dimension"].title()
+            # Use the first red flag as the priority source, fall back to explanation
+            if dim["red_flags"]:
+                flag_text = dim["red_flags"][0]
+                # Clean common prefixes
+                for prefix in ["Flag 1:", "Flag 2:", "Flag 3:", "Risk 1:", "Risk 2:", "Risk 3:"]:
+                    if flag_text.strip().startswith(prefix):
+                        flag_text = flag_text.strip()[len(prefix):].strip()
+                generated_priorities.append(f"{len(generated_priorities)+1}. [{dim_name}] {flag_text}")
+            elif dim["explanation"]:
+                summary = dim["explanation"][:150].rsplit(" ", 1)[0]  # Truncate at word boundary
+                generated_priorities.append(f"{len(generated_priorities)+1}. [{dim_name}] {summary}")
+        
+        # Always overwrite — don't trust the LLM output for this field
+        if "Content" in final_json.get("founder_output", {}):
+            final_json["founder_output"]["Content"]["Top 3 Priorities"] = generated_priorities
+        else:
+            final_json["founder_output"]["top_3_priorities"] = generated_priorities
 
     except Exception as e:
         logger.error(f"Final Synthesis Failed: {e}")
         final_json = {
             "error": str(e),
             "investor_output": {"verdict": verdict, "weighted_score": weighted_total, "scorecard_grid": rubric_5},
-            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": [], "top_3_priorities": ""}
+            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": [], "top_3_priorities": ["1. Review and address the evaluation errors.", "2. Resubmit with complete data.", "3. Consult with a mentor or advisor."]}
         }
 
     return {"final_report": final_json}

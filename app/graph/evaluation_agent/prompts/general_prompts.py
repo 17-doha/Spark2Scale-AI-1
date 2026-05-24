@@ -218,7 +218,7 @@ Generate THREE JSON outputs.
         * `justification`: Bulletproof reasoning citing specific evidence.
         * `red_flags`: List of specific risks found.
         * `improvements`: 1-2 SPECIFIC, TACTICAL steps. Focus on immediate validation.
-    * `top_3_priorities`: **MANDATORY**. A list of exactly 3 strings. Each string is one actionable priority for the founder. Derive these from the 3 worst-scoring dimensions. Format: ["1. Fix X by doing Y", "2. Build Z to prove A", "3. Talk to B to validate C"]. This field MUST NOT be empty or omitted.
+    * `top_3_priorities`: **MANDATORY**. A list of exactly 3 strings. Look at the 3 dimensions with the LOWEST scores from the AGENT EVIDENCE above, and write one specific, actionable priority for each. Each priority MUST reference the actual startup data — mention the real weakness, the real risk, or the real missing element. Do NOT use generic placeholder text. Example structure: ["1. <action> to address <specific weakness from evidence>", ...]. This field MUST NOT be empty or omitted.
 
 ### PART 3: VISUALIZATIONS (JSON key: "visualizations")
 * **Content:** Based on the agent evidence, categorize the overall risk levels for the risk heatmap.
@@ -244,7 +244,7 @@ Return strictly VALID JSON matching this exact skeleton:
     "executive_summary": "...",
     "scorecard_grid": {{}},
     "dimension_analysis": [{{ "dimension": "...", "score": 0, "confidence_level": "...", "justification": "...", "red_flags": [], "improvements": [] }}],
-    "top_3_priorities": ["1. ...", "2. ...", "3. ..."]
+    "top_3_priorities": ["<real priority 1 from evidence>", "<real priority 2 from evidence>", "<real priority 3 from evidence>"]
   }},
   "visualizations": {{
     "risk_heatmap": {{ "team_risk": "...", "market_risk": "...", "product_execution_risk": "...", "gtm_distribution_risk": "..." }}
