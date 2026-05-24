@@ -703,12 +703,31 @@ async def final_node(state: AgentState):
             final_json["founder_output"]["weighted_score"] = weighted_total          # Fix
             final_json["founder_output"]["verdict"] = verdict                      # Fix
 
+        # ====================================================
+        # 🎯 TOP 3 PRIORITIES BACKFILL (Ensures field always exists)
+        # ====================================================
+        founder_for_priorities = final_json.get("founder_output", {})
+        priorities_content = founder_for_priorities.get("Content", founder_for_priorities)
+        
+        existing_priorities = (
+            priorities_content.get("top_3_priorities") or 
+            priorities_content.get("Top 3 Priorities") or
+            ""
+        )
+        
+        if not existing_priorities:
+            logger.debug("Top 3 Priorities missing from LLM output — setting empty for debug.")
+            if "Content" in final_json.get("founder_output", {}):
+                final_json["founder_output"]["Content"]["Top 3 Priorities"] = ""
+            else:
+                final_json["founder_output"]["top_3_priorities"] = ""
+
     except Exception as e:
         logger.error(f"Final Synthesis Failed: {e}")
         final_json = {
             "error": str(e),
             "investor_output": {"verdict": verdict, "weighted_score": weighted_total, "scorecard_grid": rubric_5},
-            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": []}
+            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": [], "top_3_priorities": ""}
         }
 
     return {"final_report": final_json}
