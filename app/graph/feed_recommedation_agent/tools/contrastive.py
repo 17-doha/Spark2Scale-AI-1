@@ -63,9 +63,10 @@ def _l2_normalize(vec: np.ndarray) -> list[float]:
 
 
 def _ensure_collection() -> None:
-    """Idempotent: create [investor_sub_vectors] if absent."""
+    """Idempotent: create [investor_sub_vectors] and its payload indexes if absent."""
     client   = get_qdrant()
     existing = {c.name for c in client.get_collections().collections}
+
     if SUB_VEC_COLLECTION not in existing:
         client.create_collection(
             collection_name = SUB_VEC_COLLECTION,
@@ -73,6 +74,21 @@ def _ensure_collection() -> None:
         )
         logger.info("[Contrastive] Created collection '%s'.", SUB_VEC_COLLECTION)
 
+    # Indexes are idempotent — safe to call on every startup even if they exist.
+    # investor_id is required for the scroll filter in select_query_vector_ucb().
+    from qdrant_client.models import PayloadSchemaType
+    client.create_payload_index(
+        collection_name=SUB_VEC_COLLECTION,
+        field_name="investor_id",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    # tag_name is used for point ID lookups; index it too for future range queries.
+    client.create_payload_index(
+        collection_name=SUB_VEC_COLLECTION,
+        field_name="tag_name",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    logger.info("[Contrastive] Ensured payload indexes on '%s'.", SUB_VEC_COLLECTION)
 
 # ── Sub-vector building ───────────────────────────────────────────────────────
 

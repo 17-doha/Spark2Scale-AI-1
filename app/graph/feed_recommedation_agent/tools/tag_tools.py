@@ -31,6 +31,7 @@ from app.graph.feed_recommedation_agent.tools.supabase_tags import (  # noqa: F4
     fetch_unique_tags,
     fetch_investor_tags,
     fetch_all_investors,
+    fetch_seen_pitchdeck_ids,
 )
 
 # ── Neo4j read/update queries ────────────────────────────────────────────────
@@ -62,6 +63,7 @@ __all__ = [
     "fetch_unique_tags",
     "fetch_investor_tags",
     "fetch_all_investors",
+    "fetch_seen_pitchdeck_ids",
     # Neo4j queries
     "get_investor_subtags",
     "get_sibling_subtags",

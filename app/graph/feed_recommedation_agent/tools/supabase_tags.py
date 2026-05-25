@@ -39,6 +39,43 @@ def fetch_unique_tags() -> list[str]:
     logger.info(f"[TagTools] Found {len(unique)} unique tags across all investors.")
     return unique
 
+def fetch_seen_pitchdeck_ids(investor_id: str) -> list[str]:
+    """
+    Return all pitchdeck IDs that the investor has already interacted with
+    (liked, disliked, or contacted) from the pitchdeck_likes table.
+
+    A pitchdeck is considered 'seen' the moment a row exists for it,
+    regardless of the liked / contacted flags.
+
+    Args:
+        investor_id: UUID of the investor.
+
+    Returns:
+        List of pitchdeck_id strings; empty list on error or no interactions.
+    """
+    if not supabase:
+        logger.error("[TagTools] Supabase client is not initialised.")
+        return []
+
+    try:
+        resp = (
+            supabase.table("pitchdeck_likes")
+            .select("pitchdeck_id")
+            .eq("investor_id", investor_id)
+            .execute()
+        )
+        ids = [row["pitchdeck_id"] for row in (resp.data or [])]
+        logger.info(
+            "[TagTools] Investor %s has seen %d pitchdeck(s).",
+            investor_id, len(ids),
+        )
+        return ids
+    except Exception as e:
+        logger.error(
+            "[TagTools] Failed to fetch seen pitchdeck IDs for %s: %s",
+            investor_id, e,
+        )
+        return []
 
 def fetch_investor_tags(investor_id: str) -> list[str]:
     """
