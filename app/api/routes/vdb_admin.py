@@ -56,3 +56,40 @@ def trigger_neo4j_sync():
     """Trigger the Supabase → Neo4j synchronization."""
     sync_supabase_to_neo4j()
     return {"message": "Neo4j sync triggered. Check logs for details."}
+
+@router.post("/collections/reindex")
+def reindex_all_collections():
+    """
+    Idempotent: create any missing payload indexes across all collections.
+    Safe to call on a live cluster — existing data and vectors are untouched.
+    Use this after deploying schema changes that add new filter fields.
+    """
+    from qdrant_client.models import PayloadSchemaType
+
+    client  = get_qdrant()
+    actions = []
+
+    index_plan = {
+        "investors"             : ["tags"],
+        "pitchdecks"            : ["tags", "pitchdeck_id"],
+        "investor_sub_vectors"  : ["investor_id", "tag_name"],
+    }
+
+    for collection, fields in index_plan.items():
+        try:
+            existing_cols = {c.name for c in client.get_collections().collections}
+            if collection not in existing_cols:
+                actions.append({"collection": collection, "status": "skipped — does not exist"})
+                continue
+
+            for field in fields:
+                client.create_payload_index(
+                    collection_name=collection,
+                    field_name=field,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                actions.append({"collection": collection, "field": field, "status": "ok"})
+        except Exception as e:
+            actions.append({"collection": collection, "status": f"error: {e}"})
+
+    return {"message": "Reindex complete.", "actions": actions}
