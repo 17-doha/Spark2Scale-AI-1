@@ -139,6 +139,7 @@ Pygments==2.20.0
 pyiceberg==0.11.1
 PyJWT==2.12.1
 pyparsing==3.3.2
+pdfplumber==0.11.4
 PyPDF2==3.0.1
 pyroaring==1.0.4
 pytest==9.0.2
