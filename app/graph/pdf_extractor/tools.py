@@ -5,8 +5,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Optional PDF backends — we try both; neither is hard-required at import time
+# Optional PDF backends — none is hard-required at import time
 # ---------------------------------------------------------------------------
+try:
+    import pdfplumber as _pdfplumber   # layout-aware: tables + ordered text
+except ImportError:
+    _pdfplumber = None
+
 try:
     from PyPDF2 import PdfReader as _PyPDF2Reader
 except ImportError:
@@ -76,6 +81,74 @@ def force_numeric_types(data: object) -> object:
 # Stage-1 text extraction helpers
 # ---------------------------------------------------------------------------
 
+def _table_to_markdown(table: list) -> str:
+    """Convert a pdfplumber table (list of rows) to a Markdown table string."""
+    rows = [[cell or "" for cell in row] for row in table if any(row)]
+    if not rows:
+        return ""
+    header, *body = rows
+    sep = ["-" * max(len(c), 1) for c in header]
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join(sep)    + " |",
+    ]
+    lines += ["| " + " | ".join(row) + " |" for row in body]
+    return "\n".join(lines)
+
+
+def _extract_via_pdfplumber(file_bytes: bytes) -> str:
+    """
+    Layout-aware extraction using pdfplumber.
+
+    - Pages with tables: non-table text via extract_words() + tables as Markdown.
+    - Pages without tables: extract_text() — more reliable than extract_words()
+      for PDFs with unusual fonts or encodings.
+    - Zero ML models, sub-second on CPU — safe for Azure student-tier.
+    """
+    if _pdfplumber is None:
+        return ""
+    try:
+        pages_text = []
+        with _pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                parts = []
+                table_objects = page.find_tables()
+
+                if table_objects:
+                    # Extract non-table text word-by-word to avoid duplication
+                    table_bboxes = [t.bbox for t in table_objects]
+                    words = page.extract_words(keep_blank_chars=False)
+                    non_table_words = [
+                        w["text"] for w in words
+                        if not any(
+                            w["x0"] >= bb[0] and w["top"] >= bb[1]
+                            and w["x1"] <= bb[2] and w["bottom"] <= bb[3]
+                            for bb in table_bboxes
+                        )
+                    ]
+                    if non_table_words:
+                        parts.append(" ".join(non_table_words))
+                    for t in table_objects:
+                        md = _table_to_markdown(t.extract())
+                        if md:
+                            parts.append(md)
+                else:
+                    # No tables — extract_text() handles more PDF encodings than
+                    # extract_words(), which silently returns [] on some fonts.
+                    text = page.extract_text()
+                    if text and text.strip():
+                        parts.append(text.strip())
+
+                if parts:
+                    pages_text.append("\n\n".join(parts))
+
+        return "\n\n---\n\n".join(pages_text)
+
+    except Exception as exc:
+        logger.warning("[PDF tools] pdfplumber failed: %s", exc)
+        return ""
+
+
 def _extract_via_pypdf2(file_bytes: bytes) -> str:
     """Digital PDF extraction using PyPDF2 — fast, zero GPU cost."""
     if PdfReader is None:
@@ -126,14 +199,23 @@ def _extract_via_pymupdf(file_bytes: bytes) -> str:
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     """
-    Two-stage PDF text extraction.
+    Three-stage PDF text extraction.
 
-    Stage 1 — PyPDF2 (fast, no extra deps, works on digital PDFs).
-    Stage 2 — pymupdf (fitz) fallback for scanned / complex PDFs.
+    Stage 1 — pdfplumber (tables as Markdown + ordered text; best for pitch decks).
+    Stage 2 — PyPDF2 (fast plain-text fallback for simple digital PDFs).
+    Stage 3 — pymupdf (fitz) fallback for scanned / complex PDFs.
 
-    Returns the extracted text, or raises RuntimeError if both fail.
+    Returns the extracted text, or raises RuntimeError if all three fail.
     """
     # --- Stage 1 ---
+    text = _extract_via_pdfplumber(file_bytes)
+    if text.strip():
+        logger.info("[PDF tools] Text extracted via pdfplumber (%d chars).", len(text))
+        return text
+
+    logger.info("[PDF tools] pdfplumber returned no text — trying PyPDF2 fallback.")
+
+    # --- Stage 2 ---
     text = _extract_via_pypdf2(file_bytes)
     if text.strip():
         logger.info("[PDF tools] Text extracted via PyPDF2 (%d chars).", len(text))
@@ -141,7 +223,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
     logger.info("[PDF tools] PyPDF2 returned no text — trying pymupdf fallback.")
 
-    # --- Stage 2 ---
+    # --- Stage 3 ---
     text = _extract_via_pymupdf(file_bytes)
     if text.strip():
         logger.info("[PDF tools] Text extracted via pymupdf (%d chars).", len(text))
