@@ -152,7 +152,7 @@ def extract_swot_data(
         # Look at Competitors
         competitors = data.get("competitors", [])
         if competitors:
-            comp_count = len([c for c in competitors if c.get("Name") and c.get("Name") != "Data Unavailable"])
+            comp_count = len([c for c in competitors if isinstance(c, dict) and c.get("Name") and c.get("Name") != "Data Unavailable"])
             if comp_count > 5:
                 swot_context["threats_context"].append(f"High competition: at least {comp_count} direct competitors identified.")
             
