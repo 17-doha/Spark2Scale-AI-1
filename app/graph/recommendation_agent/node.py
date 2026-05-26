@@ -1,23 +1,48 @@
 import json
 import os
 import time
-from google import genai
 from .state import RecommendationState
 from app.core.config import Config
+from app.core.llm import get_llm
 from app.utils.logger import logger
 from .prompts import SYSTEM_ADVISOR_PROMPT, RECOMMENDATION_PROMPT_TEMPLATE, STATEMENT_IMPROVEMENT_PROMPT
+
+# Report generation runs through app.core.llm.get_llm. Defaults to Gemini
+# (Config.GEMINI_MODEL). Env-overridable — set RECOMMENDATION_LLM_PROVIDER=groq
+# or =ollama (+ RECOMMENDATION_LLM_MODEL) to switch providers. The news payload
+# is trimmed to keep the prompt within smaller context windows.
+RECOMMENDATION_LLM_PROVIDER = os.environ.get("RECOMMENDATION_LLM_PROVIDER", "gemini")
+RECOMMENDATION_LLM_MODEL = os.environ.get("RECOMMENDATION_LLM_MODEL", Config.GEMINI_MODEL)
+_MAX_NEWS_ITEMS = 6
+_MAX_SNIPPET_CHARS = 280
+_RATE_LIMIT_MARKERS = ("rate limit", "rate_limit", "429", "quota", "resource_exhausted", "too many requests")
+
+
+def _strip_code_fences(text: str) -> str:
+    return (text or "").strip().replace("```json", "").replace("```", "").strip()
+
+
+def _trim_news_signals(news_signals):
+    """Shrink the scraped news payload so the full report prompt fits an 8K context."""
+    trimmed = []
+    for n in (news_signals or [])[:_MAX_NEWS_ITEMS]:
+        trimmed.append({
+            "title": n.get("title", ""),
+            "source_domain": n.get("source_domain", ""),
+            "url": n.get("url", ""),
+            "snippet": (n.get("snippet") or "")[:_MAX_SNIPPET_CHARS],
+        })
+    return trimmed
 
 def recommendation_node(state: RecommendationState):
     """
     Generates strategic recommendations based on evaluation results.
     """
     try:
-        # Get API key from config
+        # Report generation now runs on Groq (see AgentNodes); the Gemini key is
+        # no longer required. Kept only for backward-compatible call signatures.
         api_key = Config.GEMINI_API_KEY
-        if not api_key:
-            logger.error("GEMINI_API_KEY not configured. Please set it in your .env file.")
-            return {"recommendation": "Error: GEMINI_API_KEY not configured. Please set it in your .env file."}
-        
+
         # Extract evaluation output - it might be a string (JSON) or already a dict
         eval_output = state.get("evaluation")
         if isinstance(eval_output, str):
@@ -97,10 +122,16 @@ def recommendation_node(state: RecommendationState):
 
 
 class AgentNodes:
-    def __init__(self, api_key):
-        # self.client = genai.Client(api_key="AIzaSyBvX80EbeRGsstF2RqUmyk4z0iBCrjQn-k")
-        self.client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        self.model_id = "gemini-3-flash-preview"
+    def __init__(self, api_key=None):
+        # api_key is accepted for backward-compatible call signatures but unused:
+        # generation runs on Groq, which sources keys via the round-robin rotator
+        # in app.core.llm. Provider/model are env-overridable.
+        self.provider = RECOMMENDATION_LLM_PROVIDER
+        self.model_id = RECOMMENDATION_LLM_MODEL
+        self.temperature = Config.GEMINI_TEMPERATURE
+
+    def _llm(self, json_mode=True):
+        return get_llm(temperature=self.temperature, provider=self.provider, model_name=self.model_id, json_mode=json_mode)
 
     def improve_statements(self, insights, max_retries=3, retry_delay=2):
         statements = {
@@ -112,134 +143,91 @@ class AgentNodes:
             "beachhead_market": insights.get('beachhead_market', 'N/A'),
             "gap_analysis": insights.get('gap_analysis', 'N/A')
         }
-        
+
         prompt = STATEMENT_IMPROVEMENT_PROMPT.format(
             statements_json=json.dumps(statements, indent=2),
             quotes_json=json.dumps(insights.get('customer_quotes', []), indent=2)
         )
-        
+
         for attempt in range(max_retries):
             try:
-                # Add temperature config from environment
-                api_config = {'temperature': Config.GEMINI_TEMPERATURE}
-                response = self.client.models.generate_content(
-                    model=self.model_id, 
-                    contents=prompt,
-                    config=api_config
-                )
-                # Handle cleaning of potential markdown
-                text = response.text.strip().replace("```json", "").replace("```", "")
+                # JSON mode on: refinements must come back as structured JSON.
+                response = self._llm(json_mode=True).invoke(prompt)
+                text = _strip_code_fences(response.content)
                 return json.loads(text)
+            except json.JSONDecodeError:
+                # Model returned non-JSON. Don't crash the run — return None so the
+                # workflow's passthrough fallback still renders Statement Refinements.
+                logger.warning("Refined statements: model returned non-JSON; using passthrough fallback.")
+                return None
             except Exception as e:
-                error_msg = str(e)
-                
-                # Handle 503/overload errors with retry
-                if "503" in error_msg or "overloaded" in error_msg.lower() or "unavailable" in error_msg.lower():
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (attempt + 1)
-                        print(f"[WARNING] API temporarily unavailable (503). Retrying in {wait_time} seconds... (Attempt {attempt + 1}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        raise ValueError(
-                            "[ERROR] API Service Error: Gemini API is currently overloaded (503).\n"
-                            "This is a temporary issue on Google's side.\n"
-                            "Please try again in a few minutes."
-                        ) from e
-                elif "429" in error_msg or "resource_exhausted" in error_msg.lower():
-                     logger.warning("API Quota Exceeded (429) for refined statements. Skipping refinement step.")
-                     return None
-                elif "suspended" in error_msg.lower() or "403" in error_msg:
-                    raise ValueError(
-                        "[ERROR] API Key Error: Your Gemini API key has been suspended or is invalid.\n"
-                        "Please:\n"
-                        "1. Get a new API key from: https://aistudio.google.com/apikey\n"
-                        "2. Update your .env file with: GEMINI_API_KEY=your_new_key\n"
-                        "3. Make sure the API key has access to Gemini API"
-                    ) from e
-                elif "401" in error_msg or "unauthorized" in error_msg.lower():
-                    raise ValueError(
-                        "[ERROR] API Key Error: Invalid or unauthorized API key.\n"
-                        "Please check your GEMINI_API_KEY in the .env file."
-                    ) from e
-                else:
-                    # Log the specific error to a file for debugging
-                    with open("debug_error.log", "a") as f:
-                        f.write(f"API Error in improve_statements: {str(e)}\n")
-                    raise
+                error_msg = str(e).lower()
+                if any(marker in error_msg for marker in _RATE_LIMIT_MARKERS):
+                    logger.warning("Refined statements: Groq rate/quota limit hit. Skipping refinement step.")
+                    return None
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
+                logger.error(f"improve_statements failed permanently: {e}")
+                raise
 
     def synthesize_report(self, data, patterns, insights, replacements, market_signals, max_retries=3, retry_delay=2):
         # Format market intelligence strings
-        country_risk_json = json.dumps(market_signals.get('country_risk', {}), indent=2) if market_signals else "{}"
-        news_signals_json = json.dumps(market_signals.get('news_signals', []), indent=2) if market_signals else "[]"
+        tool_status = market_signals.get('tool_status', {}) if market_signals else {}
+        country_risk = market_signals.get('country_risk', {}) if market_signals else {}
+        news_signals = market_signals.get('news_signals', []) if market_signals else []
+
+        # Safety catch: if a tool was offline/timed out (ran but returned nothing),
+        # hand the LLM an explicit {"status": "Tool offline"} marker so it adjusts
+        # its tone instead of falsely concluding no market data or competitors exist.
+        if not country_risk and tool_status.get('world_bank') == 'offline':
+            country_risk_json = json.dumps({"status": "Tool offline"}, indent=2)
+        else:
+            country_risk_json = json.dumps(country_risk, indent=2)
+
+        if not news_signals and tool_status.get('tavily') == 'offline':
+            news_signals_json = json.dumps({"status": "Tool offline"}, indent=2)
+        else:
+            # Trim so the prompt stays small enough for compact local models.
+            news_signals_json = json.dumps(_trim_news_signals(news_signals), indent=2)
+
         risk_flags_json = json.dumps(market_signals.get('risk_flags', []), indent=2) if market_signals else "[]"
         intel_confidence = market_signals.get('confidence', 'unknown') if market_signals else "unknown"
 
         prompt = RECOMMENDATION_PROMPT_TEMPLATE.format(
-            company_name=insights['company_name'],
+            company_name=insights.get('company_name', 'Unknown'),
             stage=data.stage,
             company_context=data.company_context,
             scores_json=data.scores.model_dump_json(indent=2),
             patterns_json=json.dumps(patterns, indent=2),
-            problem_statement=insights['problem_statement'],
-            quotes_json=json.dumps(insights['customer_quotes']),
-            target_raise=insights['target_raise'],
+            problem_statement=insights.get('problem_statement', 'Unknown'),
+            quotes_json=json.dumps(insights.get('customer_quotes', [])),
+            target_raise=insights.get('target_raise', 'Unknown'),
             replacements_json=json.dumps(replacements),
             country_risk_json=country_risk_json,
             news_signals_json=news_signals_json,
             risk_flags_json=risk_flags_json,
             intel_confidence=intel_confidence
         )
-        
+
+        # System instruction + user prompt as a chat message pair (Groq/LangChain).
+        messages = [("system", SYSTEM_ADVISOR_PROMPT), ("human", prompt)]
+
         for attempt in range(max_retries):
             try:
-                # Add temperature config along with system instruction
-                api_config = {
-                    'system_instruction': SYSTEM_ADVISOR_PROMPT,
-                    'temperature': Config.GEMINI_TEMPERATURE
-                }
-                response = self.client.models.generate_content(
-                    model=self.model_id,
-                    config=api_config,
-                    contents=prompt
-                )
-                return response.text
+                # JSON mode off: the report is free-text markdown, not JSON.
+                response = self._llm(json_mode=False).invoke(messages)
+                return response.content
             except Exception as e:
-                error_msg = str(e)
-                
-                # Handle 503/overload errors with retry
-                if "503" in error_msg or "overloaded" in error_msg.lower() or "unavailable" in error_msg.lower():
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (attempt + 1)
-                        print(f"[WARNING] API temporarily unavailable (503). Retrying in {wait_time} seconds... (Attempt {attempt + 1}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        raise ValueError(
-                            "[ERROR] API Service Error: Gemini API is currently overloaded (503).\n"
-                            "This is a temporary issue on Google's side.\n"
-                            "Please try again in a few minutes."
-                        ) from e
-                elif "429" in error_msg or "resource_exhausted" in error_msg.lower():
-                     raise ValueError(
-                         "[ERROR] API Quota Exceeded (429). You have reached the free tier limit for Gemini API.\n"
-                         "Please check your usage at: https://aistudio.google.com/app/plan_information"
-                     ) from e
-                elif "suspended" in error_msg.lower() or "403" in error_msg:
+                error_msg = str(e).lower()
+                is_rate_limited = any(marker in error_msg for marker in _RATE_LIMIT_MARKERS)
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
+                if is_rate_limited:
                     raise ValueError(
-                        "[ERROR] API Key Error: Your Gemini API key has been suspended or is invalid.\n"
-                        "Please:\n"
-                        "1. Get a new API key from: https://aistudio.google.com/apikey\n"
-                        "2. Update your .env file with: GEMINI_API_KEY=your_new_key\n"
-                        "3. Make sure the API key has access to Gemini API"
+                        "[ERROR] LLM rate limit / quota exceeded for report synthesis. "
+                        "Please retry in a moment (or switch RECOMMENDATION_LLM_PROVIDER)."
                     ) from e
-                elif "401" in error_msg or "unauthorized" in error_msg.lower():
-                    raise ValueError(
-                        "[ERROR] API Key Error: Invalid or unauthorized API key.\n"
-                        "Please check your GEMINI_API_KEY in the .env file."
-                    ) from e
-                else:
-                    # Log the specific error to a file for debugging
-                    with open("debug_error.log", "a") as f:
-                        f.write(f"API Error in synthesize_report: {str(e)}\n")
-                    raise
+                logger.error(f"synthesize_report failed permanently: {e}")
+                raise

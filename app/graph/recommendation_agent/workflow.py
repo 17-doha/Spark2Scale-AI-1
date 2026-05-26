@@ -31,9 +31,12 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     # 2. Convert Pydantic scores to dict format for pattern detection
     # Pattern detection expects: scores['team']['score'] and scores['team']['description']
     scores_dict = data.scores.model_dump()
-    
-    # 3. Deterministic Analysis
-    matched_patterns = detect_patterns(scores_dict)
+
+    # Weakest evaluation pillar — drives the targeted multi-source intel search.
+    lowest_category = min(scores_dict, key=lambda k: scores_dict[k].get("score", 5))
+
+    # 3. Deterministic Analysis (stage-aware: late-stage weaknesses weigh heavier)
+    matched_patterns = detect_patterns(scores_dict, stage=data.stage)
     
     # 4. AI Nodes
     agent = AgentNodes(api_key)
@@ -71,7 +74,12 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
         }
     
     # Run market intelligence before synthesis
-    market_signals = run_market_intel(insights, tavily_api_key=Config.TAVILY_API_KEY)
+    market_signals = run_market_intel(
+        insights,
+        tavily_api_key=Config.TAVILY_API_KEY,
+        lowest_category=lowest_category,
+        competitor=insights.get("top_competitor"),
+    )
     
     final_report = agent.synthesize_report(data, matched_patterns, insights, replacements, market_signals)
     

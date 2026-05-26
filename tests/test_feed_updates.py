@@ -181,8 +181,7 @@ def test_days_since_updated_naive_datetime():
     from datetime import timedelta
     naive_dt = datetime.now() - timedelta(days=7)
     result = _days_since_updated(naive_dt)
-    # Widen bounds: Windows timer resolution can shift the result slightly
-    # above or below the nominal 7.0 value (observed: 6.875 on slow machines)
+    # Use a wider tolerance band to account for test execution time on any machine
     assert 6.8 < result < 7.2
 
 
@@ -323,10 +322,10 @@ def test_triplet_update_dislike_only(mock_get_qdrant):
 
     assert result is True
     called_points = mock_client.upsert.call_args[1]["points"]
-    # When e_neg == e_old (same unit direction), the push delta is zero,
-    # so after L2 renorm x stays at 1.0.  Use <= instead of strict <.
+    # The x-component should not have increased (pushed away from e_neg direction)
+    # When e_neg == e_old, the push term is zero so the vector stays the same (normalized).
     new_vec = np.array(called_points[0].vector)
-    assert new_vec[0] <= 1.0
+    assert float(new_vec[0]) <= 1.0
 
 
 @patch("app.graph.feed_recommedation_agent.tools.contrastive.get_qdrant")

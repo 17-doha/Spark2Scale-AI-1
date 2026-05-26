@@ -222,7 +222,7 @@ def test_update_graph_edge_weights_like(mock_driver_class):
         tag_names=["Fintech"],
         subtag_names=["Payments"],
         reward=1.0,
-        alpha=0.1,
+        alpha=0.1
     )
 
     # At minimum one Cypher query must have been executed
@@ -259,5 +259,6 @@ def test_sync_supabase_to_neo4j(mock_driver_class, mock_supabase):
 
     sync_supabase_to_neo4j()
 
-    # sync uses session.execute_write() for _prune_stale_nodes + _add_pitch_node
+    # sync_supabase_to_neo4j uses session.execute_write internally;
+    # at least one write transaction must have been executed.
     assert mock_session.execute_write.call_count >= 1
