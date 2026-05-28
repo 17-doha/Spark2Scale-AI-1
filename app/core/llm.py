@@ -104,23 +104,32 @@ class ModalCustomLLM(LLM):
                 return data.get("answer", "")
 
 # =========================================================
-# GROQ API KEY ROTATION
+# GROQ API KEY ROTATION  (lazy — evaluated on first call)
 # =========================================================
-_groq_keys = [
-    os.getenv(f"GROQ_API_KEY_{i}") 
-    for i in range(1, 5) 
-    if os.getenv(f"GROQ_API_KEY_{i}")
-]
-
-if not _groq_keys and getattr(Config, 'GROQ_API_KEY', None):
-    _groq_keys = [Config.GROQ_API_KEY]
-
-_groq_key_cycle = itertools.cycle(_groq_keys) if _groq_keys else None
-_groq_key_lock = threading.Lock()
+_groq_key_cycle = None
+_groq_key_lock  = threading.Lock()
 
 def _get_next_groq_key() -> str:
-    if not _groq_key_cycle:
-        raise ValueError("No GROQ API keys configured.")
+    global _groq_key_cycle
+    if _groq_key_cycle is None:
+        with _groq_key_lock:
+            if _groq_key_cycle is None:
+                # Reload env here so Docker / Azure injections are picked up
+                # even if this module was imported before dotenv ran.
+                from dotenv import load_dotenv as _load
+                _load(override=False)
+                keys = [
+                    os.getenv(f"GROQ_API_KEY_{i}")
+                    for i in range(1, 5)
+                    if os.getenv(f"GROQ_API_KEY_{i}")
+                ]
+                if not keys:
+                    single = os.getenv("GROQ_API_KEY") or getattr(Config, "GROQ_API_KEY", None)
+                    if single:
+                        keys = [single]
+                if not keys:
+                    raise ValueError("No GROQ API keys configured.")
+                _groq_key_cycle = itertools.cycle(keys)
     with _groq_key_lock:
         return next(_groq_key_cycle)
 
@@ -141,7 +150,7 @@ def get_llm(temperature=None, provider="gemini", model_name=None, json_mode: boo
 
     # --- OPTION 1: GROQ ---
     if provider == "groq":
-        selected_model = model_name if model_name else "llama-3.1-8b-instant"
+        selected_model = model_name if model_name else "llama-3.3-70b-versatile"
         api_key = _get_next_groq_key()
         return ChatGroq(
             temperature=final_temp,

@@ -248,7 +248,19 @@ You are looking for **Unit Economics**, **Retention**, and **Efficiency**.
 **Current Date:** {current_date}
 
 ### 1. INPUT EVIDENCE
-**A. Internal Business Data:**
+
+**⚡ KEY METRICS (authoritative — use these exact values, do not override from JSON):**
+| Metric | Value |
+|---|---|
+| Pricing Model | **{kv_pricing_model}** |
+| Gross Margin | **{kv_gross_margin}** |
+| MRR | **{kv_mrr}** |
+| Growth Rate MoM | **{kv_growth_rate}** |
+| Active Users (MAU) | **{kv_active_users}** |
+| Monthly Burn | **{kv_burn_rate}** |
+| Runway | **{kv_runway} months** |
+
+**A. Full Internal Business Data (for context):**
 {business_data}
 
 **B. Forensic Reports:**
@@ -262,8 +274,9 @@ You are looking for **Unit Economics**, **Retention**, and **Efficiency**.
 **Primary Question:** Does the machine make money at scale?
 
 * **0 - No Monetization Logic (Disqualified):**
-    * Revenue is $0 (Fake Seed).
+    * Revenue is $0 AND no coherent pricing model or monetization hypothesis AND no user growth to indicate future revenue potential.
     * "Leaky Bucket" Contradiction (High Growth + High Churn).
+    * NOTE (Gompers et al., 2019 JFE, n=885 VCs): $0 revenue at Seed is not an automatic disqualifier. 20% of institutional VCs do not forecast cash flows pre-investment. Consumer platforms with a clear monetization model and strong user growth should be scored on trajectory and hypothesis quality, not current MRR.
 
 * **1 - Unclear or Unrealistic:**
     * Margins are degrading as they scale (Cost > Price).

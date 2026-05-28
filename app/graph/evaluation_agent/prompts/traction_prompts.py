@@ -40,8 +40,9 @@ You are looking for **Mathematical Impossibilities** and **Scalability Blockers*
 ### CHECKLIST: THE 4 SEED LOGIC TRAPS
 
 **1. The "Fake Seed" Contradiction (Premature Scaling)**
-* **Logic:** If `mrr` is $0 (or "Not specified") AND `paid_users` < 10.
-* **Verdict:** 🚩 **Stage Mismatch.** "This is a Pre-Seed company trying to raise at Seed valuation. They haven't proved value yet."
+* **Logic:** If `mrr` is $0 AND `active_users` is also 0 or near-zero AND `growth_rate_mom` is flat or not specified AND no engagement signals exist.
+* **Note (Gompers et al., 2019 JFE, n=885 VCs):** 20% of VCs do not forecast cash flows at the pre-investment stage. $0 MRR alone does NOT constitute a stage mismatch for consumer platforms or viral products — strong user growth (>20% MoM) or demonstrated engagement is an accepted proof of value. Apply this flag only when ALL signals are absent.
+* **Verdict:** 🚩 **Stage Mismatch.** "No revenue AND no user growth AND no engagement. The company has not proved any form of value yet."
 
 **2. The "Leaky Bucket" Contradiction (Growth vs. Retention)**
 * **Logic:** If `growth_rate_mom` is "High (>10%)" BUT `retention_metrics` is "Low" or "High Churn".
@@ -138,7 +139,7 @@ You are looking for **Fake Growth**, **Scalability Blockers**, and **Broken Unit
 * **The "Profitability" Rule:** Does the math of scaling work?
     * **FAIL:** If `unit_economics` implies CAC > LTV (e.g., Spending $100 to acquire a $10 user).
     * **FAIL:** If CAC Payback period is missing or stretches beyond 12-18 months.
-    * **FAIL:** If `paid_users` is 0 or `mrr` is $0 (Seed startups MUST have validated revenue).
+    * **FAIL:** If `paid_users` is 0 AND `active_users` is also 0 or flat (no engagement at all). Per Gompers et al. (2019), 20% of VCs do not require revenue forecasts pre-investment — strong user growth is valid proof of value for consumer platforms.
 
 ---
 ### INPUT DATA (Internal Only)
@@ -237,7 +238,17 @@ You are looking for **Repeatable Growth** and **Unit Economics**.
 **Current Date:** {current_date}
 
 ### 1. INPUT CONTEXT
-**A. Internal Startup Data:**
+
+**⚡ KEY METRICS (authoritative — use these exact values, do not override from JSON):**
+| Metric | Value |
+|---|---|
+| Monthly Active Users (MAU) | **{kv_active_users}** |
+| Growth Rate MoM | **{kv_growth_rate_mom}** |
+| MRR | **{kv_mrr}** |
+| Paid Users | **{kv_paid_users}** |
+{kv_consumer_note}
+
+**A. Full Internal Startup Data (for context):**
 {internal_data}
 
 **B. Forensic Reports:**
@@ -249,10 +260,10 @@ You are looking for **Repeatable Growth** and **Unit Economics**.
 ### 2. SCORING RUBRIC (Seed Standard)
 **Primary Question:** Is the machine working and scalable?
 
-* **0 - Fake Seed (Disqualified):**
-    * Revenue is $0 or MRR is trivial (<$1k) despite being "Seed".
-    * OR "Contradiction Check" flagged "Premature Scaling".
-    * OR "Risk Analysis" found "Insolvency Risk" (CAC > LTV).
+* **0 - No Signal (Disqualified):**
+    * Revenue is $0 AND active users are also 0 or flat AND growth rate is 0% or not specified — no proof of value in any form.
+    * OR "Risk Analysis" found "Insolvency Risk" (CAC > LTV) WITH no user growth to offset it.
+    * NOTE (Gompers et al., 2019 JFE): 20% of VCs do not forecast cash flows pre-investment. Consumer platforms with strong user growth (>20% MoM) and high MAU should NOT be scored 0 for $0 MRR. Use the growth_metrics.active_users and growth_rate_mom fields as primary signals for consumer/B2C companies.
 
 * **1 - Broken Machine:**
     * Revenue exists but is flat/declining.
