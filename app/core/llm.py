@@ -133,6 +133,18 @@ def _get_next_groq_key() -> str:
     with _groq_key_lock:
         return next(_groq_key_cycle)
 
+def get_llm(temperature=None, provider="gemini", model_name=None, json_mode=True):
+    """
+    Factory function to get the LLM instance.
+
+    Args:
+        temperature (float): Creativity (0.0 to 1.0).
+        provider (str): "gemini", "ollama", or "groq".
+        model_name (str): Optional override (e.g., "llama3-70b-8192").
+        json_mode (bool): Ollama only — force JSON output. Set False for free-text
+            (e.g. a markdown report). Ignored by other providers.
+    """
+    final_temp = temperature if temperature is not None else Config.GEMINI_TEMPERATURE
 
 def get_llm(temperature=None, provider="gemini", model_name=None, json_mode: bool = False):
     final_temp = temperature if temperature is not None else getattr(Config, 'GEMINI_TEMPERATURE', 0.7)
@@ -164,12 +176,15 @@ def get_llm(temperature=None, provider="gemini", model_name=None, json_mode: boo
     # --- OPTION 2: OLLAMA ---
     if provider == "ollama":
         selected_model = model_name if model_name else "gemma3:1b"
-        return ChatOllama(
+
+        ollama_kwargs = dict(
             model=selected_model,
-            format="json", 
             temperature=final_temp,
-            base_url=getattr(Config, 'OLLAMA_BASE_URL', "http://localhost:11434")
+            base_url=getattr(Config, 'OLLAMA_BASE_URL', "http://localhost:11434"),
         )
+        if json_mode:
+            ollama_kwargs["format"] = "json"
+        return ChatOllama(**ollama_kwargs)
 
     # --- OPTION 3: GEMINI ---
     if not getattr(Config, 'GEMINI_API_KEY', None):

@@ -300,7 +300,7 @@ def _extract_business_metrics(idea_name: str, market_research: dict) -> dict:
 
     # --- Competitor count ---
     competitors = data.get("competitors", [])
-    comp_count = len([c for c in competitors if c.get("Name") and c.get("Name") != "Data Unavailable"])
+    comp_count = len([c for c in competitors if isinstance(c, dict) and c.get("Name") and c.get("Name") != "Data Unavailable"])
     if comp_count:
         metrics["competitor_count"] = {
             "value": comp_count,

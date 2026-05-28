@@ -235,9 +235,8 @@ def test_analyze_wb_indicator_unknown_indicator():
 @patch("app.graph.recommendation_agent.tools.fetch_world_bank_data")
 @patch("app.graph.recommendation_agent.tools.fetch_tavily_news")
 def test_run_market_intel_both_sources_present(mock_tavily, mock_wb):
-    """With both WB + Tavily data, sources_used has both and confidence is 'medium'.
-    NOTE: The current threshold in tools.py requires sources_count == 3 for 'high',
-    but there are only 2 possible sources, so 'high' is unreachable. Max is 'medium'.
+    """With both WB + Tavily data, sources_used has both.
+    sources_count == 2 → confidence == 'high' (updated threshold in tools.py).
     """
     mock_wb.return_value = {
         "inflation_rate": {"value": 28.0, "risk": "high"},
@@ -262,7 +261,7 @@ def test_run_market_intel_both_sources_present(mock_tavily, mock_wb):
 @patch("app.graph.recommendation_agent.tools.fetch_world_bank_data")
 @patch("app.graph.recommendation_agent.tools.fetch_tavily_news")
 def test_run_market_intel_one_source_is_low(mock_tavily, mock_wb):
-    """With only one source active, confidence should be 'low' (sources_count == 1)."""
+    """With only one source active, confidence should be 'medium' (sources_count == 1)."""
     mock_wb.return_value = {"inflation_rate": {"value": 5.0, "risk": "low"}}
     mock_tavily.return_value = []  # no Tavily data
 
@@ -307,19 +306,25 @@ def test_run_market_intel_funding_climate_active(mock_tavily, mock_wb):
 # 4. TESTS FOR node.py (LLM Mocked)
 # ==========================================
 
-@patch("app.graph.recommendation_agent.node.genai.Client")
-def test_improve_statements_returns_parsed_json(mock_client_class):
+def _mock_llm_returning(content):
+    """Build a get_llm() stand-in whose .invoke(...) returns an AIMessage-like object."""
+    mock_llm = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.content = content
+    mock_llm.invoke.return_value = mock_msg
+    return mock_llm
+
+
+@patch("app.graph.recommendation_agent.node.get_llm")
+def test_improve_statements_returns_parsed_json(mock_get_llm):
     """improve_statements should return a parsed dict from the LLM JSON response."""
-    mock_client = mock_client_class.return_value
-    mock_response = MagicMock()
-    mock_response.text = json.dumps({
+    mock_get_llm.return_value = _mock_llm_returning(json.dumps({
         "problem_statement": {
             "original": "SMEs lack credit",
             "recommended": "90% of Cairo retail SMEs are rejected by banks due to collateral requirements.",
             "why_better": "Uses data instead of vague language."
         }
-    })
-    mock_client.models.generate_content.return_value = mock_response
+    }))
 
     agent = AgentNodes(api_key="fake-key")
     result = agent.improve_statements({"problem_statement": "SMEs lack credit", "customer_quotes": []})
@@ -329,27 +334,23 @@ def test_improve_statements_returns_parsed_json(mock_client_class):
     assert result["problem_statement"]["original"] == "SMEs lack credit"
 
 
-@patch("app.graph.recommendation_agent.node.genai.Client")
-def test_improve_statements_handles_markdown_wrapper(mock_client_class):
+@patch("app.graph.recommendation_agent.node.get_llm")
+def test_improve_statements_handles_markdown_wrapper(mock_get_llm):
     """The LLM sometimes wraps JSON in markdown fences — the response parser should strip them."""
-    mock_client = mock_client_class.return_value
-    mock_response = MagicMock()
-    mock_response.text = '```json\n{"problem_statement": {"original": "x", "recommended": "y", "why_better": "z"}}\n```'
-    mock_client.models.generate_content.return_value = mock_response
+    mock_get_llm.return_value = _mock_llm_returning(
+        '```json\n{"problem_statement": {"original": "x", "recommended": "y", "why_better": "z"}}\n```'
+    )
 
     agent = AgentNodes(api_key="fake-key")
     result = agent.improve_statements({"problem_statement": "x", "customer_quotes": []})
 
     assert result["problem_statement"]["recommended"] == "y"
-    
 
-@patch("app.graph.recommendation_agent.node.genai.Client")
-def test_synthesize_report_returns_text(mock_client_class):
+
+@patch("app.graph.recommendation_agent.node.get_llm")
+def test_synthesize_report_returns_text(mock_get_llm):
     """synthesize_report should return the raw markdown string from the LLM."""
-    mock_client = mock_client_class.return_value
-    mock_response = MagicMock()
-    mock_response.text = "# Spark2Scale Report\n\nYour startup needs to focus on sales."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_get_llm.return_value = _mock_llm_returning("# Spark2Scale Report\n\nYour startup needs to focus on sales.")
 
     agent = AgentNodes(api_key="fake-key")
     data = make_startup_data()
