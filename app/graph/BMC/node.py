@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from typing import Any, Dict, List
 
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -18,6 +20,63 @@ from .schema import BMCEnvelope
 from .state import BMCState
 
 logger = get_logger("BMCNode")
+
+# BMC generation + enhancement run on Gemini by default. Env-overridable:
+# set BMC_LLM_PROVIDER=groq|ollama (and optionally BMC_LLM_MODEL) to switch.
+BMC_LLM_PROVIDER = os.environ.get("BMC_LLM_PROVIDER", "gemini")
+BMC_LLM_MODEL = os.environ.get("BMC_LLM_MODEL") or None
+
+# --- Citation-integrity guard --------------------------------------------------
+# The prompt asks the model to only cite real, available sources and to tag
+# inferred claims [Hypothesis] — but LLMs don't reliably comply. This guard
+# enforces it deterministically after generation.
+_SOURCE_TAG_RE = re.compile(r"\s*\[Source:\s*([^\]]*)\]\s*$", re.IGNORECASE)
+_VALIDATED_PREFIX_RE = re.compile(r"^\s*\[\s*validated\s*\]", re.IGNORECASE)
+
+# Granular source labels that must NOT be cited unless that data is actually present.
+_GRANULAR_SOURCES = (
+    "competitors", "market sizing", "opportunity analysis", "validation",
+    "trends", "finance", "pricing", "startup costs", "monthly fixed costs",
+    "customer quotes",
+)
+
+
+def _source_allowed(src: str, available_lower: set) -> bool:
+    """True if a citation only references sources that genuinely exist."""
+    s = (src or "").strip().lower()
+    if not s or s in ("none", "n/a", "na"):
+        return False
+    # Deny if it names a granular source that isn't available (e.g. "Finance" when
+    # no finance data was provided) — even if a broader family token also matches.
+    for g in _GRANULAR_SOURCES:
+        if g in s and g not in available_lower:
+            return False
+    # Otherwise require at least one available source token to appear.
+    return any(tok in s for tok in available_lower)
+
+
+def _enforce_integrity(canvas: Dict[str, Any], available: List[str]) -> Dict[str, Any]:
+    """Downgrade `[Validated]` bullets that cite unavailable/empty sources to
+    `[Hypothesis]` (stripping the bogus citation), and remove stray source tags
+    (e.g. `[Source: None]`) from `[Hypothesis]` bullets."""
+    available_lower = {a.lower() for a in (available or [])}
+    cleaned: Dict[str, Any] = {}
+    for block, bullets in (canvas or {}).items():
+        out: List[str] = []
+        for bullet in (bullets or []):
+            text = str(bullet).strip()
+            m = _SOURCE_TAG_RE.search(text)
+            src = m.group(1).strip() if m else ""
+            body = _SOURCE_TAG_RE.sub("", text).rstrip()
+            is_validated = bool(_VALIDATED_PREFIX_RE.match(body))
+            if is_validated and _source_allowed(src, available_lower):
+                out.append(f"{body} [Source: {src}]")
+            else:
+                if is_validated:  # cited a missing/empty source → downgrade
+                    body = _VALIDATED_PREFIX_RE.sub("[Hypothesis]", body, count=1)
+                out.append(body.strip())  # hypotheses never keep a source tag
+        cleaned[block] = out
+    return cleaned
 
 
 def extract_context_node(state: BMCState) -> Dict[str, Any]:
@@ -62,15 +121,17 @@ def generate_bmc_node(state: BMCState) -> Dict[str, Any]:
     errors = list(state.get("errors") or [])
     context = state.get("extracted_context") or {}
 
+    available = context.get("available_evidence") or []
     prompt_user = USER_TEMPLATE.format(
         idea_name=context.get("idea_name", ""),
         idea_description=context.get("idea_description", ""),
         region=context.get("region", "Global"),
+        available_evidence=", ".join(available) if available else "NONE — treat every bullet as [Hypothesis].",
         context_json=json.dumps(context, indent=2, default=str),
     )
 
     try:
-        llm = get_llm(provider="groq", temperature=0.2)
+        llm = get_llm(provider=BMC_LLM_PROVIDER, model_name=BMC_LLM_MODEL, temperature=0.2)
         response = llm.invoke([
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=prompt_user),
@@ -80,7 +141,11 @@ def generate_bmc_node(state: BMCState) -> Dict[str, Any]:
 
         parsed = _parse_llm_json(raw)
         envelope = BMCEnvelope(**parsed)
-        return {"business_model_canvas": envelope.business_model_canvas.model_dump()}
+        canvas = envelope.business_model_canvas.model_dump()
+        # Deterministic citation-integrity pass — strips fabricated citations the
+        # LLM produced despite the prompt rules.
+        canvas = _enforce_integrity(canvas, context.get("available_evidence") or [])
+        return {"business_model_canvas": canvas}
 
     except ValidationError as ve:
         msg = f"BMC schema validation failed: {ve}"
@@ -121,7 +186,7 @@ async def enhance_bmc(
     )
 
     try:
-        llm = get_llm(provider="groq", temperature=0.2)
+        llm = get_llm(provider=BMC_LLM_PROVIDER, model_name=BMC_LLM_MODEL, temperature=0.2)
         response = await llm.ainvoke([
             SystemMessage(content=ENHANCE_SYSTEM_PROMPT),
             HumanMessage(content=prompt_user),

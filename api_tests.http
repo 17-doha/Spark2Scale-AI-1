@@ -1,0 +1,505 @@
+### ============================================================
+### Spark2Scale AI — COMPLETE API Test Suite
+### All 14 route files covered with correct schemas
+### Usage: click inside any block → Ctrl+Alt+R
+### Server: python run_api.py → http://localhost:8000
+### ============================================================
+
+@baseUrl = http://localhost:8000
+
+
+# ════════════════════════════════════════════════════════
+# ROOT
+# ════════════════════════════════════════════════════════
+
+### ✅ Health Check
+GET {{baseUrl}}/
+
+
+# ════════════════════════════════════════════════════════
+# PDF EXTRACTION   prefix: /api/v1/pdf
+# ════════════════════════════════════════════════════════
+# NOTE: This endpoint uses multipart/form-data (file upload),
+#       not JSON. Use Swagger UI at http://localhost:8000/docs
+#       to upload a real .pdf file for this one.
+# Direct REST Client test shown for reference only:
+#
+### Upload a PDF file (use Swagger /docs for this)
+# POST {{baseUrl}}/api/v1/pdf/extract-from-pdf
+# Content-Type: multipart/form-data; boundary=boundary
+#
+# --boundary
+# Content-Disposition: form-data; name="file"; filename="pitch.pdf"
+# Content-Type: application/pdf
+#
+# < ./your_pitch_deck.pdf
+# --boundary--
+
+
+# ════════════════════════════════════════════════════════
+# EVALUATION   prefix: /api/v1/evaluation
+# ════════════════════════════════════════════════════════
+
+### Start Evaluation (background job — returns job_id immediately)
+POST {{baseUrl}}/api/v1/evaluation/evaluate/all
+Content-Type: application/json
+
+{
+  "data": {
+    "company_snapshot": {
+      "company_name": "FinBoost",
+      "location": "Egypt",
+      "industry": "Fintech",
+      "current_stage": "Pre-Seed",
+      "current_round": { "target_amount": "$500k" }
+    },
+    "problem_definition": {
+      "problem_statement": "SMEs in Egypt cannot access working capital from traditional banks.",
+      "frequency": "Daily",
+      "gap_analysis": "Banks ignore digital-native SMEs without collateral."
+    },
+    "founder_and_team": {
+      "founders": [
+        {
+          "name": "Ahmed Hassan",
+          "role": "CEO",
+          "prior_experience": "Ex-CIB banker",
+          "years_direct_experience": 8,
+          "founder_market_fit_statement": "I watched SMEs get rejected for 8 years."
+        }
+      ]
+    },
+    "product_and_solution": {
+      "differentiation": "Real-time API-based credit scoring",
+      "core_stickiness": "Embedded VAT filing reduces churn"
+    },
+    "traction_metrics": {
+      "active_users_monthly": 120,
+      "early_revenue": "EGP 60,000"
+    },
+    "market_and_scope": {
+      "beachhead_market": "Cairo grocery retailers",
+      "tam": "$3B"
+    },
+    "vision_and_strategy": {
+      "five_year_vision": "Become the MENA trade-finance backbone."
+    }
+  }
+}
+
+### Poll Evaluation Status — replace JOB_ID with value from response above
+GET {{baseUrl}}/api/v1/evaluation/evaluate/status/JOB_ID_HERE
+
+### Generate PDF Report from Evaluation Results
+POST {{baseUrl}}/api/v1/evaluation/generate-report
+Content-Type: application/json
+
+{
+  "weighted_score": 72,
+  "company_name": "FinBoost",
+  "team_report": { "score": 3.5, "summary": "Strong technical team." },
+  "market_report": { "score": 4.5, "summary": "Large underserved MENA market." },
+  "final_report": { "recommendation": "Proceed to Seed round." }
+}
+
+
+# ════════════════════════════════════════════════════════
+# RECOMMENDATION   prefix: /api/v1  (no sub-prefix)
+# ════════════════════════════════════════════════════════
+
+### Get Strategic Recommendations
+POST {{baseUrl}}/api/v1/recommend
+Content-Type: application/json
+
+{
+  "raw_input": {
+    "company_snapshot": {
+      "company_name": "FinBoost",
+      "industry": "Fintech",
+      "current_stage": "Seed"
+    }
+  },
+  "evaluation_output": {
+    "stage": "Seed",
+    "company_context": "A fintech startup in Egypt focusing on SME credit scoring",
+    "scores": {
+      "team":      { "score": 3.5, "description": "Strong technical team, weak on sales" },
+      "problem":   { "score": 4.0, "description": "Well-validated problem with clear evidence" },
+      "product":   { "score": 3.0, "description": "MVP launched, needs more features" },
+      "market":    { "score": 4.5, "description": "Large underserved market in MENA" },
+      "traction":  { "score": 2.5, "description": "Early revenue but high churn" },
+      "gtm":       { "score": 2.0, "description": "No clear go-to-market strategy" },
+      "economics": { "score": 3.0, "description": "Healthy margins but burn rate high" },
+      "ops":       { "score": 2.5, "description": "No formal processes" },
+      "vision":    { "score": 4.0, "description": "Bold MENA expansion vision" }
+    }
+  },
+  "request_id": "test-001"
+}
+
+### Get Investor Subtags from Neo4j (recommendation router)
+GET {{baseUrl}}/api/v1/investors/user123/subtags
+
+
+# ════════════════════════════════════════════════════════
+# MARKET RESEARCH   prefix: /api/v1/market-research
+# ════════════════════════════════════════════════════════
+
+### Run Full Market Research
+POST {{baseUrl}}/api/v1/market-research/research
+Content-Type: application/json
+
+{
+  "idea": "AI-powered credit scoring for SMEs",
+  "problem": "SMEs in Egypt cannot access working capital from traditional banks due to lack of credit history.",
+  "region": "Egypt"
+}
+
+### Validate a Startup Idea
+POST {{baseUrl}}/api/v1/market-research/validate-idea
+Content-Type: application/json
+
+{
+  "idea": "AI fitness tracking app for MENA",
+  "problem": "People in MENA have no access to affordable personalized fitness coaching.",
+  "region": "MENA"
+}
+
+
+# ════════════════════════════════════════════════════════
+# SWOT GENERATION   prefix: /api/v1/swot
+# ════════════════════════════════════════════════════════
+
+### Generate SWOT Analysis
+POST {{baseUrl}}/api/v1/swot/generate
+Content-Type: application/json
+
+{
+  "idea_name": "FinBoost",
+  "idea_description": "AI-powered credit scoring platform for Egyptian SMEs",
+  "region": "MENA",
+  "market_research": {
+    "data": {
+      "market_size": "$3B TAM in MENA SME lending",
+      "competitors": ["Khazna", "Telda", "Paymob"],
+      "trends": ["Digital banking adoption", "Open banking regulations"],
+      "pain_points": ["No credit history for SMEs", "Long bank approval times"]
+    }
+  },
+  "comment": "Focus on strengths vs traditional banks"
+}
+
+
+# ════════════════════════════════════════════════════════
+# COMPETITOR MATRIX   prefix: /api/v1/competitor-matrix
+# ════════════════════════════════════════════════════════
+
+### Generate Competitor Matrix
+POST {{baseUrl}}/api/v1/competitor-matrix/generate
+Content-Type: application/json
+
+{
+  "idea_name": "FinBoost",
+  "idea_description": "AI credit scoring for Egyptian SMEs",
+  "region": "Egypt",
+  "market_research": {
+    "data": {
+      "competitors": ["Khazna", "Telda", "Paymob"],
+      "market_size": "$3B",
+      "trends": ["Digital lending", "Open banking"]
+    }
+  },
+  "comment": "Highlight speed and API-first approach"
+}
+
+
+# ════════════════════════════════════════════════════════
+# BUSINESS MODEL CANVAS   prefix: /api/v1/bmc
+# ════════════════════════════════════════════════════════
+
+### Generate BMC
+POST {{baseUrl}}/api/v1/bmc/generate
+Content-Type: application/json
+
+{
+  "idea_name": "FinBoost",
+  "idea_description": "AI-powered credit scoring for Egyptian SMEs",
+  "region": "MENA",
+  "market_research": {
+    "data": {
+      "market_size": "$3B",
+      "competitors": ["Khazna", "Telda"],
+      "trends": ["Open banking", "Digital lending"]
+    }
+  },
+  "evaluation": null,
+  "recommendation": null
+}
+
+### ✅ Enhance Existing BMC (WORKING)
+POST {{baseUrl}}/api/v1/bmc/enhance
+Content-Type: application/json
+
+{
+  "idea_name": "FinBoost",
+  "idea_description": "AI credit scoring for SMEs",
+  "region": "MENA",
+  "current_bmc": {
+    "value_proposition": ["Fast credit decisions for SMEs"],
+    "customer_segments": ["Cairo grocery retailers"],
+    "revenue_streams": ["2% transaction fee"],
+    "channels": ["Direct sales"],
+    "customer_relationships": ["Account managers"],
+    "key_resources": ["Credit scoring model"],
+    "key_activities": ["Loan processing"],
+    "key_partnerships": ["Fawry payment network"],
+    "cost_structure": ["Cloud infrastructure $2k/mo"]
+  },
+  "document_changes": ["Add enterprise B2B tier", "Expand to Saudi Arabia"]
+}
+
+
+# ════════════════════════════════════════════════════════
+# DOCUMENT CHAT   prefix: /api/v1/document-chat
+# ════════════════════════════════════════════════════════
+# NOTE: file_path must be a real local file path OR a URL.
+# For local testing, pass a JSON string as file_path.
+
+### Chat with Document (JSON payload as file_path)
+POST {{baseUrl}}/api/v1/document-chat/test-document-qa
+Content-Type: application/json
+
+{
+  "file_path": "{\"company_name\": \"FinBoost\", \"problem\": \"SMEs cannot get loans\", \"solution\": \"AI credit scoring\", \"market\": \"Egypt Fintech\"}",
+  "query": "What problem does this startup solve?",
+  "provider": "groq",
+  "chat_history": [],
+  "document_type": "pitch_deck"
+}
+
+
+# ════════════════════════════════════════════════════════
+# CHAT SUMMARIZER   prefix: /api/v1/chat-summarizer
+# NOTE: needs valid GROQ_API_KEY in .env to work
+# ════════════════════════════════════════════════════════
+
+### Summarize Chat to Extract Document Changes
+POST {{baseUrl}}/api/v1/chat-summarizer/summarize
+Content-Type: application/json
+
+{
+  "messages": [
+    { "role": "user",      "content": "What should I focus on for my GTM strategy?" },
+    { "role": "assistant", "content": "Focus on direct outbound sales to Cairo SMEs first." },
+    { "role": "user",      "content": "Can you add a section about our unit economics?" },
+    { "role": "assistant", "content": "Sure, I can add a unit economics section showing CAC and LTV." },
+    { "role": "user",      "content": "Also update the market size to include Saudi Arabia." }
+  ]
+}
+
+
+# ════════════════════════════════════════════════════════
+# FEED RECOMMENDATION   prefix: /api/v1/feed
+# ════════════════════════════════════════════════════════
+
+### ✅ Get Investor Subtags (WORKING)
+GET {{baseUrl}}/api/v1/feed/investors/user123/subtags?limit=10
+
+### Get Recommended Pitchdecks for Investor (full LangGraph pipeline)
+GET {{baseUrl}}/api/v1/feed/recommend/investor_001
+
+### Get Similar Investors
+GET {{baseUrl}}/api/v1/feed/similar-investors/investor_001?k=5
+
+### Record Interaction — LIKE (use a real pitchdeck UUID from your DB)
+POST {{baseUrl}}/api/v1/feed/interactions
+Content-Type: application/json
+
+{
+  "user_id": "6622ce4d-2f0d-4791-9b80-867d69e6c9a9",
+  "pitch_id": "0011b18a-1806-46be-b144-01a1eecb519d",
+  "liked": true,
+  "contacted": false
+}
+
+### Record Interaction — DISLIKE
+POST {{baseUrl}}/api/v1/feed/interactions
+Content-Type: application/json
+
+{
+  "user_id": "6622ce4d-2f0d-4791-9b80-867d69e6c9a9",
+  "pitch_id": "0011b18a-1806-46be-b144-01a1eecb519d",
+  "liked": false,
+  "contacted": false
+}
+
+### Record Interaction — CONTACT
+POST {{baseUrl}}/api/v1/feed/interactions
+Content-Type: application/json
+
+{
+  "user_id": "6622ce4d-2f0d-4791-9b80-867d69e6c9a9",
+  "pitch_id": "0011b18a-1806-46be-b144-01a1eecb519d",
+  "liked": false,
+  "contacted": true
+}
+
+### Build Sub-Vectors for Investor
+POST {{baseUrl}}/api/v1/feed/sub-vectors/build/investor_001
+
+### Sync Neo4j (background task)
+POST {{baseUrl}}/api/v1/feed/admin/sync-neo4j
+
+### Supabase Webhook — Investor Updated
+POST {{baseUrl}}/api/v1/feed/webhook/investor
+Content-Type: application/json
+
+{
+  "type": "UPDATE",
+  "record": { "user_id": "6622ce4d-2f0d-4791-9b80-867d69e6c9a9" }
+}
+
+### Supabase Webhook — Pitchdeck Updated
+POST {{baseUrl}}/api/v1/feed/webhook/pitchdeck
+Content-Type: application/json
+
+{
+  "type": "INSERT",
+  "record": { "pitchdeckid": "0011b18a-1806-46be-b144-01a1eecb519d" }
+}
+
+
+# ════════════════════════════════════════════════════════
+# VECTOR DB ADMIN   prefix: /api/v1/feed
+# ════════════════════════════════════════════════════════
+
+### ✅ VDB Health Check (WORKING)
+GET {{baseUrl}}/api/v1/feed/health
+
+### Initialize Qdrant Collections
+POST {{baseUrl}}/api/v1/feed/collections/init
+
+### Batch Sync All Investor Embeddings → Qdrant
+POST {{baseUrl}}/api/v1/feed/investor-embedding/batch
+
+### Sync Single Investor Embedding
+POST {{baseUrl}}/api/v1/feed/investor-embedding
+Content-Type: application/json
+
+{
+  "investor_id": "6622ce4d-2f0d-4791-9b80-867d69e6c9a9"
+}
+
+### Batch Sync All Pitchdeck Embeddings → Qdrant
+POST {{baseUrl}}/api/v1/feed/pitchdeck-embedding/batch
+
+### Sync Single Pitchdeck Embedding
+POST {{baseUrl}}/api/v1/feed/pitchdeck-embedding
+Content-Type: application/json
+
+{
+  "pitchdeck_id": "0011b18a-1806-46be-b144-01a1eecb519d"
+}
+
+### Sync Neo4j (VDB Admin route)
+POST {{baseUrl}}/api/v1/feed/neo4j/sync
+
+### ⚠️ Verify Supabase ↔ Neo4j Sync (requires NEO4J_URI configured)
+GET {{baseUrl}}/api/v1/feed/admin/verify-sync
+
+### ⚠️ DANGER: Delete All Qdrant Collections
+DELETE {{baseUrl}}/api/v1/feed/collections
+
+
+# ════════════════════════════════════════════════════════
+# PITCH ANALYZER   prefix: /api/v1/pitch-analyzer
+# ════════════════════════════════════════════════════════
+
+### ✅ Check Environment Variables (WORKING)
+GET {{baseUrl}}/api/v1/pitch-analyzer/env-check
+
+### ✅ Check Worker Status (WORKING)
+GET {{baseUrl}}/api/v1/pitch-analyzer/worker-status
+
+### Get Last Generated Report
+GET {{baseUrl}}/api/v1/pitch-analyzer/get-report
+
+### Run LLM Pre-flight Extraction
+POST {{baseUrl}}/api/v1/pitch-analyzer/extract
+Content-Type: application/json
+
+{
+  "transcript": "Hi, I am Ahmed. We built FinBoost, an AI credit scoring platform for SMEs in Egypt.",
+  "context": {}
+}
+
+### Generate Investment Readiness Report
+POST {{baseUrl}}/api/v1/pitch-analyzer/generate-report
+Content-Type: application/json
+
+{
+  "transcript": "FinBoost solves credit access for Egyptian SMEs using AI-based scoring.",
+  "session_id": "test-session-001"
+}
+
+### Start LiveKit AI Agent Worker
+POST {{baseUrl}}/api/v1/pitch-analyzer/start
+
+### Stop LiveKit AI Agent Worker
+POST {{baseUrl}}/api/v1/pitch-analyzer/stop
+
+### Generate LiveKit Token
+POST {{baseUrl}}/api/v1/pitch-analyzer/token
+Content-Type: application/json
+
+{
+  "room_name": "test-room",
+  "participant_name": "founder_ahmed"
+}
+
+
+# ════════════════════════════════════════════════════════
+# AI CHAT   prefix: /api/v1/chat
+# ════════════════════════════════════════════════════════
+
+### Chat with AI
+POST {{baseUrl}}/api/v1/chat/chat
+Content-Type: application/json
+
+{
+  "message": "What are the key metrics I should track for a Pre-Seed Fintech startup?",
+  "session_id": "session-001",
+  "context": {}
+}
+
+### Update Startup Data for Chat Context
+POST {{baseUrl}}/api/v1/chat/update-startup-data
+Content-Type: application/json
+
+{
+  "session_id": "session-001",
+  "startup_data": {
+    "company_name": "FinBoost",
+    "industry": "Fintech",
+    "stage": "Pre-Seed"
+  }
+}
+
+
+# ════════════════════════════════════════════════════════
+# PRESENTATION GENERATION   prefix: /api/v1/ppt
+# NOTE: requires python-pptx installed in venv
+# ════════════════════════════════════════════════════════
+
+### Generate Presentation
+POST {{baseUrl}}/api/v1/ppt/generate
+Content-Type: application/json
+
+{
+  "idea_name": "FinBoost",
+  "idea_description": "AI credit scoring for SMEs",
+  "region": "MENA",
+  "market_research": {
+    "data": { "market_size": "$3B", "competitors": ["Khazna"] }
+  }
+}

@@ -1,10 +1,11 @@
 SYSTEM_ADVISOR_PROMPT = """
 ACT AS: Senior Startup Strategic Advisor & Venture Scientist.
-TONE: Direct, analytical, and truth-seeking. Focus on validation over speculation.
+TONE: Direct, concise, and truth-seeking. Favor short bullets over long paragraphs; cut filler, hedging, and repetition. Do not restate the raw data dumps back to the reader.
+CITATIONS: Every external/market claim must link a REAL source URL copied verbatim from the provided scraped intelligence, formatted as a markdown link [domain](https://full-url). Never invent a URL, statistic, or source name. If no relevant source is provided, say so instead of guessing.
 FORMAT RULE: When writing memo headers (To: / From: / Subject:), each MUST appear on its own separate line, never all on a single line.
 """
 
-# Experiment-Led Framework for the final report
+# Dual-audience framework for the final report (Founder dashboard + VC-grade deep dive)
 RECOMMENDATION_PROMPT_TEMPLATE = """
 START YOUR RESPONSE WITH THIS EXACT HEADER FORMAT (each field on its own line):
 To: {company_name} Founder
@@ -20,11 +21,11 @@ Subject: Strategic Audit: {stage} Stage — {company_name}
 ### AI SCORING DATA
 {scores_json}
 
-### EXTERNAL MARKET INTELLIGENCE
+### EXTERNAL MARKET INTELLIGENCE & MULTI-SOURCE BENCHMARKS
 **Country Risk Indicators (World Bank):**
 {country_risk_json}
 
-**Recent Market Signals (News):**
+**Multi-Source Scraped Intelligence (Tavily Multi-Domain Search):**
 {news_signals_json}
 
 **Auto-Generated Risk Flags:**
@@ -35,53 +36,33 @@ Subject: Strategic Audit: {stage} Stage — {company_name}
 ### DETECTED FAILURE PATTERNS
 {patterns_json}
 
-### EXPERIMENT-LED STRATEGIC ASSESSMENT
+---
 
-0. **🌍 Market Intelligence Warnings**:
-   - Reference specific risk flags by name.
-   - Tell the founder if their country has critical macro risk and what to do about it (e.g. consider incorporating elsewhere, delay fundraising, hedge currency).
-   - Cite the actual news sources by domain name.
+WRITING RULES (follow strictly — the report must be SHORT and skimmable):
+- Be concise. Use tight bullets, not long paragraphs. No filler, no repetition, and do NOT restate the data dumps above.
+- CITE REAL URLs ONLY: whenever you reference market, competitor, or macro evidence, link the source as a markdown link [domain](https://full-url), copying the URL VERBATIM from the "Multi-Source Scraped Intelligence" above. Never invent a URL, number, or source. If there is no relevant source, write "(no external source available)" instead of guessing.
+- If a data block shows {{"status": "Tool offline"}}, say the live data was unavailable and reason cautiously — never assume "no market" or "no competitors" exist.
+- Do not invent metrics or founder names.
 
-1. **📊 Market Intelligence Confidence Summary**:
-   This table is ONLY about the EXTERNAL MARKET RESEARCH (World Bank indicators and news signals from the data above).
-   Do NOT reference failure patterns here — those belong in Section 5.
-   Summarize what the market research data reveals with confidence levels.
-   Rules:
-   - "Finding" = a macro/market observation (e.g. "High Inflation Risk", "Active Funding Climate", "Regulatory Tailwind").
-   - "Confidence" = how strongly the data supports this observation (HIGH / MEDIUM / LOW).
-   - "Source" = which data source backs this up (e.g. "World Bank", "TechCabal", "IMARC Report").
-   | Market Finding | Confidence | Source |
-   | :--- | :--- | :--- |
+### PART 1 — EXECUTIVE DASHBOARD (plain language, for the founder)
+One line per pillar: a traffic light (🟢 Healthy / 🟡 Warning / 🔴 Critical) + a ≤25-word plain-English explanation. Cover all 9 pillars: Team, Problem, Product, Market, Traction, GTM, Economics, Vision, Ops. Finish with a 2-sentence **Bottom line**.
 
-2. **THE CORE HYPOTHESIS**:
-   Identify the single most important assumption that must be true for this startup to survive. 
-   Compare the Founder's claim: "{problem_statement}" against the Evidence: {quotes_json}.
+### PART 2 — VENTURE SCIENTIST ASSESSMENT (for experts; keep every section tight)
 
-3. **THE "KILL" SIGNAL (Pivot Threshold)**:
-   Define a specific, measurable event or lack of progress that should trigger an immediate pivot.
+**0. 🌍 Macro Warnings** — 2–4 bullets on the biggest macro risks (cite World Bank figures and a real news URL) and the single burn-rate / runway adjustment to make.
 
-4. **VALIDATION EXPERIMENT BACKLOG**:
-   - **Technical Proof Point:** What must be built/tested to prove the "Defensibility" claim?
-   - **Market Proof Point:** What must happen to prove "Willingness to Pay"?
+**1. 🛑 Top 2 Kill Signals** — the two gravest threats (from the lowest scores / kill_signal patterns). For each: flaw (1 line), the data proving it (1 line), one concrete counter-measure (1 line) with a citation link when relevant.
 
-5. **DETECTION & ACTION TABLE** (from Startup Pattern Analysis):
-   This table is ONLY about the DETECTED FAILURE PATTERNS from the startup's own scores and behavior (the patterns_json data above).
-   Do NOT include market/macro observations here — those belong in Section 1.
-   STRICT RULES FOR THIS TABLE:
-   - EVERY row MUST have all 4 columns: Risk Pattern | Severity | Confidence | Recommended Action.
-   - **NEVER** leave any row with a blank or missing "Recommended Action". Every pattern needs a concrete action.
-   - **NEVER** use Pattern IDs (like FP-TEAM-001) in the Risk Pattern column — use plain human-readable names only.
-   - The Risk Pattern name in every row MUST be written in **bold** (e.g. **Founder Avoids Hard Job**).
-   | Risk Pattern | Severity | Confidence | Recommended Action |
-   | :--- | :--- | :--- | :--- |
-   
-   *HIGH confidence patterns appear bold. LOW confidence patterns should be framed as "worth monitoring".*
+**2. 📊 Weak Pillars** — ONLY pillars scoring below 4/5. One tight bullet each: the gap + the fix, with a citation link when you reference an external benchmark.
 
-6. **RED FLAGS & EARLY WARNINGS**:
-   List 5 specific metrics to monitor weekly.
+**3. 🧪 30-Day Experiments** — 2–3 experiments, each EXACTLY:
+   - **Hypothesis:** …
+   - **Test:** … (cheap, real-world)
+   - **Fail metric:** … (a number that disproves it)
 
-7. **FUNDRAISING READINESS**:
-   Evaluate the target raise of {target_raise} based on current traction quality.
+**4. 🚀 Refinement Blueprint** — for Problem, Differentiation, Core Stickiness, 5-Year Vision: one "Original → Recommended" upgrade each, ≤30 words per line.
+
+**5. 📚 References** — a numbered list of every source URL you cited above, each as a markdown link [domain](https://full-url). Use ONLY URLs from the scraped intelligence. If you cited none, write "No external sources were available for this report."
 """
 
 STATEMENT_IMPROVEMENT_PROMPT = """

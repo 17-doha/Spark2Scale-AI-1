@@ -246,7 +246,7 @@ PATTERN_LIBRARY = {
           }
           }
 
-def detect_patterns(scores):
+def detect_patterns(scores, stage=None):
     matched = []
     
     # Track which categories have patterns firing at medium or high severity
@@ -296,8 +296,22 @@ def detect_patterns(scores):
             reason = "Isolated signal without cross-category support"
             cross_category_support = False
             
-        strength = calculate_trigger_strength(severity, MULTIPLIERS, cross_category_support=cross_category_support)
-        label = "strong" if strength > 1.0 else "moderate" if strength >= 0.5 else "weak"
+        strength = calculate_trigger_strength(
+            severity, MULTIPLIERS,
+            cross_category_support=cross_category_support,
+            stage=stage, category=category,
+        )
+        # Stage amplification can push a HIGH-severity, critical-pillar weakness into
+        # kill-signal territory. Gate the label on severity so amplified low/medium
+        # patterns (e.g. "Overstated TAM") don't masquerade as survival threats.
+        if severity == "high" and strength >= 1.5:
+            label = "kill_signal"
+        elif strength > 1.0:
+            label = "strong"
+        elif strength >= 0.5:
+            label = "moderate"
+        else:
+            label = "weak"
         
         final_matched.append({
             "pattern_id": p_id,
