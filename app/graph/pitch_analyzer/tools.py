@@ -708,6 +708,7 @@ def build_investment_readiness_report(
             "diligence_answered": " | ".join(diligence_answered),
             "full_transcript":    full_transcript[-4000:],
             "vocal_delivery":     vocal_delivery_text,
+            "monotone_assessment": monotone_assessment,
         })
         return result
     except Exception as e:
