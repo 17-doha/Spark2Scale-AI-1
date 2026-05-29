@@ -623,7 +623,7 @@ def get_tools_definition() -> list:
 # ═══════════════════════════════════════════════════════════════════════════════
 import numpy as np  # kept for use elsewhere in this file
 
-from audio_analysis import (
+from .audio_analysis import (
     compute_audio_features,
     RMSCalibrator,
     detect_nervousness,
