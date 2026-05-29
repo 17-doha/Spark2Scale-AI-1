@@ -355,3 +355,127 @@ class TestBMCWorkflow:
         wf = create_bmc_workflow()
         assert wf is not None
         assert hasattr(wf, "ainvoke")
+
+
+# ===========================================================================
+# 6. AVAILABLE-EVIDENCE WHITELIST & CITATION-INTEGRITY GUARD
+# ===========================================================================
+from app.graph.BMC.helpers import _available_evidence
+from app.graph.BMC.node import _enforce_integrity, _source_allowed
+
+
+class TestAvailableEvidence:
+    def test_prose_only_inputs_expose_family_sources(self):
+        """Free-text inputs make only the three families citable — not Finance etc."""
+        ctx = extract_bmc_context(
+            "X", "d", "Global",
+            "some market research prose", "some evaluation prose", "some recommendation prose",
+        )
+        avail = ctx["available_evidence"]
+        assert avail == ["Market Research", "Evaluation", "Recommendation"]
+        assert "Finance" not in avail and "Competitors" not in avail
+
+    def test_structured_finance_and_competitors_are_whitelisted(self):
+        ctx = extract_bmc_context(
+            "X", "d", "Global",
+            {"competitors": [{"name": "Acme"}], "finance": {"startup_costs": 5000}}, {}, {},
+        )
+        avail = ctx["available_evidence"]
+        assert "Competitors" in avail and "Finance" in avail and "Startup Costs" in avail
+
+
+class TestCitationIntegrityGuard:
+    AVAIL = ["Market Research", "Evaluation", "Recommendation"]
+
+    def test_validated_with_absent_finance_is_downgraded(self):
+        canvas = {"revenue_streams": ["[Validated] [Day 1] $500/month. [Source: Finance - Pricing]"]}
+        out = _enforce_integrity(canvas, self.AVAIL)["revenue_streams"][0]
+        assert out.startswith("[Hypothesis]")
+        assert "[Source:" not in out
+
+    def test_validated_with_absent_competitors_is_downgraded(self):
+        canvas = {"value_proposition": ["[Validated] [Day 1] Beats rivals. [Source: Market Research - Competitors]"]}
+        out = _enforce_integrity(canvas, self.AVAIL)["value_proposition"][0]
+        assert out.startswith("[Hypothesis]")
+
+    def test_validated_with_available_family_is_kept(self):
+        canvas = {"key_resources": ["[Validated] [Day 1] Needs AI talent. [Source: Recommendation - Founder Market Fit]"]}
+        out = _enforce_integrity(canvas, self.AVAIL)["key_resources"][0]
+        assert out.startswith("[Validated]")
+        assert "[Source: Recommendation - Founder Market Fit]" in out
+
+    def test_hypothesis_source_none_is_stripped(self):
+        canvas = {"channels": ["[Hypothesis] Maybe ads. [Source: None]"]}
+        out = _enforce_integrity(canvas, self.AVAIL)["channels"][0]
+        assert out == "[Hypothesis] Maybe ads."
+
+    def test_empty_whitelist_downgrades_everything(self):
+        canvas = {"value_proposition": ["[Validated] [Day 1] Anything. [Source: Recommendation]"]}
+        out = _enforce_integrity(canvas, [])["value_proposition"][0]
+        assert out.startswith("[Hypothesis]") and "[Source:" not in out
+
+    def test_source_allowed_helper(self):
+        avail = {"market research", "evaluation", "recommendation"}
+        assert _source_allowed("Recommendation - Differentiation", avail) is True
+        assert _source_allowed("Finance - Pricing", avail) is False
+        assert _source_allowed("None", avail) is False
+        assert _source_allowed("", avail) is False
+
+
+class TestVariantInputShapes:
+    """Hand-built payloads use simpler shapes than the agents' real output —
+    the helpers must tolerate them without crashing (regression for the
+    `'str' object has no attribute 'get'` 500)."""
+
+    def test_string_refined_statements_and_patterns_do_not_crash(self):
+        recommendation = {
+            "refined_statements": {
+                "problem_statement": "Shop owners cannot secure inventory financing fast enough.",
+                "differentiation": "We score credit instantly from POS data.",
+            },
+            "patterns_detected": [
+                "High registration then drop-off due to complex KYC.",
+                "Demand peaks between the 20th and 30th of each month.",
+            ],
+            "customer_quotes": ["If I can't buy stock when prices drop, my margin is destroyed."],
+            "target_raise": "$1,500,000 USD Seed Round",
+            "stage": "Seed",
+        }
+        out = _slim_recommendation(recommendation)
+        assert out["problem_statement"] == "Shop owners cannot secure inventory financing fast enough."
+        assert out["differentiation"] == "We score credit instantly from POS data."
+        assert out["target_raise"] == "$1,500,000 USD Seed Round"
+        assert len(out["top_patterns"]) == 2
+        assert out["top_patterns"][0]["name"].startswith("High registration")
+        assert out["customer_quotes"][0].startswith("If I can't")
+
+    def test_flat_evaluation_shape_is_extracted(self):
+        evaluation = {
+            "verdict": "Strong Technical Foundation, High Execution Risk.",
+            "scorecard": {"team": 8.0, "go_to_market": 4.0},
+            "executive_summary": "Excellent speed metrics but weak retention.",
+            "top_priorities": ["Pivot to founder-led B2B sales."],
+            "deal_breakers": ["No FRA compliance."],
+        }
+        out = _slim_evaluation(evaluation)
+        assert out["verdict"].startswith("Strong Technical")
+        assert out["scorecard"]["go_to_market"] == 4.0
+        assert out["top_priorities"] == ["Pivot to founder-led B2B sales."]
+        assert out["deal_breakers"] == ["No FRA compliance."]
+
+    def test_full_structured_finboost_input_does_not_crash(self):
+        """The exact shape that previously 500'd must now extract cleanly."""
+        ctx = extract_bmc_context(
+            "FinBoost", "POS micro-lending", "Egypt",
+            {"market_sizing": {"TAM": "$4.2B"},
+             "competitors": [{"name": "MNT-Halan", "weakness": "slow onboarding"}],
+             "finance": {"startup_costs": 150000, "monthly_fixed_costs": 12000}},
+            {"verdict": "High execution risk", "scorecard": {"go_to_market": 4.0}},
+            {"refined_statements": {"problem_statement": "SMEs lack fast credit."},
+             "patterns_detected": ["KYC drop-off"], "target_raise": "$1.5M"},
+        )
+        assert ctx["recommendation"]["problem_statement"] == "SMEs lack fast credit."
+        assert ctx["evaluation"]["verdict"] == "High execution risk"
+        # Finance + Competitors + Market Sizing become citable.
+        for s in ("Finance", "Competitors", "Market Sizing", "Evaluation", "Recommendation"):
+            assert s in ctx["available_evidence"]

@@ -24,7 +24,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -41,8 +41,8 @@ RETRY_CONFIG = {
 
 @retry(**RETRY_CONFIG)
 async def operations_risk_agent(operations_data: dict, benchmarks: str, template: str) -> str:
-    async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+    async with modal_limiter:
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
         return await chain.ainvoke({
             "operations_data": json.dumps(operations_data, indent=2),
@@ -51,7 +51,7 @@ async def operations_risk_agent(operations_data: dict, benchmarks: str, template
 
 @retry(**RETRY_CONFIG)
 async def operations_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("⚖️ Operations Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(OPERATIONS_SCORING_AGENT_PROMPT) | llm | StrOutputParser()

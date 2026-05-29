@@ -231,42 +231,40 @@ def extract_problem_data(data):
     }
 
 def extract_product_data(data):
+    root = data.get("startup_evaluation", data)
+    snap = root.get("company_snapshot", {})
+    prod = root.get("product_and_solution", {})
+    prob = root.get("problem_definition", {})
+    team = root.get("founder_and_team", {})
+    market = root.get("market_and_scope", {})
+    vision = root.get("vision_and_strategy", {})
+
     return {
-        # --- 1. COMPANY SNAPSHOT (ALL FIELDS) ---
-        # "Context: Stage, Speed (Founded Date), and Resources (Amount Raised)"
         "snapshot": {
-            "company_name": data.get("company_snapshot", {}).get("company_name"),
-            "website": data.get("company_snapshot", {}).get("website"),
-            "hq_location": data.get("company_snapshot", {}).get("hq_location"),
-            "date_founded": data.get("company_snapshot", {}).get("date_founded"),
-            "current_stage": data.get("company_snapshot", {}).get("current_stage"),
-            "amount_raised": data.get("company_snapshot", {}).get("amount_raised"),
-            "current_round": data.get("company_snapshot", {}).get("current_round")
+            "company_name": snap.get("company_name"),
+            "website": snap.get("website_url") or snap.get("website"),
+            "hq_location": snap.get("hq_location"),
+            "date_founded": snap.get("date_founded"),
+            "current_stage": snap.get("current_stage"),
+            "amount_raised": snap.get("amount_raised_to_date") or snap.get("amount_raised"),
+            "current_round": snap.get("current_round")
         },
-
-        # --- 2. PRODUCT & SOLUTION (ALL FIELDS) ---
-        # "The Core: Status, Visuals, Moat, Stickiness"
         "product": {
-            "status": data.get("product_and_solution", {}).get("product_status"),
-            "visuals": data.get("product_and_solution", {}).get("visuals"),
-            "stickiness": data.get("product_and_solution", {}).get("stickiness"),
-            "differentiation": data.get("product_and_solution", {}).get("differentiation"),
-            "moat": data.get("product_and_solution", {}).get("moat")
+            "status": prod.get("product_stage") or prod.get("product_status"),
+            "demo_link": prod.get("demo_link"),
+            "stickiness": prod.get("core_stickiness") or prod.get("stickiness"),
+            "differentiation": prod.get("differentiation"),
+            "moat": prod.get("defensibility_moat") or prod.get("moat")
         },
-
-        # --- 3. CRITICAL DEPENDENCIES (Keep these for Scoring Logic) ---
-        
-        # From Problem (Needed for "10x Better" check)
-        "baseline_solution": data.get("problem_definition", {}).get("current_state"),
-        "problem_gap": data.get("problem_definition", {}).get("gap"),
-
-        # From Team (Needed for "How quickly can it be built?" check)
-        "shipping_history": data.get("founder_and_team", {}).get("team_execution"),
-
-        # From Market & Strategy (Needed for "Roadmap" & "Red/Blue Ocean" check)
-        "expansion_roadmap": data.get("market_and_scope", {}).get("expansion"),
-        "category_strategy": data.get("vision_and_strategy", {}).get("categorization"),
-        "future_vision": data.get("vision_and_strategy", {}).get("future_view")
+        "baseline_solution": prob.get("current_solution") or prob.get("current_state"),
+        "problem_gap": prob.get("gap_analysis") or prob.get("gap"),
+        "shipping_history": (
+            team.get("execution", {}).get("key_shipments")
+            or team.get("team_execution")
+        ),
+        "expansion_roadmap": market.get("expansion_strategy") or market.get("expansion"),
+        "category_strategy": vision.get("category_definition") or vision.get("categorization"),
+        "future_vision": vision.get("five_year_vision") or vision.get("future_view")
     }
 
 
@@ -278,23 +276,13 @@ def extract_market_data(data):
     """
     Transforms raw startup JSON into the simplified structure needed for Market Analysis.
     """
-    # Safely get sections
-    snapshot = data.get("company_snapshot", {})
-    # Handle nested structure if inside startup_evaluation or flat
-    if "startup_evaluation" in data:
-        root = data["startup_evaluation"]
-        market = root.get("market_and_scope", {})
-        problem = root.get("problem_definition", {})
-        business = root.get("business_model", {})
-        vision = root.get("vision_and_strategy", {})
-        gtm = root.get("gtm_strategy", {})
-    else:
-        # Fallback if structure is already flat
-        market = data.get("market_and_scope", {})
-        problem = data.get("problem_definition", {})
-        business = data.get("business_model", {})
-        vision = data.get("vision_and_strategy", {})
-        gtm = data.get("gtm_strategy", {})
+    root = data.get("startup_evaluation", data)
+    snapshot = root.get("company_snapshot", {})
+    market = root.get("market_and_scope", {})
+    problem = root.get("problem_definition", {})
+    business = root.get("business_model", {})
+    vision = root.get("vision_and_strategy", {})
+    gtm = root.get("gtm_strategy", {})
 
     return {
         "entry_point": {
@@ -371,14 +359,28 @@ def extract_traction_data(data):
 
     # PATH B: SEED TRACTION
     else:
+        # Determine if this is a B2C consumer app (pre-revenue is expected/normal)
+        active_users = traction.get("active_users_monthly") or traction.get("user_count", 0)
+        user_growth = traction.get("revenue_growth_rate") or traction.get("growth_rate")
+        is_consumer = not is_b2b
+        is_pre_revenue = not traction.get("early_revenue") and not traction.get("monthly_recurring_revenue")
+        consumer_note = (
+            "IMPORTANT: This is a B2C consumer platform with pre-revenue at Seed stage. "
+            "For consumer apps, user growth rate and MAU are the primary traction signals — "
+            "NOT MRR. Do NOT apply the 'Fake Seed' rule. Evaluate growth_rate_mom and "
+            "active_users as the core traction proof."
+            if (is_consumer and is_pre_revenue and active_users and user_growth)
+            else None
+        )
         return {
             "analysis_type": "Seed Growth",
-            "context": base_context,
+            "context": {**base_context, **({"consumer_note": consumer_note} if consumer_note else {})},
             "growth_metrics": {
-                "mrr": traction.get("early_revenue"), 
-                "growth_rate_mom": traction.get("revenue_growth_rate", "Not specified"),
+                "mrr": traction.get("early_revenue") or traction.get("monthly_recurring_revenue"),
+                "growth_rate_mom": traction.get("revenue_growth_rate") or traction.get("growth_rate", "Not specified"),
                 "retention_metrics": traction.get("retention_metrics", "Not specified"),
-                "paid_users": traction.get("paying_customer_count", 0),
+                "paid_users": traction.get("paying_customer_count") or traction.get("number_of_paying_customers", 0),
+                "active_users": traction.get("active_users_monthly") or traction.get("user_count", 0),
                 "unit_economics": {
                     "acv": biz.get("average_price_per_customer"),
                     "cac_hint": "Infer from marketing spend if available"
@@ -386,7 +388,7 @@ def extract_traction_data(data):
             },
             "sales_machine": {
                 "closer": gtm.get("deal_closer"),
-                "channel": gtm.get("primary_acquisition_channel"),
+                "channel": gtm.get("primary_acquisition_channel") or gtm.get("primary_channel"),
                 "sales_cycle": gtm.get("average_sales_cycle"),
                 "sales_motion": gtm.get("sales_motion"),
                 "conversion_friction": "Low" if gtm.get("sales_motion") == "Self-serve" else "High"
@@ -423,8 +425,8 @@ def extract_gtm_pre_seed(data):
         },
         "unit_economics": {
             "burn_rate": biz.get("monthly_burn", 0),
-            "total_users": traction.get("user_count", 0),
-            "paid_users": 0,
+            "total_users": traction.get("active_users_monthly") or traction.get("user_count", 0),
+            "paid_users": traction.get("paying_customer_count") or traction.get("number_of_paying_customers", 0),
             "revenue": traction.get("early_revenue", 0),
             "price_point": biz.get("average_price_per_customer", 0)
         }
@@ -459,11 +461,12 @@ def extract_gtm_seed(data):
         },
         "unit_economics": {
             "burn_rate": biz.get("monthly_burn"),
-            "total_users": traction.get("user_count"),
-            "paid_users": traction.get("paying_customer_count"),
-            "revenue": traction.get("early_revenue"),
+            "total_users": traction.get("active_users_monthly") or traction.get("user_count"),
+            "paid_users": traction.get("paying_customer_count") or traction.get("number_of_paying_customers", 0),
+            "revenue": traction.get("early_revenue") or traction.get("monthly_recurring_revenue"),
             "price_point": biz.get("average_price_per_customer"),
-            "growth_rate": traction.get("revenue_growth_rate"),
+            "gross_margin": biz.get("gross_margin"),
+            "growth_rate": traction.get("revenue_growth_rate") or traction.get("growth_rate"),
             "retention": traction.get("retention_metrics")
         }
     }
@@ -549,8 +552,9 @@ def extract_business_seed(data):
         "revenue_momentum": {
             "mrr": mrr_value,
             "is_mrr_calculated": (not raw_mrr or raw_mrr=="0"),
-            "growth_rate": traction.get("revenue_growth_rate", "0%"),
-            "paying_customers": traction.get("number_of_paying_customers")
+            "growth_rate": traction.get("revenue_growth_rate") or traction.get("growth_rate", "0%"),
+            "active_users": traction.get("active_users_monthly") or traction.get("user_count", 0),
+            "paying_customers": traction.get("number_of_paying_customers") or traction.get("paying_customer_count", 0),
         },
         "retention_health": {
             "churn_metric": traction.get("retention_metrics"), 
@@ -573,8 +577,8 @@ def extract_vision_data(data):
         },
         "north_star": {
             "5_year_vision": strategy.get("five_year_vision"),
-            "long_term_market": market.get("long_term_market_vision"),
-            "expansion_plan": market.get("expansion_strategy")
+            "long_term_market": market.get("long_term_market_vision") or market.get("long_term_vision"),
+            "expansion_plan": market.get("expansion_strategy"),
         },
         "category_play": {
             "definition": strategy.get("category_definition"),
@@ -595,7 +599,10 @@ def extract_operations_data(data):
     snapshot = root.get("company_snapshot", {})
     founders = root.get("founder_and_team", {}).get("founders", [])
     economics = root.get("business_model", {})
-    fundraising = root.get("fundraising_and_use_of_funds", {})
+    # Support both old "fundraising_and_use_of_funds" key and newer layout
+    # where use_of_funds lives inside vision_and_strategy
+    fundraising = root.get("fundraising_and_use_of_funds") or {}
+    vision_strategy = root.get("vision_and_strategy", {})
 
     total_founder_equity = sum([float(f.get("ownership_percentage", 0) or 0) for f in founders])
     raw_industry = root.get("problem_definition", {}).get("customer_profile", {}).get("industry", "Technology")
@@ -621,8 +628,17 @@ def extract_operations_data(data):
             "gross_margin": economics.get("gross_margin")
         },
         "the_plan": {
-            "use_of_funds": fundraising.get("use_of_funds", []),
-            "milestones": fundraising.get("key_milestones", "")
+            "use_of_funds": (
+                fundraising.get("use_of_funds")
+                or vision_strategy.get("use_of_funds")
+                or fundraising.get("use_of_funds_over_next_18_months")
+                or []
+            ),
+            "milestones": (
+                fundraising.get("key_milestones")
+                or fundraising.get("milestones")
+                or ""
+            )
         }
     }
 def check_missing_fields(data, parent_path=""):
@@ -804,12 +820,31 @@ async def normalize_input_data(raw_input: str) -> dict:
     """
     Takes any string input (messy text, partial JSON) and returns the strict Schema JSON.
     """
-    logger.info("🧹 Normalizing Input Data...")
-    
-    # Use Gemini (Flash or Pro) for this. It's great at long-context understanding.
-    # Groq works too but Gemini has larger context window if raw_input is huge.
-    llm = get_llm(temperature=0, provider="groq") 
-    
+    # ── Fast path: input is already valid structured JSON ─────────────────────
+    # When the frontend submits a properly-formed payload (or a PDF extraction
+    # is passed directly), running it through Modal/Gemma3n would corrupt numeric
+    # fields — Gemma maps them to the schema's default zeros.
+    # Skip the LLM entirely if the payload already has the top-level wrapper.
+    try:
+        candidate = json.loads(raw_input) if isinstance(raw_input, str) else raw_input
+        if isinstance(candidate, dict) and "startup_evaluation" in candidate:
+            logger.info("🧹 Input already structured — skipping LLM normalization.")
+            force_numeric_types(candidate)
+            return candidate
+        # Inner dict without wrapper — wrap it and skip
+        if isinstance(candidate, dict) and any(
+            k in candidate for k in ("company_snapshot", "founder_and_team", "traction_metrics")
+        ):
+            logger.info("🧹 Input already structured (unwrapped) — skipping LLM normalization.")
+            wrapped = {"startup_evaluation": candidate}
+            force_numeric_types(wrapped)
+            return wrapped
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # ── Slow path: free-text or schema-mismatched input → LLM normalization ───
+    logger.info("🧹 Normalizing Input Data via LLM...")
+    llm = get_llm(temperature=0, provider="modal")
     chain = PromptTemplate.from_template(NORMALIZER_PROMPT) | llm | JsonOutputParser()
 
     try:
@@ -817,17 +852,14 @@ async def normalize_input_data(raw_input: str) -> dict:
             "target_schema": json.dumps(TARGET_SCHEMA, indent=2),
             "raw_input": raw_input
         })
-        
-        # Validation Check: Ensure top-level key exists
+
         if "startup_evaluation" not in normalized_json:
-            # If the LLM returned just the inner dict, wrap it
             return {"startup_evaluation": normalized_json}
-            
+
         return normalized_json
 
     except Exception as e:
         logger.error(f"Normalization Failed: {e}")
-        # Fallback: Return empty schema structure so pipeline doesn't crash
         return TARGET_SCHEMA
 
 

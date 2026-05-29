@@ -26,7 +26,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -120,7 +120,7 @@ def calculate_economics_with_judgment(gtm_data: dict) -> dict:
 
     return metrics
 async def evaluate_business_model_with_context(business_data: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("💰 Analyzing Business Model & Economics...")
         structure = business_data.get("monetization_structure", {})
         cash = business_data.get("cash_health", {})
@@ -168,13 +168,13 @@ async def evaluate_business_model_with_context(business_data: dict) -> dict:
             return {"error": str(e)}
 @retry(**RETRY_CONFIG)
 async def business_risk_agent(business_data: dict, risk_prompt_template: str) -> str:
-    async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+    async with modal_limiter:
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(risk_prompt_template) | llm | StrOutputParser()
         return await chain.ainvoke({"business_data": json.dumps(business_data, indent=2)})
 @retry(**RETRY_CONFIG)
 async def business_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🚀 Business Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         business_data = data_package.get("business_data", {})
@@ -182,12 +182,23 @@ async def business_scoring_agent(data_package: dict) -> dict:
         template = SCORING_BIZ_PRE_SEED_PROMPT if "pre" in stage_raw else SCORING_BIZ_SEED_PROMPT
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
         
+        ms = business_data.get("monetization_structure", {})
+        rm = business_data.get("revenue_momentum", {})
+        ch = business_data.get("cash_health", {})
         raw_res = await chain.ainvoke({
             "current_date": datetime.now().strftime("%Y-%m-%d"),
             "business_data": json.dumps(business_data, indent=2),
             "calculator_report": json.dumps(data_package.get("calculator_report", {}), indent=2),
             "contradiction_report": str(data_package.get("contradiction_report", "None")),
-            "risk_report": str(data_package.get("risk_report", "None"))
+            "risk_report": str(data_package.get("risk_report", "None")),
+            # Pre-extracted to prevent hallucination of 0/null for these critical fields
+            "kv_gross_margin": str(ms.get("gross_margin") or "Not specified"),
+            "kv_pricing_model": str(ms.get("pricing_model") or "Not specified"),
+            "kv_mrr": str(rm.get("mrr") or "$0"),
+            "kv_growth_rate": str(rm.get("growth_rate") or "Not specified"),
+            "kv_active_users": str(rm.get("active_users", 0)),
+            "kv_burn_rate": str(ch.get("burn_rate") or "Not specified"),
+            "kv_runway": str(ch.get("runway_months") or "Not specified"),
         })
         
         result_dict = parse_and_repair_json(raw_res)

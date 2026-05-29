@@ -26,7 +26,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -54,9 +54,9 @@ async def tech_stack_detective(url: str):
         return {"error": str(e)}
     
 async def local_dependency_detective(tech_stack: str, acquisition_channel: str, product_desc: str):
-    async with concurrency_limiter:
+    async with modal_limiter:
         logger.info("🕵️ Dependency Detective...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         prompt_text = f"""
         Analyze platform risks for Product: {product_desc}, Tech: {tech_stack}, Channel: {acquisition_channel}.
         Respond ONLY JSON: {{ "risk_level": "High/Medium/Low", "red_flags": ["..."], "search_query_needed": "..." }}
@@ -75,10 +75,10 @@ async def local_dependency_detective(tech_stack: str, acquisition_channel: str, 
 #     capture = await capture_screenshot(website_url)
 #     if "error" in capture: return f"Visual Error: {capture['error']}"
 
-#     async with concurrency_limiter:
+#     async with groq_limiter:
 #         logger.info("👁️ Vision Analysis...")
 #         # Vision requires Gemini (Groq doesn't do image inputs well yet usually)
-#         llm = get_llm(temperature=0, provider="gemini") 
+#         llm = get_llm(temperature=0, provider="groq") 
 #         msg = HumanMessage(content=[
 #             {"type": "text", "text": prompt_template.format(company_name=company_name, website_url=website_url)},
 #             {"type": "image_url", "image_url": f"data:image/png;base64,{capture['image_b64']}"}
@@ -88,7 +88,7 @@ async def local_dependency_detective(tech_stack: str, acquisition_channel: str, 
 
 @retry(**RETRY_CONFIG)
 async def product_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🏆 Product Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(PRODUCT_SCORING_AGENT_PROMPT) | llm | StrOutputParser()

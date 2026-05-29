@@ -141,6 +141,7 @@ Pygments==2.20.0
 pyiceberg==0.11.1
 PyJWT==2.12.1
 pyparsing==3.3.2
+pdfplumber==0.11.4
 PyPDF2==3.0.1
 pyroaring==1.0.4
 pytest==9.0.2
@@ -203,4 +204,4 @@ zipp==3.23.0
 zstandard==0.25.0
 qdrant-client==1.17.1
 PyMuPDF==1.27.2.2
-locust==2.44.0
+modal==1.4.2

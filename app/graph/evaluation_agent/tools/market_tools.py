@@ -26,7 +26,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -103,7 +103,7 @@ async def tam_sam_verifier_tool(beachhead: str, location: str, claimed_size: str
 
 @retry(**RETRY_CONFIG)
 async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result):
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("📉 Market Risk...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(VALUATION_RISK_MARKET_PROMPT_TEMPLATE) | llm | StrOutputParser()
@@ -116,7 +116,7 @@ async def market_risk_agent(market_inputs, tam_result, radar_result, dep_result)
 
 @retry(**RETRY_CONFIG)
 async def market_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("⚖️ Market Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(MARKET_SCORING_AGENT_PROMPT) | llm | StrOutputParser()

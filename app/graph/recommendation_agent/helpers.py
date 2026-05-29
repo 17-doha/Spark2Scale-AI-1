@@ -1,11 +1,68 @@
 import json
 
-def calculate_trigger_strength(severity, multipliers, cross_category_support=False):
+# Funding-stage maturity index. A weakness that is forgivable early becomes a
+# kill signal once a startup claims a later stage.
+STAGE_ORDER = {
+    "idea": 0, "pre-seed": 0, "preseed": 0, "pre seed": 0,
+    "seed": 1,
+    "series a": 2, "series-a": 2, "a": 2,
+    "series b": 3, "series-b": 3, "b": 3,
+    "series c": 4, "series-c": 4, "c": 4, "growth": 4, "late": 4,
+}
+
+# Maturity index at/after which a weakness in this pillar is mission-critical.
+# Example: GTM is a minor warning pre-seed but a kill signal by Series A.
+# Keys MUST match the category token in a pattern id (FP-<TOKEN>-NNN), e.g. "ECON".
+CATEGORY_CRITICAL_STAGE = {
+    "TEAM": 0, "PROBLEM": 0, "PRODUCT": 1, "MARKET": 1,
+    "TRACTION": 2, "GTM": 2, "ECON": 2, "OPS": 2, "VISION": 3,
+}
+
+
+def stage_amplifier(stage, category):
+    """
+    Scale a risk signal by how unacceptable a weakness in this pillar is at the
+    startup's current stage, graded by how far past (or before) its criticality
+    onset the startup is.
+
+    Returns 1.0 (no change) when stage or category is unknown — preserving the
+    original deterministic strength for callers that don't pass them.
+
+    `distance = stage_index - criticality_onset`:
+      - >= +2 -> 2.0  long overdue (should have been solid stages ago)
+      -   +1  -> 1.9  overdue
+      -    0  -> 1.8  just became mission-critical (a Series-A GTM gap, etc.)
+      -   -1  -> 1.0  normal warning, one stage early
+      -   -2  -> 0.7  premature concern
+      - <= -3 -> 0.5  far too early to matter
+    The graded escalation lets a fundamental gap (e.g. Team at Series A) outrank a
+    pillar that has only just become critical, instead of flattening everything to 1.8.
+    """
+    if not stage or not category:
+        return 1.0
+    s_idx = STAGE_ORDER.get(str(stage).lower().strip(), 1)
+    onset = CATEGORY_CRITICAL_STAGE.get(str(category).upper(), 1)
+    distance = s_idx - onset
+    if distance >= 2:
+        return 2.0
+    elif distance == 1:
+        return 1.9
+    elif distance == 0:
+        return 1.8
+    elif distance == -1:
+        return 1.0
+    elif distance == -2:
+        return 0.7
+    return 0.5
+
+
+def calculate_trigger_strength(severity, multipliers, cross_category_support=False, stage=None, category=None):
     base_weight = 0.7
-    strength = round(base_weight * multipliers.get(severity, 1.0), 2)
+    strength = base_weight * multipliers.get(severity, 1.0)
     if cross_category_support:
-        strength = round(strength * 1.2, 2)
-    return strength
+        strength *= 1.2
+    strength *= stage_amplifier(stage, category)
+    return round(strength, 2)
 
 def extract_key_insights(raw_data):
     ev = raw_data.get("startup_evaluation", {})

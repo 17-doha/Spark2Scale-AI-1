@@ -24,7 +24,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -47,8 +47,8 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
     if not api_key: return {"error": "Missing SERPER_API_KEY."}
 
     # 1. Generate Queries
-    async with concurrency_limiter:
-        llm = get_llm(temperature=0, provider="groq")
+    async with modal_limiter:
+        llm = get_llm(temperature=0, provider="modal")
         query_gen_prompt = f"""
         Search Expert. Convert to 3 Google queries.
         Audience: {target_audience}
@@ -88,7 +88,7 @@ async def verify_problem_claims(problem_statement: str, target_audience: str) ->
     return results_report
 @retry(**RETRY_CONFIG)
 async def loaded_risk_check_with_search(problem_data: dict, search_results: dict, agent_prompt: str) -> str:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🛡️ Problem Risk Check...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
@@ -98,7 +98,7 @@ async def loaded_risk_check_with_search(problem_data: dict, search_results: dict
         })
 @retry(**RETRY_CONFIG)
 async def problem_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🏆 Problem Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(PROBLEM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()

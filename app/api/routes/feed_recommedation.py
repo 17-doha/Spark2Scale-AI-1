@@ -257,34 +257,25 @@ async def fetch_investor_subtags(
 @router.get("/recommend/{investor_id}", response_model=RecommendedPitchdecksResponse)
 @api_limiter.limit("60/minute")
 async def recommend_pitchdecks(request: Request, investor_id: str, k: int = TOP_K):
-    """
-    Top-K pitchdeck recommendations for a given investor.
-
-    Runs the full LangGraph:
-      1. generate_filter_tags   — tag pre-filter list (mock → swap later)
-      2. build_investor_vector  — investor's aggregated embedding
-      3. filtered_vector_search — Qdrant ANN within the filtered subset only
-      4. rerank_candidates      — Jina cross-encoder re-scores → top-K
-      5. format_output          — final shaping
-    """
     result = await filtered_search_app.ainvoke({
-        "investor_id"    : investor_id,
-        "filter_tags"    : [],
-        "investor_vector": None,
-        "candidates"     : [],
-        "final_results"  : [],
-        "errors"         : [],
+        "investor_id"       : investor_id,
+        "filter_tags"       : [],
+        "investor_vector"   : None,
+        "candidates"        : [],
+        "final_results"     : [],
+        "errors"            : [],
+        "seen_pitchdeck_ids": [],
+        "fallback_triggered": False,
+        "sibling_tags"      : [],
     })
 
     final_results = result.get("final_results", [])
-    errors        = result.get("errors", [])
 
     return RecommendedPitchdecksResponse(
         investor_id = investor_id,
         results     = final_results[:k],
         k           = k,
     )
-
 
 # ════════════════════════════════════════════════════════════════════════════
 #  SUPABASE WEBHOOKS

@@ -41,7 +41,7 @@ class TestDocumentQARequest:
         req = DocumentQARequest(file_path="/some/path.pdf", query="What is the GTM strategy?")
         assert req.file_path == "/some/path.pdf"
         assert req.query == "What is the GTM strategy?"
-        assert req.provider == "groq"            # default
+        assert req.provider == "modal"           # default (changed from "groq")
         assert req.model_name is None            # default
         assert req.chat_history is None          # default
 

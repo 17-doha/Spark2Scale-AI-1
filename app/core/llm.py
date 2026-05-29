@@ -2,6 +2,10 @@ import os
 import asyncio
 import itertools
 import threading
+import aiohttp
+import requests
+from typing import Any, Optional, List
+from langchain_core.language_models.llms import LLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.chat_models import ChatOllama
 from langchain_groq import ChatGroq  
@@ -12,46 +16,154 @@ except ImportError:
     GradioClient = None
 
 # =========================================================
-# GROQ API KEY ROTATION (Round-Robin across multiple keys)
+# MODAL CUSTOM LANGCHAIN WRAPPER
 # =========================================================
-_groq_keys = [
-    os.getenv(f"GROQ_API_KEY_{i}") 
-    for i in range(1, 5) 
-    if os.getenv(f"GROQ_API_KEY_{i}")
-]
+# The deployed /infer endpoint expects:
+#   { context, question, json_mode, temperature, max_new_tokens, top_p, top_k }
+# and returns:
+#   { answer, inference_time, json_data?, json_valid?, json_error? }
+#
+# LangChain chains pass a single `prompt` string.
+# We split on the first double-newline to extract context vs question.
+# If no separator is found the whole text becomes the question.
 
-# Fallback: use single key if numbered keys aren't set
-if not _groq_keys and Config.GROQ_API_KEY:
-    _groq_keys = [Config.GROQ_API_KEY]
+_MODAL_INFER_URL = os.getenv(
+    "MODAL_INFER_URL",
+    "https://doha-hemdan7--spark2scale-gemma3n-inference-llmengine-infer.modal.run",
+)
 
-_groq_key_cycle = itertools.cycle(_groq_keys) if _groq_keys else None
-_groq_key_lock = threading.Lock()
+class ModalCustomLLM(LLM):
+    """LangChain wrapper for the Modal-deployed Gemma 3n /infer endpoint."""
+
+    endpoint_url: str = _MODAL_INFER_URL
+    temperature:  float = 0.7
+    max_tokens:   int   = 1024   # output tokens; rest of the 8192 window goes to the prompt
+    json_mode:    bool  = False
+
+    @property
+    def _llm_type(self) -> str:
+        return "modal_gemma3n"
+
+    # ── helper: split prompt into (context, question) ────────────────────────
+    @staticmethod
+    def _split_prompt(prompt: str):
+        """
+        Convention used by evaluation_agent chains:
+          <system/data block>
+          \n\n
+          <instruction / scoring request>
+        Everything before the FIRST double blank line → context.
+        Everything after                              → question.
+        """
+        parts = prompt.split("\n\n", 1)
+        if len(parts) == 2:
+            return parts[0].strip(), parts[1].strip()
+        return "", prompt.strip()
+
+    # ── sync call (used by .invoke()) ────────────────────────────────────────
+    def _call(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
+        context, question = self._split_prompt(prompt)
+        payload = {
+            "context":        context,
+            "question":       question,
+            "json_mode":      self.json_mode,
+            "temperature":    self.temperature,
+            "max_new_tokens": self.max_tokens,
+        }
+        response = requests.post(self.endpoint_url, json=payload, timeout=300)
+        response.raise_for_status()
+        data = response.json()
+        # If the model returned valid JSON and caller asked for json_mode,
+        # prefer the pre-parsed dict stringified, else return raw answer.
+        if self.json_mode and data.get("json_valid"):
+            import json as _json
+            return _json.dumps(data["json_data"])
+        return data.get("answer", "")
+
+    # ── async call (used by .ainvoke()) ──────────────────────────────────────
+    async def _acall(
+        self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any
+    ) -> str:
+        context, question = self._split_prompt(prompt)
+        payload = {
+            "context":        context,
+            "question":       question,
+            "json_mode":      self.json_mode,
+            "temperature":    self.temperature,
+            "max_new_tokens": self.max_tokens,
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.endpoint_url, json=payload, timeout=aiohttp.ClientTimeout(total=300)
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                if self.json_mode and data.get("json_valid"):
+                    import json as _json
+                    return _json.dumps(data["json_data"])
+                return data.get("answer", "")
+
+# =========================================================
+# GROQ API KEY ROTATION  (lazy — evaluated on first call)
+# =========================================================
+_groq_key_cycle = None
+_groq_key_lock  = threading.Lock()
 
 def _get_next_groq_key() -> str:
-    """Thread-safe round-robin key selection."""
-    if not _groq_key_cycle:
-        raise ValueError("No GROQ API keys configured. Set GROQ_API_KEY_1 through GROQ_API_KEY_4 in .env")
+    global _groq_key_cycle
+    if _groq_key_cycle is None:
+        with _groq_key_lock:
+            if _groq_key_cycle is None:
+                # Reload env here so Docker / Azure injections are picked up
+                # even if this module was imported before dotenv ran.
+                from dotenv import load_dotenv as _load
+                _load(override=False)
+                keys = [
+                    os.getenv(f"GROQ_API_KEY_{i}")
+                    for i in range(1, 5)
+                    if os.getenv(f"GROQ_API_KEY_{i}")
+                ]
+                if not keys:
+                    single = os.getenv("GROQ_API_KEY") or getattr(Config, "GROQ_API_KEY", None)
+                    if single:
+                        keys = [single]
+                if not keys:
+                    raise ValueError("No GROQ API keys configured.")
+                _groq_key_cycle = itertools.cycle(keys)
     with _groq_key_lock:
         return next(_groq_key_cycle)
 
-def get_llm(temperature=None, provider="gemini", model_name=None):
+def get_llm(temperature=None, provider="gemini", model_name=None, json_mode=True):
     """
     Factory function to get the LLM instance.
-    
+
     Args:
         temperature (float): Creativity (0.0 to 1.0).
         provider (str): "gemini", "ollama", or "groq".
         model_name (str): Optional override (e.g., "llama3-70b-8192").
+        json_mode (bool): Ollama only — force JSON output. Set False for free-text
+            (e.g. a markdown report). Ignored by other providers.
     """
     final_temp = temperature if temperature is not None else Config.GEMINI_TEMPERATURE
 
-    # --- OPTION 1: GROQ (Fastest / Recommended for Logic) ---
-    if provider == "groq":
-        selected_model = model_name if model_name else "llama-3.1-8b-instant"
-        
-        # Round-robin key rotation for higher effective RPM
-        api_key = _get_next_groq_key()
+def get_llm(temperature=None, provider="gemini", model_name=None, json_mode: bool = False):
+    final_temp = temperature if temperature is not None else getattr(Config, 'GEMINI_TEMPERATURE', 0.7)
 
+    # --- MODAL (Gemma 3n fine-tuned on A100) ---
+    if provider == "modal":
+        return ModalCustomLLM(
+            temperature = final_temp,
+            max_tokens  = 1024,
+            # json_mode controls whether Modal returns structured JSON (True) or
+            # plain natural-language text (False). Extraction tasks pass True;
+            # conversational tasks (document_chat, etc.) pass False.
+            json_mode   = json_mode,
+        )
+
+    # --- OPTION 1: GROQ ---
+    if provider == "groq":
+        selected_model = model_name if model_name else "llama-3.3-70b-versatile"
+        api_key = _get_next_groq_key()
         return ChatGroq(
             temperature=final_temp,
             model_name=selected_model,
@@ -61,22 +173,25 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
             timeout=90 
         )
 
-    # --- OPTION 2: OLLAMA (Local) ---
+    # --- OPTION 2: OLLAMA ---
     if provider == "ollama":
         selected_model = model_name if model_name else "gemma3:1b"
-        
-        return ChatOllama(
-            model=selected_model,
-            format="json", 
-            temperature=final_temp,
-            base_url=getattr(Config, 'OLLAMA_BASE_URL', "http://localhost:11434")
-        )
 
-    if not Config.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
+        ollama_kwargs = dict(
+            model=selected_model,
+            temperature=final_temp,
+            base_url=getattr(Config, 'OLLAMA_BASE_URL', "http://localhost:11434"),
+        )
+        if json_mode:
+            ollama_kwargs["format"] = "json"
+        return ChatOllama(**ollama_kwargs)
+
+    # --- OPTION 3: GEMINI ---
+    if not getattr(Config, 'GEMINI_API_KEY', None):
+        raise ValueError("GEMINI_API_KEY is not set.")
 
     return ChatGoogleGenerativeAI(
-        model=Config.GEMINI_MODEL,
+        model=getattr(Config, 'GEMINI_MODEL', 'gemini-1.5-flash'),
         temperature=final_temp,
         google_api_key=Config.GEMINI_API_KEY,
         convert_system_message_to_human=True,
@@ -84,10 +199,11 @@ def get_llm(temperature=None, provider="gemini", model_name=None):
     )
 
 
+
 # =========================================================
 # T5-3B  (Hugging Face Space via Gradio — lazy-connect)
 # =========================================================
-_T5_SPACE_URL = "Dohahemdann/Spark2Scale-Space"
+_T5_SPACE_URL = "Spark2scale/Spark2Scale-Space"
 _t5_gradio_client = None
 _t5_client_lock = threading.Lock()
 

@@ -15,7 +15,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -32,7 +32,7 @@ RETRY_CONFIG = {
 
 @retry(**RETRY_CONFIG)
 async def contradiction_check(data: dict, agent_prompt: str) -> str:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🤖 Contradiction Check...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()

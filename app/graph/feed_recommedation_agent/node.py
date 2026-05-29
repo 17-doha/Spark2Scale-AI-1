@@ -19,6 +19,7 @@ from app.graph.feed_recommedation_agent.tools.tag_tools import (
     fetch_investor_tags,
     get_investor_subtags,
     get_sibling_subtags,
+    fetch_seen_pitchdeck_ids,
 )
 from app.graph.feed_recommedation_agent.tools import (
     build_investor_embedding,
@@ -94,13 +95,26 @@ async def store_node(state: FeedRecommendationState) -> dict:
 
 async def generate_filter_tags_node(state: FilteredSearchState) -> dict:
     """
-    NODE 1 — Tag pre-filter list for Qdrant.
-    Fetches real sub-tags from Neo4j associated with the investor's interests.
-    """
-    subtags = get_investor_subtags(state["investor_id"])
-    logger.info("[Node1] Found %d sub-tags for investor %s.", len(subtags), state["investor_id"])
-    return {"filter_tags": subtags}
+    NODE 1 — Tag pre-filter list + seen-pitchdeck exclusion list.
 
+    Fetches:
+      • Real sub-tags from Neo4j for the Qdrant tag filter.
+      • Already-seen pitchdeck IDs from Supabase so nodes 3 and 3b
+        can exclude them from every ANN search.
+    """
+    investor_id = state["investor_id"]
+
+    subtags     = get_investor_subtags(investor_id)
+    seen_ids    = fetch_seen_pitchdeck_ids(investor_id)
+
+    logger.info(
+        "[Node1] investor=%s  subtags=%d  seen_pitchdecks=%d",
+        investor_id, len(subtags), len(seen_ids),
+    )
+    return {
+        "filter_tags"       : subtags,
+        "seen_pitchdeck_ids": seen_ids,
+    }
 
 async def build_investor_vector_node(state: FilteredSearchState) -> dict:
     """
@@ -150,13 +164,27 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
     if state.get("investor_vector") is None:
         return {"candidates": [], "errors": ["No investor vector — skipping search."]}
 
-    filter_tags   = state.get("filter_tags", [])
-    qdrant_filter = (
-        Filter(should=[FieldCondition(key="tags", match=MatchAny(any=filter_tags))])
-        if filter_tags else None
-    )
+    filter_tags = state.get("filter_tags", [])
+    seen_ids    = state.get("seen_pitchdeck_ids", [])
+
+    def _build_filter(tags: list[str], exclude_ids: list[str]):
+        """
+        Combine an optional tag 'should' clause with an optional pitchdeck
+        'must_not' exclusion into a single Qdrant Filter.
+        Returns None when both lists are empty.
+        """
+        should   = [FieldCondition(key="tags",         match=MatchAny(any=tags))]       if tags        else []
+        must_not = [FieldCondition(key="pitchdeck_id", match=MatchAny(any=exclude_ids))] if exclude_ids else []
+
+        if not should and not must_not:
+            return None
+        return Filter(
+            should   = should   or None,
+            must_not = must_not or None,
+        )
 
     try:
+        qdrant_filter = _build_filter(filter_tags, seen_ids)
         res = get_qdrant().query_points(
             collection_name = "pitchdecks",
             query           = state["investor_vector"],
@@ -167,12 +195,14 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
         candidates = _parse_hits(res.points)
         logger.info("[Node3] Filtered search → %d candidates.", len(candidates))
 
-        # Filter returned nothing — retry without tag filter
+        # Filter returned nothing — retry without tag filter but keep seen exclusion
         if not candidates and filter_tags:
-            logger.warning("[Node3] 0 filtered results — retrying unfiltered.")
+            logger.warning("[Node3] 0 filtered results — retrying without tag filter.")
+            fallback_filter = _build_filter([], seen_ids)
             res = get_qdrant().query_points(
                 collection_name = "pitchdecks",
                 query           = state["investor_vector"],
+                query_filter    = fallback_filter,
                 limit           = RERANK_FETCH_K,
                 with_payload    = True,
             )
@@ -182,8 +212,8 @@ async def filtered_vector_search_node(state: FilteredSearchState) -> dict:
         return {"candidates": candidates}
     except Exception as e:
         logger.error("[Node3] Qdrant search failed: %s", e)
-        return {"candidates": [], "errors": [f"Qdrant search failed: {e}"]}
-        
+        return {"candidates": [], "errors": [f"Qdrant search failed: {e}"]}       
+
 
 async def rerank_candidates_node(state: FilteredSearchState) -> dict:
     """NODE 4 — Jina cross-encoder re-scores candidates → top-K. Non-fatal fallback on failure."""
@@ -219,18 +249,13 @@ async def format_output_node(state: FilteredSearchState) -> dict:
 
 async def sibling_fallback_node(state: FilteredSearchState) -> dict:
     """
-    NODE 3b — Triggered when filtered_vector_search returned fewer than TOP_K
-    candidates. Widens the search by:
-
-      1. Querying Neo4j for SubTag siblings (share a parent Tag with filter_tags).
-      2. Running a second Qdrant ANN search filtered to those sibling tags.
-      3. Merging new hits into the existing candidate list (no duplicates).
-
-    The original candidates are preserved — we only append, never replace.
+    NODE 3b — Sibling-tag fallback when node 3 returned fewer than TOP_K candidates.
+    Excludes already-seen pitchdecks from the sibling search as well.
     """
     current_candidates = state.get("candidates", [])
     filter_tags        = state.get("filter_tags", [])
     investor_vector    = state.get("investor_vector")
+    seen_ids           = state.get("seen_pitchdeck_ids", [])   # ← NEW
 
     if investor_vector is None:
         return {
@@ -239,34 +264,36 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
             "errors": ["Sibling fallback skipped: no investor vector."],
         }
 
-    # 1. How many more do we need?
-    needed = 3 # TOP_K - len(current_candidates)
+    needed = 3
     logger.info("[FallbackNode] %s", current_candidates)
     logger.info("[FallbackNode] %s", len(current_candidates))
     if needed <= 0:
         return {"fallback_triggered": False, "sibling_tags": []}
 
-    # 2. Get siblings, excluding tags already searched
-    already_seen_ids = {c["pitchdeck_id"] for c in current_candidates}
+    already_seen_ids = {c["pitchdeck_id"] for c in current_candidates} | set(seen_ids)  # ← UPDATED
+
     siblings = get_sibling_subtags(
         subtag_names=filter_tags,
-        exclude=filter_tags,            # don't re-search the same tags
+        exclude=filter_tags,
         limit=FALLBACK_SIBLING_LIMIT,
     )
 
     if not siblings:
-        logger.warning(
-            "[FallbackNode] No siblings found for filter_tags=%s", filter_tags
-        )
+        logger.warning("[FallbackNode] No siblings found for filter_tags=%s", filter_tags)
         return {
             "fallback_triggered": True,
             "sibling_tags": [],
             "errors": ["Sibling fallback: no Neo4j siblings found."],
         }
 
-    # 3. Second Qdrant search — filtered to sibling tags only
+    # Combine sibling tag filter with seen-pitchdeck exclusion
+    must_not = (
+        [FieldCondition(key="pitchdeck_id", match=MatchAny(any=list(already_seen_ids)))]
+        if already_seen_ids else []
+    )
     sibling_filter = Filter(
-        should=[FieldCondition(key="tags", match=MatchAny(any=siblings))]
+        should   = [FieldCondition(key="tags", match=MatchAny(any=siblings))],
+        must_not = must_not or None,
     )
 
     try:
@@ -274,19 +301,19 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
             collection_name = "pitchdecks",
             query           = investor_vector,
             query_filter    = sibling_filter,
-            limit           = needed * 2,       # fetch extra; reranker trims later
+            limit           = needed * 2,
             with_payload    = True,
         )
         new_hits = [
             {
-                "pitchdeck_id"     : h.payload.get("pitchdeck_id"),
-                "startup_id"       : h.payload.get("startup_id"),
-                "tags"             : h.payload.get("tags", []),
-                "vector_score"     : round(h.score, 4),
-                "from_fallback"    : True,      # tag origin for observability
+                "pitchdeck_id" : h.payload.get("pitchdeck_id"),
+                "startup_id"   : h.payload.get("startup_id"),
+                "tags"         : h.payload.get("tags", []),
+                "vector_score" : round(h.score, 4),
+                "from_fallback": True,
             }
             for h in res.points
-            if h.payload.get("pitchdeck_id") not in already_seen_ids
+            if h.payload.get("pitchdeck_id") not in already_seen_ids  # double-guard
         ]
     except Exception as e:
         logger.error("[FallbackNode] Qdrant sibling search failed: %s", e)
@@ -301,7 +328,6 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
         "[FallbackNode] Merged %d original + %d sibling hits = %d total candidates.",
         len(current_candidates), len(new_hits), len(merged),
     )
-
     return {
         "candidates"        : merged,
         "fallback_triggered": True,
