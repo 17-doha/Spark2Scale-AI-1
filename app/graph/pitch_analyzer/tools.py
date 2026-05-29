@@ -623,16 +623,28 @@ def get_tools_definition() -> list:
 # ═══════════════════════════════════════════════════════════════════════════════
 import numpy as np  # kept for use elsewhere in this file
 
-from .audio_analysis import (
-    compute_audio_features,
-    RMSCalibrator,
-    detect_nervousness,
-    detect_acoustic_anomalies,
-    detect_monotone,
-    detect_speaking_rate,
-    detect_vocal_stress_trajectory,
-    HYSTERESIS_FRAMES,
-)
+try:
+    from .audio_analysis import (
+        compute_audio_features,
+        RMSCalibrator,
+        detect_nervousness,
+        detect_acoustic_anomalies,
+        detect_monotone,
+        detect_speaking_rate,
+        detect_vocal_stress_trajectory,
+        HYSTERESIS_FRAMES,
+    )
+except ImportError:
+    from audio_analysis import (  # noqa: F401  (bare import via sys.path hack in main.py)
+        compute_audio_features,
+        RMSCalibrator,
+        detect_nervousness,
+        detect_acoustic_anomalies,
+        detect_monotone,
+        detect_speaking_rate,
+        detect_vocal_stress_trajectory,
+        HYSTERESIS_FRAMES,
+    )
 
 
 # 8. INVESTMENT READINESS REPORT BUILDER
