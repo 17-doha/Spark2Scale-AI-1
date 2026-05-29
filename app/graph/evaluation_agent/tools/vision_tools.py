@@ -29,7 +29,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -57,7 +57,7 @@ async def analyze_category_future(vision_data: dict) -> dict:
             combined_signals = f"=== SERPER ===\n{market_text}"
         
         # LLM Phase (Sequential)
-        async with concurrency_limiter:
+        async with groq_limiter:
             logger.info("🌐 Vision Analysis (LLM)...")
             llm = get_llm(temperature=0, provider="groq")
             prompt = PromptTemplate.from_template(CATEGORY_FUTURE_PROMPT)
@@ -74,7 +74,7 @@ async def analyze_category_future(vision_data: dict) -> dict:
         return {"error": str(e)}
 @retry(**RETRY_CONFIG)
 async def vision_risk_agent(vision_data: dict, market_analysis: dict, template: str) -> str:
-    async with concurrency_limiter:
+    async with groq_limiter:
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
         return await chain.ainvoke({
@@ -108,7 +108,7 @@ async def get_funding_benchmarks(location: str, stage: str, sector: str) -> str:
     
 @retry(**RETRY_CONFIG)
 async def vision_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("⚖️ Vision Scoring...")
         llm = get_llm(temperature=0, provider="groq")
         chain = PromptTemplate.from_template(VISION_SCORING_AGENT_PROMPT) | llm | StrOutputParser()

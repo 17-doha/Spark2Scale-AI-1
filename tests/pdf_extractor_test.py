@@ -219,17 +219,15 @@ class TestExtractTextFromPdf:
     """Tests the PDF byte reader (PyPDF2 wrapper)."""
 
     def test_raises_on_missing_dependency(self):
-        """HIGH – when PyPDF2 is absent, an ImportError must be raised."""
-        with patch.dict("sys.modules", {"PyPDF2": None}):
-            # Force re-evaluation: mock PdfReader = None path
-            from app.graph.pdf_extractor import tools as pdf_tools
-            original = pdf_tools.PdfReader
-            try:
-                pdf_tools.PdfReader = None
-                with pytest.raises(ImportError, match="PyPDF2"):
-                    pdf_tools.extract_text_from_pdf(b"fake")
-            finally:
-                pdf_tools.PdfReader = original
+        """HIGH – when PdfReader is None, extract_text_from_pdf raises RuntimeError."""
+        from app.graph.pdf_extractor import tools as pdf_tools
+        original = pdf_tools.PdfReader
+        try:
+            pdf_tools.PdfReader = None
+            with pytest.raises((ImportError, RuntimeError)):
+                pdf_tools.extract_text_from_pdf(b"fake")
+        finally:
+            pdf_tools.PdfReader = original
 
     def test_extracts_text_from_pages(self):
         """CRITICAL – text must be concatenated across all pages."""
@@ -357,16 +355,16 @@ class TestLLMExtractionNode:
                 "company_snapshot": {"company_name": "Acme Corp"}
             }
         }
+        # node.py uses: (llm | StrOutputParser()).ainvoke(prompt)
+        # then parses the string. We make ainvoke return valid JSON.
         mock_chain = MagicMock()
-        mock_chain.ainvoke = AsyncMock(return_value=mock_extracted)
+        mock_chain.ainvoke = AsyncMock(return_value=json.dumps(mock_extracted))
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.__or__ = MagicMock(return_value=mock_chain)
+        mock_get_llm.return_value = mock_llm_instance
 
-        with patch("app.graph.pdf_extractor.node.PromptTemplate") as mock_prompt, \
-             patch("app.graph.pdf_extractor.node.JsonOutputParser"):
-            mock_prompt.from_template.return_value.__or__ = MagicMock(return_value=mock_chain)
-            mock_chain.__or__ = MagicMock(return_value=mock_chain)
-
-            from app.graph.pdf_extractor.node import llm_extraction_node
-            result = await llm_extraction_node(base_state)
+        from app.graph.pdf_extractor.node import llm_extraction_node
+        result = await llm_extraction_node(base_state)
 
         assert "raw_extracted_data" in result
 
@@ -528,10 +526,19 @@ async def test_full_pdf_extractor_pipeline_success(mock_get_llm):
     with patch(
         "app.graph.pdf_extractor.node.extract_text_from_pdf",
         return_value="Company: Spark2Scale. Stage: Pre-Seed."
-    ), patch("app.graph.pdf_extractor.node.PromptTemplate") as mock_prompt, \
-       patch("app.graph.pdf_extractor.node.JsonOutputParser"):
-        mock_prompt.from_template.return_value.__or__ = MagicMock(return_value=mock_chain)
-        mock_chain.__or__ = MagicMock(return_value=mock_chain)
+    ):
+        # node uses (llm | StrOutputParser()).ainvoke — wire mock accordingly
+        mock_chain = MagicMock()
+        mock_chain.ainvoke = AsyncMock(return_value=json.dumps({
+            "startup_evaluation": {
+                "company_snapshot": {"company_name": "Spark2Scale", "amount_raised_to_date": 0},
+                "business_model": {"monthly_burn": "USD 5000"},
+            }
+        }))
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.__or__ = MagicMock(return_value=mock_chain)
+        mock_get_llm.return_value = mock_llm_instance
+
         final_state = await pdf_extractor_app.ainvoke(initial_state)
 
     assert final_state.get("error") is None

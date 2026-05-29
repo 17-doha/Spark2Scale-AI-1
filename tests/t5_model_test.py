@@ -59,6 +59,10 @@ async def test_t5_model_latency():
     The test records actual elapsed time and FAILS if it exceeds the budget,
     giving a clear message with the measured value.
     """
+    import os
+    if not os.getenv("HF_TOKEN"):
+        pytest.skip("HF_TOKEN not set — skipping live T5 integration test")
+
     start = time.perf_counter()
     result = await get_t5_insight(_SAMPLE_PROMPT)
     elapsed = time.perf_counter() - start
@@ -83,6 +87,10 @@ async def test_t5_model_returns_answer():
     - The result does NOT start with a known failure prefix
       (e.g. 'T5 Model unavailable' or 'T5 Insight failed')
     """
+    import os
+    if not os.getenv("HF_TOKEN"):
+        pytest.skip("HF_TOKEN not set — skipping live T5 integration test")
+
     result = await get_t5_insight(_SAMPLE_PROMPT)
 
     print(f"\n📥 Full T5 answer:\n{result}")

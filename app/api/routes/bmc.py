@@ -17,11 +17,15 @@ logger = get_logger("BMCAPI")
 
 def _maybe_parse(payload):
     if isinstance(payload, str):
+        s = payload.strip()
         try:
-            return json.loads(payload)
+            return json.loads(s)
         except json.JSONDecodeError:
-            logger.warning("[BMC] Could not parse string payload as JSON; using {}.")
-            return {}
+            # Not JSON — keep the raw text so extract_bmc_context can use it as
+            # free-text evidence instead of silently discarding it (which caused
+            # the model to fabricate [Validated] claims against empty sources).
+            logger.info("[BMC] Payload is free text, not JSON; passing through as raw text.")
+            return s
     return payload or {}
 
 

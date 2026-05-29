@@ -121,18 +121,17 @@ async def planner_node(state: AgentState):
     Generates a strategic plan for the evaluation based on initial user data.
     """
     user_data = state.get("user_data", {})
-    
-    llm = get_llm(temperature=0, provider="groq")
-    
-    # Structured output binding
-    structured_llm = llm.with_structured_output(Plan)
+
+    llm = get_llm(temperature=0, provider="modal")
+
+    chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
-        plan_obj = await structured_llm.ainvoke(
-            PLANNER_PROMPT.format(user_data=json.dumps(user_data, indent=2))
-        )
-        return {"plan": plan_obj.model_dump()}
+        plan_dict = await chain.ainvoke({"user_data": json.dumps(user_data, indent=2)})
+        # Validate with Pydantic and return dict
+        return {"plan": Plan(**plan_dict).model_dump()}
     except Exception as e:
+        logger.error(f"Planning Failed: {e}")
         # Fallback empty plan if fails
         return {"plan": {"steps": [], "key_risks": ["Planning Failed"], "desired_output_structure": []}}
 
@@ -272,15 +271,14 @@ async def product_final_scoring_node(state: AgentState):
 async def planner_node(state: AgentState):
     """Generates a strategic plan."""
     user_data = state.get("user_data", {})
-    llm = get_llm(temperature=0, provider="groq")  
-    structured_llm = llm.with_structured_output(Plan)
+    llm = get_llm(temperature=0, provider="modal")
+    chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
-        plan_obj = await structured_llm.ainvoke(
-            PLANNER_PROMPT.format(user_data=json.dumps(user_data, indent=2))
-        )
-        return {"plan": plan_obj.model_dump()}
-    except Exception:
+        plan_dict = await chain.ainvoke({"user_data": json.dumps(user_data, indent=2)})
+        return {"plan": Plan(**plan_dict).model_dump()}
+    except Exception as e:
+        logger.error(f"Planning Failed: {e}")
         return {"plan": {"steps": [], "key_risks": ["Planning Failed"], "desired_output_structure": []}}
 
 async def team_node(state: AgentState):
@@ -575,7 +573,12 @@ def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, st
             "operations": 0.5
         }
     else:
-        weights = {"team": 1.0, "problem": 1.0, "product": 1.0, "market": 1.0, "traction": 1.5, "gtm": 1.3, "business": 1.2, "vision": 1.0, "operations": 1.0}
+        # Weights calibrated to Gompers et al. (2019 JFE, n=885 VCs):
+        # Team: 47% cite as most important factor → highest weight.
+        # Business model: 83% cite as important → 2nd.
+        # Product: 74% → 3rd. Market: 68% → 4th.
+        # Traction/GTM not in top-cited VC criteria; 20% don't forecast cash flows pre-investment.
+        weights = {"team": 2.0, "problem": 1.0, "product": 1.2, "market": 1.1, "traction": 1.0, "gtm": 0.9, "business": 1.5, "vision": 1.0, "operations": 0.8}
 
     weighted_total = sum(rubric.get(k, 0) * weights.get(k, 1.0) for k in rubric)
     
@@ -626,7 +629,7 @@ async def final_node(state: AgentState):
     agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
 
     # 4. Generate with LLM
-    llm = get_llm(temperature=0, provider="groq") 
+    llm = get_llm(temperature=0, provider="modal")
     chain = PromptTemplate.from_template(FINAL_SYNTHESIS_PROMPT) | llm | JsonOutputParser()
 
     try:
@@ -705,12 +708,54 @@ async def final_node(state: AgentState):
             final_json["founder_output"]["weighted_score"] = weighted_total          # Fix
             final_json["founder_output"]["verdict"] = verdict                      # Fix
 
+        # ====================================================
+        # 🎯 TOP 3 PRIORITIES (Generated programmatically — LLM is unreliable for this)
+        # ====================================================
+        scored_dims = []
+        for key in required_dims:
+            report = state.get(f"{key}_report", {})
+            score_val = rubric_5.get(key, 0)
+            red_flags = report.get("red_flags", [])
+            explanation = report.get("explanation", "")
+            scored_dims.append({
+                "dimension": key,
+                "score": score_val,
+                "red_flags": red_flags,
+                "explanation": explanation
+            })
+        
+        # Sort by score ascending → worst dimensions first
+        scored_dims.sort(key=lambda x: x["score"])
+        
+        generated_priorities = []
+        for dim in scored_dims:
+            if len(generated_priorities) >= 3:
+                break
+            dim_name = dim["dimension"].title()
+            # Use the first red flag as the priority source, fall back to explanation
+            if dim["red_flags"]:
+                flag_text = dim["red_flags"][0]
+                # Clean common prefixes
+                for prefix in ["Flag 1:", "Flag 2:", "Flag 3:", "Risk 1:", "Risk 2:", "Risk 3:"]:
+                    if flag_text.strip().startswith(prefix):
+                        flag_text = flag_text.strip()[len(prefix):].strip()
+                generated_priorities.append(f"{len(generated_priorities)+1}. [{dim_name}] {flag_text}")
+            elif dim["explanation"]:
+                summary = dim["explanation"][:150].rsplit(" ", 1)[0]  # Truncate at word boundary
+                generated_priorities.append(f"{len(generated_priorities)+1}. [{dim_name}] {summary}")
+        
+        # Always overwrite — don't trust the LLM output for this field
+        if "Content" in final_json.get("founder_output", {}):
+            final_json["founder_output"]["Content"]["Top 3 Priorities"] = generated_priorities
+        else:
+            final_json["founder_output"]["top_3_priorities"] = generated_priorities
+
     except Exception as e:
         logger.error(f"Final Synthesis Failed: {e}")
         final_json = {
             "error": str(e),
             "investor_output": {"verdict": verdict, "weighted_score": weighted_total, "scorecard_grid": rubric_5},
-            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": []}
+            "founder_output": {"verdict": verdict, "score": weighted_total, "scorecard_grid": rubric_5, "dimension_analysis": [], "top_3_priorities": ["1. Review and address the evaluation errors.", "2. Resubmit with complete data.", "3. Consult with a mentor or advisor."]}
         }
 
     return {"final_report": final_json}

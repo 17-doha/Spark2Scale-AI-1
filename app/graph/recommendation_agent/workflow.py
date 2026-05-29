@@ -31,16 +31,55 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     # 2. Convert Pydantic scores to dict format for pattern detection
     # Pattern detection expects: scores['team']['score'] and scores['team']['description']
     scores_dict = data.scores.model_dump()
-    
-    # 3. Deterministic Analysis
-    matched_patterns = detect_patterns(scores_dict)
+
+    # Weakest evaluation pillar — drives the targeted multi-source intel search.
+    lowest_category = min(scores_dict, key=lambda k: scores_dict[k].get("score", 5))
+
+    # 3. Deterministic Analysis (stage-aware: late-stage weaknesses weigh heavier)
+    matched_patterns = detect_patterns(scores_dict, stage=data.stage)
     
     # 4. AI Nodes
     agent = AgentNodes(api_key)
     replacements = agent.improve_statements(insights)
+
+    # 4b. Fallback: improve_statements returns None when Gemini hits a 429
+    # quota error. Without this, the "Statement Refinements" page would
+    # silently disappear for some startups — making reports structurally
+    # inconsistent. Build a passthrough from the real insights so the
+    # section ALWAYS renders, agent-sourced, for every startup.
+    if not replacements:
+        logger.warning(
+            "Refined statements unavailable (model quota) for request_id "
+            f"{request_id}; using passthrough fallback from insights."
+        )
+        _fallback_why = (
+            "Original retained — AI refinement was unavailable for this run "
+            "(model quota). Regenerate for an enhanced version."
+        )
+        replacements = {
+            key: {
+                "original": str(insights.get(key, "N/A")),
+                "recommended": str(insights.get(key, "N/A")),
+                "why_better": _fallback_why,
+            }
+            for key in (
+                "problem_statement",
+                "founder_market_fit",
+                "differentiation",
+                "core_stickiness",
+                "five_year_vision",
+                "beachhead_market",
+                "gap_analysis",
+            )
+        }
     
     # Run market intelligence before synthesis
-    market_signals = run_market_intel(insights, tavily_api_key=Config.TAVILY_API_KEY)
+    market_signals = run_market_intel(
+        insights,
+        tavily_api_key=Config.TAVILY_API_KEY,
+        lowest_category=lowest_category,
+        competitor=insights.get("top_competitor"),
+    )
     
     final_report = agent.synthesize_report(data, matched_patterns, insights, replacements, market_signals)
     

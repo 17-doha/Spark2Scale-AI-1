@@ -196,29 +196,29 @@ Generate THREE JSON outputs.
 ### PART 1: INVESTOR OUTPUT (JSON key: "investor_output")
 * **Tone:** Analytical, skeptical, detailed.
 * **Content:**
-    * **Executive Summary:** Write a 3-4 sentence narrative paragraph. Start with "This [Stage] opportunity presents a 'Hook' of...". Explicitly contrast the strongest signal (The Hook) against the critical flaw (The Anchor).
-    * **Weighted Score:** {weighted_score}
-    * **Verdict:** {verdict_band}
-    * **Deal Breakers:** List 3 specific red flags from the EVIDENCE.
-    * **Diligence Questions:** 3 hard questions based on risks.
-    * **Scorecard Grid:** Dictionary of scores {{ "Team": X, ... }}
-    * **Dimension Rationales (List of objects):**
+    * `executive_summary`: Write a 3-4 sentence narrative paragraph. Start with "This [Stage] opportunity presents a 'Hook' of...". Explicitly contrast the strongest signal (The Hook) against the critical flaw (The Anchor).
+    * `weighted_score`: {weighted_score}
+    * `verdict`: {verdict_band}
+    * `deal_breakers`: List 3 specific red flags from the EVIDENCE.
+    * `diligence_questions`: 3 hard questions based on risks.
+    * `scorecard_grid`: Dictionary of scores {{ "team": X, ... }}
+    * `dimension_rationales`: List of objects, each with:
         * `dimension`: Name
         * `rationale`: 1-sentence bottom line justification.
 
 ### PART 2: FOUNDER OUTPUT (JSON key: "founder_output")
 * **Tone:** Direct, constructive, and actionable. If Stage is "Pre-Seed", act as an empathetic startup coach guiding them to their first milestone.
 * **Content:**
-    * **Executive Summary:** Write a 2-3 sentence overview of their application's standing.
-    * **Scorecard Grid:** Dictionary of scores.
-    * **Dimension Analysis (List of objects):**
+    * `executive_summary`: Write a 2-3 sentence overview of their application's standing.
+    * `scorecard_grid`: Dictionary of scores.
+    * `dimension_analysis`: List of objects, each with:
         * `dimension`: Name (e.g., "Team")
         * `score`: Numeric (0-5)
         * `confidence_level`: High/Medium/Low.
         * `justification`: Bulletproof reasoning citing specific evidence.
         * `red_flags`: List of specific risks found.
         * `improvements`: 1-2 SPECIFIC, TACTICAL steps. Focus on immediate validation.
-    * **Top 3 Priorities (List of strings):** ["1. Fix X...", "2. Build Y...", "3. Talk to Z..."]
+    * `top_3_priorities`: **MANDATORY**. A list of exactly 3 strings. Look at the 3 dimensions with the LOWEST scores from the AGENT EVIDENCE above, and write one specific, actionable priority for each. Each priority MUST reference the actual startup data — mention the real weakness, the real risk, or the real missing element. Do NOT use generic placeholder text. Example structure: ["1. <action> to address <specific weakness from evidence>", ...]. This field MUST NOT be empty or omitted.
 
 ### PART 3: VISUALIZATIONS (JSON key: "visualizations")
 * **Content:** Based on the agent evidence, categorize the overall risk levels for the risk heatmap.
@@ -229,13 +229,34 @@ Generate THREE JSON outputs.
         * `gtm_distribution_risk`: "Low" / "Medium" / "High"
 
 ### OUTPUT FORMAT
-Return strictly VALID JSON with three keys: "investor_output", "founder_output", and "visualizations".
+Return strictly VALID JSON matching this exact skeleton:
+{{
+  "investor_output": {{
+    "executive_summary": "...",
+    "weighted_score": 0,
+    "verdict": "...",
+    "deal_breakers": ["...", "...", "..."],
+    "diligence_questions": ["...", "...", "..."],
+    "scorecard_grid": {{}},
+    "dimension_rationales": [{{ "dimension": "...", "rationale": "..." }}]
+  }},
+  "founder_output": {{
+    "executive_summary": "...",
+    "scorecard_grid": {{}},
+    "dimension_analysis": [{{ "dimension": "...", "score": 0, "confidence_level": "...", "justification": "...", "red_flags": [], "improvements": [] }}],
+    "top_3_priorities": ["<real priority 1 from evidence>", "<real priority 2 from evidence>", "<real priority 3 from evidence>"]
+  }},
+  "visualizations": {{
+    "risk_heatmap": {{ "team_risk": "...", "market_risk": "...", "product_execution_risk": "...", "gtm_distribution_risk": "..." }}
+  }}
+}}
 
 IMPORTANT OUTPUT INSTRUCTIONS:
 1. Return ONLY the JSON object. 
 2. Do NOT output markdown formatting like "###" or "**".
 3. Start output immediately with "{{" and end with "}}".
 4. IMPORTANT: Use SINGLE QUOTES (') for any internal quoting.
+5. The "top_3_priorities" key inside "founder_output" is REQUIRED — never omit it.
 """
 
 NORMALIZER_PROMPT = """

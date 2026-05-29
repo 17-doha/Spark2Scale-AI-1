@@ -73,11 +73,7 @@ def get_qdrant() -> QdrantClient:
 # ── Collection initializer ───────────────────────────────────────────────────
 
 def init_qdrant_collections() -> None:
-    """
-    Idempotent — creates each collection only if it does not already exist.
-    Call once at application startup.
-    """
-    client = get_qdrant()
+    client   = get_qdrant()
     existing = {c.name for c in client.get_collections().collections}
 
     if VDB_SEARCH_ALGORITHM == "DOT":
@@ -97,7 +93,6 @@ def init_qdrant_collections() -> None:
         else:
             logger.info("[Qdrant] Collection '%s' already exists.", name)
 
-        # Ensure 'tags' payload index exists for investors and pitchdecks
         if name in ["investors", "pitchdecks"]:
             client.create_payload_index(
                 collection_name=name,
@@ -105,3 +100,12 @@ def init_qdrant_collections() -> None:
                 field_schema=PayloadSchemaType.KEYWORD,
             )
             logger.info("[Qdrant] Ensured 'keyword' index for 'tags' in '%s'.", name)
+
+        # ── NEW: pitchdeck_id index (required for must_not exclusion filter) ──
+        if name == "pitchdecks":
+            client.create_payload_index(
+                collection_name=name,
+                field_name="pitchdeck_id",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+            logger.info("[Qdrant] Ensured 'keyword' index for 'pitchdeck_id' in 'pitchdecks'.")

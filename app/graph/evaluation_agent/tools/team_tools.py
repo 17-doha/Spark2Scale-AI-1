@@ -20,7 +20,7 @@ from ..helpers import (
 )
 from app.core.llm import get_llm
 from app.core.logger import get_logger
-from app.core.limiter import concurrency_limiter
+from app.core.limiter import groq_limiter, modal_limiter
 # Load Environment Variables
 
 # --- INITIALIZE LOGGER ---
@@ -37,19 +37,18 @@ RETRY_CONFIG = {
 
 @retry(**RETRY_CONFIG)
 async def team_risk_check(data: dict, agent_prompt: str) -> str:
-    async with concurrency_limiter:
+    async with modal_limiter:
         logger.info("📉 Team Risk Check...")
-        llm = get_llm(temperature=0, provider="groq")
+        llm = get_llm(temperature=0, provider="modal")
         chain = PromptTemplate.from_template(agent_prompt) | llm | StrOutputParser()
         return await chain.ainvoke({"json_data": json.dumps(data, indent=2)})
 
 
 @retry(**RETRY_CONFIG)
 async def team_scoring_agent(data_package: dict) -> dict:
-    async with concurrency_limiter:
+    async with groq_limiter:
         logger.info("🏆 Team Scoring...")
         llm = get_llm(temperature=0, provider="groq")
-        # Use StrOutputParser + repair_json
         chain = PromptTemplate.from_template(TEAM_SCORING_AGENT_PROMPT) | llm | StrOutputParser()
         
         raw_res = await chain.ainvoke({

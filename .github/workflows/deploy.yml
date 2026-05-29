@@ -5,8 +5,78 @@ on:
     branches: [ "Merging" ]
 
 jobs:
-  build:
+  test:
+    name: Run Pytest Suite
     runs-on: ubuntu-latest
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      NEO4J_URI: ${{ secrets.NEO4J_URI }}
+      NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
+      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+      FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
+      FIRECRAWL_KEY: ${{ secrets.FIRECRAWL_KEY }}
+      FMP_KEY: ${{ secrets.FMP_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+      MODAL_INFER_URL: ${{ secrets.MODAL_INFER_URL }}
+      LANGCHAIN_TRACING_V2: "false"
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies for PyAudio
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for test-gemma trigger
+        id: gemma_flag
+        run: |
+          if echo "${{ github.event.head_commit.message }}" | grep -q "test-gemma"; then
+            echo "run_gemma=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_gemma=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests — unit only (no Gemma, no live network)
+        if: steps.gemma_flag.outputs.run_gemma == 'false'
+        run: |
+          pytest tests/ \
+            --asyncio-mode=auto \
+            -m "not integration and not gemma" \
+            -v \
+            --tb=short
+
+      - name: Run tests — unit + Gemma (triggered by "test-gemma" in commit message)
+        if: steps.gemma_flag.outputs.run_gemma == 'true'
+        run: |
+          pytest tests/ \
+            --asyncio-mode=auto \
+            -m "not integration" \
+            -v \
+            --tb=short
+
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test  # ← deploy only runs when all tests pass
 
     steps:
       - name: Check out the repo
@@ -24,5 +94,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # Replace 'your_username' with your actual Docker Hub username
           tags: dohahemdan17/spark2scale-ai:v2
