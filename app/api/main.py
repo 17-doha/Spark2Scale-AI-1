@@ -43,7 +43,7 @@ def value_error_handler(request: Request, exc: ValueError):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000"],
+    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000", "https://spark2scale-client.azurewebsites.net"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

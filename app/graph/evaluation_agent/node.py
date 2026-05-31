@@ -121,9 +121,9 @@ async def planner_node(state: AgentState):
     Generates a strategic plan for the evaluation based on initial user data.
     """
     user_data = state.get("user_data", {})
-    
+
     llm = get_llm(temperature=0, provider="modal")
-    
+
     chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
@@ -271,7 +271,7 @@ async def product_final_scoring_node(state: AgentState):
 async def planner_node(state: AgentState):
     """Generates a strategic plan."""
     user_data = state.get("user_data", {})
-    llm = get_llm(temperature=0, provider="modal")  
+    llm = get_llm(temperature=0, provider="modal")
     chain = PromptTemplate.from_template(PLANNER_PROMPT) | llm | JsonOutputParser()
     
     try:
@@ -573,7 +573,12 @@ def calculate_weighted_score(scores: dict, stage: str) -> tuple[float, float, st
             "operations": 0.5
         }
     else:
-        weights = {"team": 1.0, "problem": 1.0, "product": 1.0, "market": 1.0, "traction": 1.5, "gtm": 1.3, "business": 1.2, "vision": 1.0, "operations": 1.0}
+        # Weights calibrated to Gompers et al. (2019 JFE, n=885 VCs):
+        # Team: 47% cite as most important factor → highest weight.
+        # Business model: 83% cite as important → 2nd.
+        # Product: 74% → 3rd. Market: 68% → 4th.
+        # Traction/GTM not in top-cited VC criteria; 20% don't forecast cash flows pre-investment.
+        weights = {"team": 2.0, "problem": 1.0, "product": 1.2, "market": 1.1, "traction": 1.0, "gtm": 0.9, "business": 1.5, "vision": 1.0, "operations": 0.8}
 
     weighted_total = sum(rubric.get(k, 0) * weights.get(k, 1.0) for k in rubric)
     
@@ -624,7 +629,7 @@ async def final_node(state: AgentState):
     agent_summaries += f"\n=== SPARK2SCALE T5-3B DEEP INSIGHT ===\n{t5_insight}\n"
 
     # 4. Generate with LLM
-    llm = get_llm(temperature=0, provider="modal") 
+    llm = get_llm(temperature=0, provider="modal")
     chain = PromptTemplate.from_template(FINAL_SYNTHESIS_PROMPT) | llm | JsonOutputParser()
 
     try:

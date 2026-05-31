@@ -144,18 +144,18 @@ def patch_concurrency_limiter():
     """
     noop = _make_noop_ctx()
 
+    _limiter_names = ["groq_limiter", "modal_limiter", "concurrency_limiter"]
+    _tool_modules = [
+        "vision_tools", "business_tools", "gtm_tools", "operations_tools",
+        "problem_tools", "product_tools", "team_tools", "traction_tools",
+        "general_tools", "market_tools",
+    ]
     modules_to_patch = [
-        "app.core.limiter.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.vision_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.business_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.gtm_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.operations_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.problem_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.product_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.team_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.traction_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.general_tools.concurrency_limiter",
-        "app.graph.evaluation_agent.tools.market_tools.concurrency_limiter",
+        f"app.core.limiter.{lim}" for lim in _limiter_names
+    ] + [
+        f"app.graph.evaluation_agent.tools.{mod}.{lim}"
+        for mod in _tool_modules
+        for lim in _limiter_names
     ]
 
     patchers = [patch(target, noop) for target in modules_to_patch]
