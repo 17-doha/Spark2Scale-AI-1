@@ -133,8 +133,8 @@ async def get_similar_investors(request: Request, investor_id: str, k: int = TOP
             if h.payload.get("investor_id") != investor_id
         ][:k]
     except Exception as e:
-        logger.error("[similar-investors] Qdrant search failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("[similar-investors] Qdrant search failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Search failed. Please try again.")
 
     return SimilarInvestorsResponse(investor_id=investor_id, results=results, k=k)
 
@@ -161,7 +161,8 @@ async def handle_interaction(payload: InteractionPayload, background_tasks: Back
     try:
         tag_data = InteractionService.fetch_pitchdeck_tags(payload.pitch_id)
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("[interactions] Failed to fetch pitchdeck tags: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process interaction. Please try again.")
 
     parent_tags = tag_data["parent_tags"]
     sub_tags    = tag_data["sub_tags"]

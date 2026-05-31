@@ -91,5 +91,5 @@ async def summarize_chat(request: ChatSummarizerRequest):
             detail="AI returned an unparseable response. Please try again."
         )
     except Exception as e:
-        logger.error(f"[chat_summarizer] Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail=f"Summarization failed: {e}")
+        logger.error(f"[chat_summarizer] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Summarization failed. Please try again.")

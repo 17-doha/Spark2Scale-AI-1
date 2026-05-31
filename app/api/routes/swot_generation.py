@@ -1,9 +1,10 @@
 import json
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from app.graph.document_generator.workflow import document_generator_app
 from app.api.schemas import SWOTRequest, SWOTResponse
 from app.core.logger import get_logger
+from app.core.auth import get_current_user
 
 router = APIRouter()
 logger = get_logger("SWOTAPI")
@@ -22,7 +23,7 @@ def _dump_debug(payload: dict):
 
 
 @router.post("/generate", response_model=SWOTResponse)
-async def generate_swot(request: SWOTRequest):
+async def generate_swot(request: SWOTRequest, current_user=Depends(get_current_user)):
     """
     Triggers the Document Generator Agent to generate a SWOT analysis.
     """
@@ -111,5 +112,5 @@ async def generate_swot(request: SWOTRequest):
         )
 
     except Exception as e:
-        logger.error(f"[ERROR] SWOT Generation Failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[ERROR] SWOT Generation Failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="SWOT generation failed. Please try again.")

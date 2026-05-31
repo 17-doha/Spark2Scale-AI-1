@@ -6,12 +6,12 @@ import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
-# from app.core.metrics import active_pitch_sessions
 
+from app.core.auth import get_current_user
 from app.graph.pitch_analyzer.main import load_company_context, run_extraction
 
 router = APIRouter()
@@ -44,7 +44,7 @@ async def env_check():
 
 
 @router.get("/get-report", summary="Retrieve Last Generated Report")
-async def get_report(pitchdeckid: Optional[str] = None):
+async def get_report(pitchdeckid: Optional[str] = None, current_user=Depends(get_current_user)):
     """
     Returns the last generated report.
     If pitchdeckid is provided, tries to fetch session_report from Supabase first.
@@ -75,11 +75,13 @@ async def get_report(pitchdeckid: Optional[str] = None):
     try:
         return json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read report: {e}")
+        import logging as _log
+        _log.error("[GET-REPORT] Failed to read report: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to read report.")
 
 
 @router.post("/generate-report", summary="Build Investment Readiness Report")
-async def generate_report_from_state():
+async def generate_report_from_state(current_user=Depends(get_current_user)):
     """
     Builds the final report from the raw session state saved by the worker.
     Call this ALWAYS at the end of the session, whether it ended early or full time.
@@ -101,7 +103,8 @@ async def generate_report_from_state():
     try:
         state_data = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read session state: {e}")
+        _log.error("[GENERATE-REPORT] Failed to read session state: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to read session state.")
 
     # Import the report builder from the pitch_analyzer package
     try:
@@ -110,7 +113,8 @@ async def generate_report_from_state():
             _sys.path.insert(0, _graph_path)
         from tools import build_investment_readiness_report, detect_monotone  # type: ignore
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot import report builder: {e}")
+        _log.error("[GENERATE-REPORT] Cannot import report builder: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Report builder unavailable.")
 
     # Monotone detection (fast, no LLM)
     feature_history = state_data.get("feature_history", [])
@@ -125,8 +129,6 @@ async def generate_report_from_state():
             transcript = " ".join(pitch_history)
             _log.warning("[GENERATE-REPORT] full_transcript empty — using pitch_history as fallback.")
         else:
-            # If no transcript and no report exists, just pass a dummy string
-            # to force the report generation. The AI will judge it accordingly.
             _log.warning("[GENERATE-REPORT] No speech captured at all — passing dummy transcript.")
             transcript = "The founder ended the session very early and practically no speech was recorded."
 
@@ -145,7 +147,8 @@ async def generate_report_from_state():
             monotone_assessment,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+        _log.error("[GENERATE-REPORT] Report generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Report generation failed. Please try again.")
 
     if not report:
         raise HTTPException(status_code=500, detail="LLM returned an empty report. Please try again.")
@@ -211,7 +214,7 @@ class ExtractRequest(BaseModel):
 
 
 @router.post("/extract", summary="Run LLM Pre-flight Extraction")
-def run_pitch_extraction(request: ExtractRequest = Body(default=ExtractRequest())):
+def run_pitch_extraction(request: ExtractRequest = Body(default=ExtractRequest()), current_user=Depends(get_current_user)):
     """
     Runs the LLM extraction pipeline separately from the worker.
     Call this when the user clicks on the pitchdeck, so it processes the documents
@@ -254,11 +257,13 @@ def run_pitch_extraction(request: ExtractRequest = Body(default=ExtractRequest()
             "pitchdeckid": request.pitchdeckid,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        import logging as _log
+        _log.error("[EXTRACT] Extraction failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Extraction failed. Please try again.")
 
 
 @router.post("/start", summary="Start LiveKit AI Agent Worker")
-async def start_agent_worker():
+async def start_agent_worker(current_user=Depends(get_current_user)):
     global worker_process, _worker_log
     import asyncio as _asyncio
 
@@ -268,7 +273,7 @@ async def start_agent_worker():
 
     script_path = os.path.join(os.getcwd(), "app", "graph", "pitch_analyzer", "main.py")
     if not os.path.exists(script_path):
-        raise HTTPException(status_code=500, detail=f"Agent script not found at {script_path}")
+        raise HTTPException(status_code=500, detail="Agent script not found.")
 
     env = os.environ.copy()
     _worker_log.clear()
@@ -278,10 +283,8 @@ async def start_agent_worker():
                      "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"]
     missing = [k for k in required_keys if not env.get(k)]
     if missing:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Cannot start agent worker — missing env vars: {', '.join(missing)}"
-        )
+        _logging.error("[AGENT START] Missing required env vars: %s", missing)
+        raise HTTPException(status_code=500, detail="Agent worker cannot start due to missing configuration.")
 
     # --- Spawn subprocess with PIPE stdout so we can forward to Azure log stream ---
     _logging.info("[AGENT START] Spawning LiveKit agent worker from %s", script_path)
@@ -303,11 +306,8 @@ async def start_agent_worker():
     await _asyncio.sleep(3)
     exit_code = worker_process.poll()
     if exit_code is not None:
-        tail = "\n".join(_worker_log[-20:]) or "(no output captured)"
-        raise HTTPException(
-            status_code=500,
-            detail=f"Agent worker crashed at startup (exit {exit_code}).\n\nLast output:\n{tail}"
-        )
+        _logging.error("[AGENT START] Worker crashed at startup (exit %s)", exit_code)
+        raise HTTPException(status_code=500, detail=f"Agent worker crashed at startup (exit {exit_code}).")
 
     _logging.info("[AGENT START] Worker is alive — pid=%s", worker_process.pid)
     active_pitch_sessions.inc()
@@ -315,21 +315,19 @@ async def start_agent_worker():
 
 
 @router.get("/worker-status", summary="Check if AI Worker is Running")
-async def get_worker_status():
-    """Returns whether the Python AI worker subprocess is currently alive, plus log tail."""
-    global worker_process, _worker_log
+async def get_worker_status(current_user=Depends(get_current_user)):
+    """Returns whether the Python AI worker subprocess is currently alive."""
+    global worker_process
     if worker_process is None:
-        return {"running": False, "reason": "never_started", "log_tail": []}
+        return {"running": False, "reason": "never_started"}
     code = worker_process.poll()
-    tail = list(_worker_log)[-30:]   # deque: slice to list for JSON serialisation
     if code is None:
-        return {"running": True, "pid": worker_process.pid, "log_tail": tail}
-    return {"running": False, "reason": f"exited_with_code_{code}", "log_tail": tail}
-
+        return {"running": True, "pid": worker_process.pid}
+    return {"running": False, "reason": f"exited_with_code_{code}"}
 
 
 @router.post("/stop", summary="Gracefully Stop the AI Agent Worker")
-async def stop_agent_worker():
+async def stop_agent_worker(current_user=Depends(get_current_user)):
     """
     Terminates the LiveKit worker subprocess.
     Call this from the frontend on 'End Session' or 'End Call' AFTER
@@ -369,11 +367,9 @@ async def stop_agent_worker():
     finally:
         worker_process = None
         _worker_log.clear()
-        
+
     active_pitch_sessions.dec()
     return {"status": "stopped", "pid": pid}
-
-
 
 
 class TokenRequest(BaseModel):
@@ -381,7 +377,7 @@ class TokenRequest(BaseModel):
     room_name: Optional[str] = None
 
 @router.post("/token", summary="Generate LiveKit Token for Pitch Analyzer")
-async def generate_pitch_analyzer_token(request: TokenRequest):
+async def generate_pitch_analyzer_token(request: TokenRequest, current_user=Depends(get_current_user)):
 
     api_key = os.getenv("LIVEKIT_API_KEY")
     api_secret = os.getenv("LIVEKIT_API_SECRET")

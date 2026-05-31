@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()  # must run before any module reads os.getenv()
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -43,7 +43,7 @@ def value_error_handler(request: Request, exc: ValueError):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net/", "http://localhost:3000", "https://spark2scale-client.azurewebsites.net"],
+    allow_origins=["https://spark2scale-ai-api-server.azurewebsites.net", "http://localhost:3000", "https://spark2scale-client.azurewebsites.net"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,6 +68,16 @@ app.include_router(chat_summarizer.router, prefix="/api/v1/chat-summarizer", tag
 
 app.include_router(feed_recommedation.router, prefix="/api/v1/feed", tags=["Feed Recommendation"])
 app.include_router(vdb_admin.router, prefix="/api/v1/feed", tags=["Vector DB Admin"])
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 
 @app.get("/")
 def read_root():
