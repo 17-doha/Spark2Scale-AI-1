@@ -97,13 +97,20 @@ def extract_key_insights(raw_data):
         else:
              sector = "technology"
 
+    # Resolve the primary (first) founder safely. The previous
+    # `found.get("founders", [{}])[0]` pattern crashed with IndexError
+    # when "founders" was present but an empty list (e.g., founders=[]).
+    # The default `[{}]` only kicks in when the key is missing, not when
+    # the value is empty. Use `or [{}]` so any falsy value also falls back.
+    first_founder = (found.get("founders") or [{}])[0]
+
     return {
         "company_name": snap.get("company_name", "Unknown"),
         "stage": snap.get("current_stage", "Unknown"),
         "target_raise": snap.get("current_round", {}).get("target_amount", "Unknown"),
         "problem_statement": prob.get("problem_statement", "Unknown"),
-        "founder_experience": found.get("founders", [{}])[0].get("prior_experience", "Unknown"),
-        "founder_market_fit": found.get("founders", [{}])[0].get("founder_market_fit_statement", "Unknown"),
+        "founder_experience": first_founder.get("prior_experience", "Unknown"),
+        "founder_market_fit": first_founder.get("founder_market_fit_statement", "Unknown"),
         "customer_quotes": prob.get("evidence", {}).get("customer_quotes", []),
         "differentiation": prod.get("differentiation", "Unknown"),
         "core_stickiness": prod.get("core_stickiness", "Unknown"),
