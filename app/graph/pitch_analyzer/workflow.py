@@ -19,9 +19,10 @@ from prompts import (
     NERVOUSNESS_INTERRUPT_INSTRUCTION,
 )
 from tools import (
-    compute_audio_features, detect_acoustic_anomalies, detect_nervousness, extract_claims,
-    execute_grammar_check, execute_check_consistency, check_investor_essentials,
-    build_investment_readiness_report, deep_search_verification
+    compute_audio_features, detect_acoustic_anomalies, detect_nervousness,
+    detect_monotone, detect_speaking_rate, detect_vocal_stress_trajectory,
+    extract_claims, execute_grammar_check, execute_check_consistency,
+    check_investor_essentials, build_investment_readiness_report, deep_search_verification
 )
 
 import pyaudio
@@ -114,6 +115,9 @@ from tools import (
     compute_audio_features,
     detect_nervousness,
     detect_acoustic_anomalies,
+    detect_monotone,
+    detect_speaking_rate,
+    detect_vocal_stress_trajectory,
     execute_grammar_check,
     execute_check_consistency,
     deep_search_verification,
@@ -413,6 +417,8 @@ def _make_tools(state: LiveKitSessionState, session_ref: list):
             build_investment_readiness_report,
             state.session_log, state.grammar_buffer, state.structured_claims,
             state.pitch_history, state.diligence_answered, state.full_transcript,
+            getattr(state, 'monotone_assessment', ''),
+            getattr(state, '_vocal_analysis', {}),
         )
         if not report:
             return "Could not generate report — session data may be incomplete."
@@ -787,16 +793,29 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
             state._report_preflight_started = True
             logging.info("[PHASE] Pre-computing final report + monotone detection in background...")
             
-            # 1. Run monotone detection synchronously first
+            # 1. Run all vocal delivery analyses synchronously first
             try:
-                # Adjust import path to match your project structure if needed
-                from tools import detect_monotone 
-                mono_result = detect_monotone(state.feature_history)
+                mono_result  = detect_monotone(state.feature_history)
                 state.monotone_assessment = mono_result.get("assessment", "")
-                logging.info(f"[PHASE] Monotone assessment: {state.monotone_assessment[:60]}")
-            except Exception as mono_err:
-                logging.warning(f"[PHASE] Monotone detection failed: {mono_err}")
+                logging.info(f"[PHASE] Monotone: {state.monotone_assessment[:60]}")
+            except Exception as e:
+                logging.warning(f"[PHASE] Monotone detection failed: {e}")
                 state.monotone_assessment = ""
+
+            try:
+                rate_result   = detect_speaking_rate(state.feature_history)
+                stress_result = detect_vocal_stress_trajectory(state.feature_history)
+                state._vocal_analysis = {
+                    "speaking_rate": rate_result,
+                    "vocal_stress":  stress_result,
+                }
+                logging.info(
+                    f"[PHASE] Speaking rate: {rate_result.get('speaking_rate_category')} | "
+                    f"Stress trend: {stress_result.get('trend')}"
+                )
+            except Exception as e:
+                logging.warning(f"[PHASE] Vocal analysis failed: {e}")
+                state._vocal_analysis = {}
 
             # 2. Build the report
             async def _preflight_report():
@@ -805,7 +824,8 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                         build_investment_readiness_report,
                         state.session_log, state.grammar_buffer, state.structured_claims,
                         state.pitch_history, state.diligence_answered, state.full_transcript,
-                        getattr(state, 'monotone_assessment', ''), # <--- Added monotone argument
+                        getattr(state, 'monotone_assessment', ''),
+                        getattr(state, '_vocal_analysis', {}),
                     )
                     state._preflight_report = r
                     logging.info("[PHASE] Pre-computed report ready.")
@@ -832,7 +852,8 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                         build_investment_readiness_report,
                         state.session_log, state.grammar_buffer, state.structured_claims,
                         state.pitch_history, state.diligence_answered, state.full_transcript,
-                        getattr(state, 'monotone_assessment', ''), # <--- Added monotone argument
+                        getattr(state, 'monotone_assessment', ''),
+                        getattr(state, '_vocal_analysis', {}),
                     )
             except Exception as e:
                 report = None
@@ -940,7 +961,8 @@ async def _phase_watcher(state: LiveKitSessionState, session: AgentSession, ctx:
                         build_investment_readiness_report,
                         state.session_log, state.grammar_buffer, state.structured_claims,
                         state.pitch_history, state.diligence_answered, state.full_transcript,
-                        getattr(state, 'monotone_assessment', ''), # <--- Added monotone argument
+                        getattr(state, 'monotone_assessment', ''),
+                        getattr(state, '_vocal_analysis', {}),
                     )
 
                 if report:

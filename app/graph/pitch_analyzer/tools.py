@@ -619,283 +619,34 @@ def get_tools_definition() -> list:
     ]
 
 
+# 7. AUDIO ANALYSIS (canonical implementation in audio_analysis.py)
 # ═══════════════════════════════════════════════════════════════════════════════
-# 7. AUDIO ANALYSIS (Moved from audio_analysis.py)
-# ═══════════════════════════════════════════════════════════════════════════════
-import numpy as np
+import numpy as np  # kept for use elsewhere in this file
 
-def compute_audio_features(pcm_bytes: bytes, rate: int = 24000) -> dict:
-    """
-    Returns a dict with:
-        rms_energy         (float): Loudness. Higher = louder.
-        zero_crossing_rate (float): Voice texture. High = shaky/harsh, Low = smooth.
-        pitch_estimate_hz  (float): Fundamental frequency in Hz. 0.0 if silence.
-    """
-    if len(pcm_bytes) == 0:
-        return {"rms_energy": 0.0, "zero_crossing_rate": 0.0, "pitch_estimate_hz": 0.0}
-
-    samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-
-    if len(samples) == 0:
-        return {"rms_energy": 0.0, "zero_crossing_rate": 0.0, "pitch_estimate_hz": 0.0}
-
-    rms = float(np.sqrt(np.mean(samples ** 2)))
-
-    zero_crossings = np.sum(np.abs(np.diff(np.sign(samples)))) / 2
-    zcr = float(zero_crossings / len(samples))
-
-    pitch_hz = _estimate_pitch_autocorr(samples, rate)
-
-    return {
-        "rms_energy": rms,
-        "zero_crossing_rate": zcr,
-        "pitch_estimate_hz": pitch_hz,
-    }
-
-def _estimate_pitch_autocorr(samples: np.ndarray, rate: int) -> float:
-    """
-    Estimates fundamental frequency using normalized autocorrelation.
-    Returns 0.0 if signal is too quiet or no clear pitch is found.
-    Search range: 80–450 Hz (full human speaking voice range).
-    """
-    rms = np.sqrt(np.mean(samples ** 2))
-    if rms < 0.01:
-        return 0.0
-
-    correlation = np.correlate(samples, samples, mode='full')
-    correlation = correlation[len(correlation) // 2:]
-
-    min_lag = int(rate / 450)
-    max_lag = int(rate / 80)
-
-    if max_lag >= len(correlation) or min_lag >= max_lag:
-        return 0.0
-
-    search_region = correlation[min_lag:max_lag]
-    peak_lag = int(np.argmax(search_region)) + min_lag
-
-    if peak_lag == 0:
-        return 0.0
-
-    return float(rate / peak_lag)
-
-
-class RMSCalibrator:
-    """
-    Measures a 5-second RMS baseline at pitch start and sets the inaudible threshold
-    per-session, eliminating false positives caused by naturally quiet microphones.
-    """
-
-    CALIBRATION_FRAMES    = 100   # ~5s at 20 frames/s (50ms chunks)
-    SCALE_FACTOR          = 0.25  # inaudible_threshold = median_rms * 0.25
-    FLOOR                 = 0.002 # Never go below this (prevents threshold=0 edge case)
-    CEILING               = 0.015 # Never go above this (sane upper bound)
-    DEFAULT_THRESHOLD     = 0.004 # Fallback if calibration fails
-
-    def __init__(self):
-        self._samples: List[float] = []
-        self.inaudible_threshold: float = self.DEFAULT_THRESHOLD
-        self._calibrated = False
-
-    def add_sample(self, rms: float):
-        if not self._calibrated:
-            self._samples.append(rms)
-            if len(self._samples) >= self.CALIBRATION_FRAMES:
-                self._compute()
-
-    def _compute(self):
-        arr = np.array(self._samples)
-        # Only use non-silent frames for baseline (exclude near-zero values)
-        active = arr[arr > 0.001]
-        if len(active) < 10:
-            # Room is nearly silent — use default
-            self.inaudible_threshold = self.DEFAULT_THRESHOLD
-        else:
-            median_rms = float(np.median(active))
-            raw = median_rms * self.SCALE_FACTOR
-            self.inaudible_threshold = float(np.clip(raw, self.FLOOR, self.CEILING))
-        self._calibrated = True
-
-    def is_ready(self) -> bool:
-        return self._calibrated
-
-    def force_complete(self):
-        """Call this if the pitch starts before calibration finishes (graceful fallback)."""
-        if not self._calibrated:
-            if self._samples:
-                self._compute()
-            else:
-                self._calibrated = True
-
-
-def detect_nervousness(feature_history: List[dict]) -> float:
-    """
-    Returns a 0.0–1.0 nervousness score based on:
-      - ZCR variance (shaky voice texture)
-      - Energy spike rate (stuttering / stopping-starting)
-      - Pitch trend (rising pitch = increasing anxiety)
-    """
-    if len(feature_history) < 5:
-        return 0.0
-
-    zcr_values    = [f["zero_crossing_rate"] for f in feature_history]
-    energy_values = [f["rms_energy"] for f in feature_history]
-    pitch_values  = [f["pitch_estimate_hz"] for f in feature_history if f["pitch_estimate_hz"] > 0]
-
-    score = 0.0
-
-    zcr_std   = float(np.std(zcr_values))
-    score    += 0.4 * min(zcr_std / 0.1, 1.0)
-
-    spike_count = sum(
-        1 for i in range(1, len(energy_values))
-        if energy_values[i - 1] - energy_values[i] > 0.05
+try:
+    from .audio_analysis import (
+        compute_audio_features,
+        RMSCalibrator,
+        detect_nervousness,
+        detect_acoustic_anomalies,
+        detect_monotone,
+        detect_speaking_rate,
+        detect_vocal_stress_trajectory,
+        HYSTERESIS_FRAMES,
     )
-    spike_rate = spike_count / max(len(energy_values) - 1, 1)
-    score     += 0.4 * min(spike_rate / 0.5, 1.0)
-
-    if len(pitch_values) >= 4:
-        x     = np.arange(len(pitch_values), dtype=float)
-        slope = float(np.polyfit(x, pitch_values, 1)[0])
-        score += 0.2 * min(max(slope, 0.0) / 5.0, 1.0)
-
-    return float(min(max(score, 0.0), 1.0))
-
-HYSTERESIS_FRAMES = 14
-
-def detect_acoustic_anomalies(
-    feature_history: List[dict],
-    inaudible_threshold: float = 0.004,
-) -> dict | None:
-    """
-    Checks for extreme acoustic conditions using a hysteresis gate so single-frame
-    spikes don't trigger false alerts.
-
-    Returns a structured dict on anomaly:
-        {
-            "type": "acoustic",
-            "reason": "inaudible" | "shouting" | "background_noise",
-            "is_critical": True,
-            "error_type": "Acoustic Anomaly",
-            "evidence": ["avg_rms=0.001", "threshold=0.004"],
-            "detail": "...",
-            "recommended_interrupt": "..."
-        }
-
-    Returns None if no anomaly.
-    """
-    if len(feature_history) < HYSTERESIS_FRAMES:
-        return None
-
-    # Use the most recent HYSTERESIS_FRAMES frames for a stable reading
-    recent  = feature_history[-HYSTERESIS_FRAMES:]
-    avg_rms = float(np.mean([f["rms_energy"] for f in recent]))
-    avg_zcr = float(np.mean([f["zero_crossing_rate"] for f in recent]))
-
-    # ── Shouting / Clipping ────────────────────────────────────────────────────
-    if avg_rms > 0.4:
-        return {
-            "type": "acoustic",
-            "reason": "shouting",
-            "is_critical": True,
-            "error_type": "Acoustic Anomaly",
-            "evidence": [f"avg_rms={avg_rms:.4f} > 0.4 (clipping threshold)"],
-            "detail": "You are speaking far too loudly — the audio is clipping.",
-            "recommended_interrupt": "You're clipping my mic. Speak at a normal volume."
-        }
-
-    # ── Background Hissing / Noise ─────────────────────────────────────────────
-    if avg_zcr > 0.4 and avg_rms > 0.01:
-        return {
-            "type": "acoustic",
-            "reason": "background_noise",
-            "is_critical": True,
-            "error_type": "Acoustic Anomaly",
-            "evidence": [f"avg_zcr={avg_zcr:.4f} > 0.4", f"avg_rms={avg_rms:.4f}"],
-            "detail": "There is heavy background noise obscuring your microphone.",
-            "recommended_interrupt": "There's too much background noise. Move somewhere quieter."
-        }
-
-    # ── Inaudible (calibrated threshold + hysteresis) ─────────────────────────
-    # Require non-zero ZCR so we don't fire when the mic is simply off
-    if avg_rms < inaudible_threshold and avg_zcr > 0.02:
-        return {
-            "type": "acoustic",
-            "reason": "inaudible",
-            "is_critical": True,
-            "error_type": "Acoustic Anomaly",
-            "evidence": [
-                f"avg_rms={avg_rms:.4f} < threshold={inaudible_threshold:.4f}",
-                f"avg_zcr={avg_zcr:.4f}"
-            ],
-            "detail": "Your microphone volume is too low — you are inaudible.",
-            "recommended_interrupt": "I can't hear you. Fix your mic or speak louder."
-        }
-
-    return None
-# ═══════════════════════════════════════════════════════════════════════════════
-# 7. MONOTONE DETECTION
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def detect_monotone(feature_history: List[dict]) -> dict:
-    """
-    Detects whether the founder spoke in a monotone voice throughout the pitch.
-
-    Uses the std-dev of pitch_estimate_hz across all session frames:
-      - Low variation (std-dev < 30 Hz) → monotone delivery
-      - Medium variation (30–80 Hz)     → slightly flat but acceptable
-      - High variation (> 80 Hz)        → good vocal variety
-
-    Returns:
-        {
-            "is_monotone": bool,
-            "variation_score": float,   # std-dev in Hz
-            "assessment": str,          # human-readable verdict
-        }
-    """
-    pitch_values = [
-        f["pitch_estimate_hz"]
-        for f in feature_history
-        if f.get("pitch_estimate_hz", 0) > 0
-    ]
-
-    if len(pitch_values) < 10:
-        return {
-            "is_monotone": False,
-            "variation_score": 0.0,
-            "assessment": "Not enough voice data to assess vocal variety.",
-        }
-
-    std_dev = float(np.std(pitch_values))
-
-    if std_dev < 30:
-        return {
-            "is_monotone": True,
-            "variation_score": round(std_dev, 2),
-            "assessment": (
-                "Monotone delivery detected — very little pitch variation throughout your pitch. "
-                "Investors struggle to stay engaged when the voice stays flat. "
-                "Practice emphasizing key numbers and pausing before important statements."
-            ),
-        }
-    elif std_dev < 80:
-        return {
-            "is_monotone": False,
-            "variation_score": round(std_dev, 2),
-            "assessment": (
-                "Slightly flat delivery — some pitch variation, but could be more dynamic. "
-                "Try emphasizing your problem statement and key metrics with a stronger vocal shift."
-            ),
-        }
-    else:
-        return {
-            "is_monotone": False,
-            "variation_score": round(std_dev, 2),
-            "assessment": "Good vocal variety — your delivery was dynamic and engaging.",
-        }
+except ImportError:
+    from audio_analysis import (  # noqa: F401  (bare import via sys.path hack in main.py)
+        compute_audio_features,
+        RMSCalibrator,
+        detect_nervousness,
+        detect_acoustic_anomalies,
+        detect_monotone,
+        detect_speaking_rate,
+        detect_vocal_stress_trajectory,
+        HYSTERESIS_FRAMES,
+    )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 8. INVESTMENT READINESS REPORT BUILDER
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -907,13 +658,29 @@ def build_investment_readiness_report(
     diligence_answered: list,
     full_transcript:    str,
     monotone_assessment: str = "",
+    vocal_analysis:     dict = None,
 ) -> dict:
     """
     Builds a structured Investment Readiness Report from all session data.
     Called by the phase watcher at T=4:30 (pre-computation) and at T=5:00 (evaluating phase).
+
+    vocal_analysis (optional): dict produced by combining detect_speaking_rate()
+        and detect_vocal_stress_trajectory() results. Included in the communication
+        rubric so the LLM can score delivery mechanics alongside verbal content.
     """
     llm    = _get_fast_llm()
     parser = JsonOutputParser()
+
+    # Build the vocal delivery section from all available signals
+    vocal_parts = [monotone_assessment] if monotone_assessment else []
+    if vocal_analysis:
+        rate_info = vocal_analysis.get("speaking_rate", {})
+        if rate_info.get("assessment"):
+            vocal_parts.append(f"Speaking rate ({rate_info.get('speaking_rate_category','?')}): {rate_info['assessment']}")
+        stress_info = vocal_analysis.get("vocal_stress", {})
+        if stress_info.get("assessment"):
+            vocal_parts.append(f"Vocal stress trajectory ({stress_info.get('trend','?')}): {stress_info['assessment']}")
+    vocal_delivery_text = "\n".join(vocal_parts) if vocal_parts else "No vocal delivery data available."
 
     prompt = ChatPromptTemplate.from_messages([
         ("system",
@@ -938,7 +705,7 @@ def build_investment_readiness_report(
          "PITCH HISTORY (all founder statements):\n{pitch_history}\n\n"
          "DILIGENCE ANSWERS:\n{diligence_answered}\n\n"
          "FULL TRANSCRIPT:\n{full_transcript}\n\n"
-         "VOCAL DELIVERY ASSESSMENT:\n{monotone_assessment}"
+         "VOCAL DELIVERY ASSESSMENT (monotone, speaking pace, stress trajectory):\n{vocal_delivery}"
         ),
     ])
 
@@ -952,7 +719,8 @@ def build_investment_readiness_report(
             "pitch_history":      " | ".join(pitch_history[-30:]),
             "diligence_answered": " | ".join(diligence_answered),
             "full_transcript":    full_transcript[-4000:],
-            "monotone_assessment": monotone_assessment or "No vocal delivery data available.",
+            "vocal_delivery":     vocal_delivery_text,
+            "monotone_assessment": monotone_assessment,
         })
         return result
     except Exception as e:
