@@ -1,6 +1,7 @@
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import get_current_user
 from app.api.schemas import (
     BMCRequest,
     BMCResponse,
@@ -30,7 +31,7 @@ def _maybe_parse(payload):
 
 
 @router.post("/generate", response_model=BMCResponse)
-async def generate_bmc(request: BMCRequest):
+async def generate_bmc(request: BMCRequest, current_user=Depends(get_current_user)):
     """Run the Business Model Canvas agent against an existing market_research payload."""
     logger.info("[LAUNCH] BMC requested for idea: %s", request.idea_name)
 
@@ -59,12 +60,12 @@ async def generate_bmc(request: BMCRequest):
         return BMCResponse(message=message, business_model_canvas=canvas, errors=errors)
 
     except Exception as e:
-        logger.error("[BMC] Generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("[BMC] Generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="BMC generation failed. Please try again.")
 
 
 @router.post("/enhance", response_model=BMCEnhanceResponse)
-async def enhance_bmc_endpoint(request: BMCEnhanceRequest):
+async def enhance_bmc_endpoint(request: BMCEnhanceRequest, current_user=Depends(get_current_user)):
     """Refine an existing BMC using founder-requested changes from the chat summarizer."""
     logger.info(
         "[LAUNCH] BMC enhance requested for idea: %s (%d change(s))",
@@ -110,5 +111,5 @@ async def enhance_bmc_endpoint(request: BMCEnhanceRequest):
         )
 
     except Exception as e:
-        logger.error("[BMC] Enhance failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("[BMC] Enhance failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="BMC enhance failed. Please try again.")

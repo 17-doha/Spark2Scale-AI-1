@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from app.core.auth import require_admin
 from app.core.limiter import api_limiter
 from app.core.qdrant_client import get_qdrant, init_qdrant_collections, COLLECTIONS
 from app.graph.feed_recommedation_agent.tools import build_and_store_all, sync_supabase_to_neo4j
@@ -19,9 +20,11 @@ def vdb_health_status():
             "missing_collections": list(set(COLLECTIONS) - existing)
         }
     except Exception as e:
-        return {"status": "offline", "error": str(e)}
+        import logging as _log
+        _log.error("[VDB health] Qdrant unreachable: %s", e, exc_info=True)
+        return {"status": "offline", "error": "Vector database unreachable."}
 
-@router.delete("/collections")
+@router.delete("/collections", dependencies=[Depends(require_admin)])
 def delete_all_collections():
     """Danger: Delete all Vector Database collections."""
     client = get_qdrant()
@@ -29,13 +32,13 @@ def delete_all_collections():
         client.delete_collection(collection_name=name)
     return {"message": "All collections deleted.", "collections": COLLECTIONS}
 
-@router.post("/collections/init")
+@router.post("/collections/init", dependencies=[Depends(require_admin)])
 def initialize_collections():
     """Initialize missing collections using the configured schema."""
     init_qdrant_collections()
     return {"message": "Collections initialized successfully."}
 
-@router.post("/investor-embedding/batch")
+@router.post("/investor-embedding/batch", dependencies=[Depends(require_admin)])
 @api_limiter.limit("5/minute")
 async def upsert_all_investor_embeddings(request: Request):
     """Batch-sync all investors from Supabase → Qdrant [investors]."""
@@ -43,7 +46,7 @@ async def upsert_all_investor_embeddings(request: Request):
     success = sum(1 for v in results.values() if v)
     return {"total": len(results), "success": success, "failed": len(results) - success}
 
-@router.post("/pitchdeck-embedding/batch")
+@router.post("/pitchdeck-embedding/batch", dependencies=[Depends(require_admin)])
 @api_limiter.limit("5/minute")
 async def upsert_all_pitchdeck_embeddings(request: Request):
     """Batch-sync all pitchdecks from Supabase → Qdrant [pitchdecks]."""
@@ -51,13 +54,13 @@ async def upsert_all_pitchdeck_embeddings(request: Request):
     success = sum(1 for v in results.values() if v)
     return {"total": len(results), "success": success, "failed": len(results) - success}
 
-@router.post("/neo4j/sync")
+@router.post("/neo4j/sync", dependencies=[Depends(require_admin)])
 def trigger_neo4j_sync():
     """Trigger the Supabase → Neo4j synchronization."""
     sync_supabase_to_neo4j()
     return {"message": "Neo4j sync triggered. Check logs for details."}
 
-@router.post("/collections/reindex")
+@router.post("/collections/reindex", dependencies=[Depends(require_admin)])
 def reindex_all_collections():
     """
     Idempotent: create any missing payload indexes across all collections.
