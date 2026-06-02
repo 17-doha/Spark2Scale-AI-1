@@ -1,5 +1,5 @@
 from .schema import StartupData
-from .helpers import extract_key_insights
+from .helpers import extract_key_insights, fetch_startup_evaluation_from_db
 from .patterns import detect_patterns
 from .tools import run_market_intel
 from .node import AgentNodes
@@ -8,17 +8,21 @@ from app.utils.output_manager import OutputManager
 from app.utils.logger import logger
 import time
 
-def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, request_id=None):
+def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, request_id=None, startup_id=None):
     """
     Run the recommendation agent workflow
-    
+
     Args:
         raw_input: Raw startup input data
         eval_output: Evaluation output data
         api_key: Gemini API key
         save_output: Whether to save output to files (default: True)
         request_id: Optional request ID for tracking
-        
+        startup_id: Optional Supabase startup id. When provided, the complete
+            evaluation document is loaded from the DB (like the other documents
+            do) and used as the source for insight extraction, instead of the
+            partial raw_input that the caller sends.
+
     Returns:
         tuple: (final_report, output_paths) or just final_report if save_output=False
     """
@@ -26,7 +30,19 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     logger.info(f"Starting recommendation agent workflow for request_id: {request_id}")
     # 1. Parse & Validate
     data = StartupData(**eval_output)
-    insights = extract_key_insights(raw_input)
+
+    # Prefer the full, enriched evaluation stored in the DB. The /recommend
+    # payload's raw_input is frequently a partial early submission, which left
+    # statements (differentiation, vision, beachhead, gap analysis, founder
+    # fit, …) empty — rendering as "None" in the report. Fall back to the
+    # passed raw_input whenever the DB fetch yields nothing.
+    insights_source = raw_input
+    if startup_id:
+        db_eval = fetch_startup_evaluation_from_db(startup_id)
+        if db_eval:
+            insights_source = db_eval
+
+    insights = extract_key_insights(insights_source)
     
     # 2. Convert Pydantic scores to dict format for pattern detection
     # Pattern detection expects: scores['team']['score'] and scores['team']['description']

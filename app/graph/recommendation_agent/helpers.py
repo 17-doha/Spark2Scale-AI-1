@@ -1,5 +1,98 @@
 import json
 
+from app.utils.logger import logger
+
+
+def _normalize_evaluation_payload(payload):
+    """
+    Coerce a stored evaluation document's ``json_response`` into the shape
+    ``extract_key_insights`` expects: a dict with a top-level
+    ``"startup_evaluation"`` key.
+
+    The ``documents`` table stores ``json_response`` either as a JSON string
+    or an already-parsed dict, and either wrapped (``{"startup_evaluation": …}``)
+    or unwrapped (the inner object directly). This flattens all four cases.
+    Returns ``None`` when the payload can't be turned into a usable dict.
+    """
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    if "startup_evaluation" in payload:
+        return payload
+
+    # Unwrapped evaluation object — wrap it so the path lookups line up.
+    if any(k in payload for k in ("company_snapshot", "problem_definition",
+                                  "founder_and_team", "product_and_solution")):
+        return {"startup_evaluation": payload}
+
+    return None
+
+
+def fetch_startup_evaluation_from_db(startup_id):
+    """
+    Load the full, enriched startup evaluation for ``startup_id`` from Supabase.
+
+    Mirrors how the other documents source their company context
+    (see ``app/graph/pitch_analyzer/main.py``): it reads the ``documents``
+    table and returns the evaluation document's ``json_response`` — the
+    complete ``startup_evaluation`` object with every field the founder
+    submitted (differentiation, gap_analysis, founder_market_fit, vision,
+    beachhead, etc.). The ``/recommend`` payload's ``raw_input`` is often a
+    partial early submission, which is why those fields rendered as "None".
+
+    Defensive by design: any failure (no client, no row, bad JSON) returns
+    ``None`` so the caller transparently falls back to the passed ``raw_input``.
+    """
+    if not startup_id:
+        return None
+
+    try:
+        from app.core.supabase_client import supabase
+    except Exception as e:  # import-time failure shouldn't break the run
+        logger.warning(f"Supabase client unavailable for evaluation fetch: {e}")
+        return None
+
+    if supabase is None:
+        logger.warning("Supabase client not initialized; cannot fetch startup evaluation.")
+        return None
+
+    try:
+        result = (
+            supabase.table("documents")
+            .select("type, json_response")
+            .eq("startup_id", startup_id)
+            .execute()
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch evaluation document for startup_id={startup_id}: {e}")
+        return None
+
+    rows = result.data or []
+    for row in rows:
+        doc_type = (row.get("type") or "").lower()
+        # Match the same evaluation-doc heuristic the pitch analyzer uses.
+        if "evaluation" in doc_type:
+            normalized = _normalize_evaluation_payload(row.get("json_response"))
+            if normalized:
+                logger.info(
+                    f"Loaded startup evaluation from DB for startup_id={startup_id} "
+                    f"(document type='{row.get('type')}')."
+                )
+                return normalized
+
+    logger.warning(
+        f"No usable evaluation document found in DB for startup_id={startup_id}; "
+        "falling back to the raw_input supplied in the request."
+    )
+    return None
+
+
 # Funding-stage maturity index. A weakness that is forgivable early becomes a
 # kill signal once a startup claims a later stage.
 STAGE_ORDER = {
