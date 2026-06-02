@@ -55,4 +55,4 @@ EXPOSE 80
 #        into the same LiveKit room, causing the "connecting" loop.
 #        Use Azure horizontal scaling (multiple container instances) for traffic load.
 # Adding logging flags so Azure can capture crash logs, and binding dynamically so Azure proxy port mapping succeeds.
-CMD sh -c "gunicorn -w 1 -k uvicorn.workers.UvicornWorker --timeout 300 --access-logfile - --error-logfile - --bind 0.0.0.0:${WEBSITES_PORT:-80} main:app"
+CMD sh -c "gunicorn -w 1 -k uvicorn.workers.UvicornWorker --timeout 900 --access-logfile - --error-logfile - --bind 0.0.0.0:${WEBSITES_PORT:-80} main:app"
