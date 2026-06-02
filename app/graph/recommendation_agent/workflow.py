@@ -37,12 +37,36 @@ def run_recommendation_agent(raw_input, eval_output, api_key, save_output=True, 
     # fit, …) empty — rendering as "None" in the report. Fall back to the
     # passed raw_input whenever the DB fetch yields nothing.
     insights_source = raw_input
+    used_db = False
     if startup_id:
         db_eval = fetch_startup_evaluation_from_db(startup_id)
         if db_eval:
             insights_source = db_eval
+            used_db = True
 
     insights = extract_key_insights(insights_source)
+
+    # Diagnostic: trace WHERE the insights came from and WHICH key statements
+    # are empty. This separates "missing in the DB / never fetched" from
+    # "founder left it blank" when a report comes back sparse — readable
+    # straight from the Azure logs for a given request_id.
+    _source = "startups.json_response (DB)" if used_db else (
+        "request raw_input (startup_id absent)" if not startup_id
+        else "request raw_input (DB fetch returned nothing)"
+    )
+    _key_fields = [
+        "target_raise", "country", "differentiation", "core_stickiness",
+        "founder_market_fit", "five_year_vision", "beachhead_market", "gap_analysis",
+    ]
+    _empty = [
+        k for k in _key_fields
+        if str(insights.get(k, "")).strip().lower() in ("", "unknown", "n/a", "none", "usd 0")
+    ]
+    logger.info(
+        f"[recommendation] request_id={request_id} startup_id={startup_id} "
+        f"insights_source={_source}; company={insights.get('company_name')!r}; "
+        f"empty_key_fields={_empty or 'none'}"
+    )
     
     # 2. Convert Pydantic scores to dict format for pattern detection
     # Pattern detection expects: scores['team']['score'] and scores['team']['description']
