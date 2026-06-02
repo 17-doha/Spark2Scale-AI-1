@@ -195,29 +195,36 @@ def test_fetch_startup_evaluation_no_id_returns_none():
 
 
 @patch("app.core.supabase_client.supabase")
-def test_fetch_startup_evaluation_picks_evaluation_doc(mock_supabase):
-    """The evaluation-type document's json_response is selected and normalized."""
+def test_fetch_startup_evaluation_reads_startups_json_response(mock_supabase):
+    """The founder's saved form in startups.json_response is loaded and normalized."""
     full_eval = {
         "startup_evaluation": {
             "company_snapshot": {"company_name": "FinBoost"},
             "product_and_solution": {"differentiation": "Real-time API scoring"},
         }
     }
-    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
-        data=[
-            {"type": "Market Research", "json_response": {"foo": "bar"}},
-            {"type": "Founder Evaluation", "json_response": full_eval},
-        ]
+    mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"json_response": full_eval}
     )
     result = fetch_startup_evaluation_from_db("startup-123")
     assert result["startup_evaluation"]["product_and_solution"]["differentiation"] == "Real-time API scoring"
 
 
 @patch("app.core.supabase_client.supabase")
-def test_fetch_startup_evaluation_no_eval_doc_returns_none(mock_supabase):
-    """When no evaluation document exists, return None so caller falls back to raw_input."""
-    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
-        data=[{"type": "Market Research", "json_response": {"foo": "bar"}}]
+def test_fetch_startup_evaluation_unwrapped_form_is_wrapped(mock_supabase):
+    """An unwrapped json_response (no startup_evaluation key) is wrapped, not dropped."""
+    mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"json_response": {"company_snapshot": {"company_name": "X"}, "problem_definition": {}}}
+    )
+    result = fetch_startup_evaluation_from_db("startup-123")
+    assert result["startup_evaluation"]["company_snapshot"]["company_name"] == "X"
+
+
+@patch("app.core.supabase_client.supabase")
+def test_fetch_startup_evaluation_no_form_returns_none(mock_supabase):
+    """When the row has no usable json_response, return None so caller falls back to raw_input."""
+    mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"json_response": None}
     )
     assert fetch_startup_evaluation_from_db("startup-123") is None
 

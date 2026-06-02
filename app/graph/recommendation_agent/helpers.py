@@ -36,15 +36,22 @@ def _normalize_evaluation_payload(payload):
 
 def fetch_startup_evaluation_from_db(startup_id):
     """
-    Load the full, enriched startup evaluation for ``startup_id`` from Supabase.
+    Load the founder's filled startup form for ``startup_id`` from Supabase.
 
-    Mirrors how the other documents source their company context
-    (see ``app/graph/pitch_analyzer/main.py``): it reads the ``documents``
-    table and returns the evaluation document's ``json_response`` — the
-    complete ``startup_evaluation`` object with every field the founder
-    submitted (differentiation, gap_analysis, founder_market_fit, vision,
-    beachhead, etc.). The ``/recommend`` payload's ``raw_input`` is often a
-    partial early submission, which is why those fields rendered as "None".
+    The new-startup form (whether typed by the founder or autofilled from a
+    PDF/idea extraction) is persisted in the ``startups`` table's
+    ``json_response`` column under the top-level ``startup_evaluation`` key
+    — see the .NET ``StartupsController`` (insert at ``/add``, and the
+    ``apply-refinements`` JSON-pointer map that patches
+    ``/startup_evaluation/...``). This is the SAME authoritative record the
+    frontend reads from (``extractStartupEval`` → ``startup.json_response``),
+    so sourcing it here keeps the recommendation consistent with the other
+    documents.
+
+    The ``/recommend`` payload's ``raw_input`` is often a partial early
+    submission, which is why enriched statements (differentiation,
+    gap_analysis, founder_market_fit, vision, beachhead, …) rendered as
+    "None". Pulling the full saved form fixes that.
 
     Defensive by design: any failure (no client, no row, bad JSON) returns
     ``None`` so the caller transparently falls back to the passed ``raw_input``.
@@ -55,39 +62,38 @@ def fetch_startup_evaluation_from_db(startup_id):
     try:
         from app.core.supabase_client import supabase
     except Exception as e:  # import-time failure shouldn't break the run
-        logger.warning(f"Supabase client unavailable for evaluation fetch: {e}")
+        logger.warning(f"Supabase client unavailable for startup form fetch: {e}")
         return None
 
     if supabase is None:
-        logger.warning("Supabase client not initialized; cannot fetch startup evaluation.")
+        logger.warning("Supabase client not initialized; cannot fetch startup form.")
         return None
 
     try:
+        # The startups table keys on `sid` (see pitch_analyzer's cheat_sheet
+        # load and the .NET StartupsController), not `startup_id`.
         result = (
-            supabase.table("documents")
-            .select("type, json_response")
-            .eq("startup_id", startup_id)
+            supabase.table("startups")
+            .select("json_response")
+            .eq("sid", startup_id)
+            .single()
             .execute()
         )
     except Exception as e:
-        logger.error(f"Failed to fetch evaluation document for startup_id={startup_id}: {e}")
+        logger.error(f"Failed to fetch startup form for startup_id={startup_id}: {e}")
         return None
 
-    rows = result.data or []
-    for row in rows:
-        doc_type = (row.get("type") or "").lower()
-        # Match the same evaluation-doc heuristic the pitch analyzer uses.
-        if "evaluation" in doc_type:
-            normalized = _normalize_evaluation_payload(row.get("json_response"))
-            if normalized:
-                logger.info(
-                    f"Loaded startup evaluation from DB for startup_id={startup_id} "
-                    f"(document type='{row.get('type')}')."
-                )
-                return normalized
+    row = result.data or {}
+    normalized = _normalize_evaluation_payload(row.get("json_response"))
+    if normalized:
+        logger.info(
+            "Loaded startup form (startups.json_response) from DB for "
+            f"startup_id={startup_id}."
+        )
+        return normalized
 
     logger.warning(
-        f"No usable evaluation document found in DB for startup_id={startup_id}; "
+        f"No usable startup_evaluation in startups.json_response for startup_id={startup_id}; "
         "falling back to the raw_input supplied in the request."
     )
     return None
