@@ -222,5 +222,7 @@ class TestChatSummarizerErrorPaths:
         with pytest.raises(HTTPException) as exc:
             await summarize_chat(_make_request([("user", "hi")]))
         assert exc.value.status_code == 500
+        # The route returns a generic message and must NOT leak the internal
+        # exception text ("rate limited") to the client (security hardening).
         assert "Summarization failed" in exc.value.detail
-        assert "rate limited" in exc.value.detail
+        assert "rate limited" not in exc.value.detail

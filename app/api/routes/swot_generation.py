@@ -22,7 +22,7 @@ def _dump_debug(payload: dict):
         logger.warning(f"[DEBUG] Could not save debug dump: {e}")
 
 
-@router.post("/generate", response_model=SWOTResponse)
+@router.post("/generate", response_model=SWOTResponse) 
 async def generate_swot(request: SWOTRequest, current_user=Depends(get_current_user)):
     """
     Triggers the Document Generator Agent to generate a SWOT analysis.
