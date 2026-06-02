@@ -3,7 +3,12 @@ import json
 from unittest.mock import patch, MagicMock
 
 # --- Imports from application ---
-from app.graph.recommendation_agent.helpers import calculate_trigger_strength, extract_key_insights
+from app.graph.recommendation_agent.helpers import (
+    calculate_trigger_strength,
+    extract_key_insights,
+    fetch_startup_evaluation_from_db,
+    _normalize_evaluation_payload,
+)
 from app.graph.recommendation_agent.patterns import detect_patterns
 from app.graph.recommendation_agent.tools import analyze_wb_indicator, run_market_intel
 from app.graph.recommendation_agent.node import AgentNodes
@@ -150,6 +155,71 @@ def test_extract_key_insights_sector_inferred_from_text():
     }
     insights = extract_key_insights(raw)
     assert insights["sector"] == "healthtech"
+
+
+# ==========================================
+# 1b. TESTS FOR DB-sourced evaluation fetch
+# ==========================================
+
+def test_normalize_evaluation_payload_wrapped_dict():
+    """A dict already carrying the wrapper is returned unchanged."""
+    payload = {"startup_evaluation": {"company_snapshot": {"company_name": "X"}}}
+    assert _normalize_evaluation_payload(payload) is payload
+
+
+def test_normalize_evaluation_payload_unwrapped_dict():
+    """An unwrapped evaluation object gets wrapped under 'startup_evaluation'."""
+    payload = {"company_snapshot": {"company_name": "X"}, "problem_definition": {}}
+    result = _normalize_evaluation_payload(payload)
+    assert result == {"startup_evaluation": payload}
+
+
+def test_normalize_evaluation_payload_json_string():
+    """A JSON string is parsed before normalization."""
+    payload = json.dumps({"startup_evaluation": {"company_snapshot": {"company_name": "X"}}})
+    result = _normalize_evaluation_payload(payload)
+    assert result["startup_evaluation"]["company_snapshot"]["company_name"] == "X"
+
+
+def test_normalize_evaluation_payload_garbage_returns_none():
+    """Unusable payloads (bad JSON, irrelevant dicts) return None for safe fallback."""
+    assert _normalize_evaluation_payload("not json {{{") is None
+    assert _normalize_evaluation_payload({"unrelated": 1}) is None
+    assert _normalize_evaluation_payload(None) is None
+
+
+def test_fetch_startup_evaluation_no_id_returns_none():
+    """No startup_id → no fetch attempted."""
+    assert fetch_startup_evaluation_from_db(None) is None
+    assert fetch_startup_evaluation_from_db("") is None
+
+
+@patch("app.core.supabase_client.supabase")
+def test_fetch_startup_evaluation_picks_evaluation_doc(mock_supabase):
+    """The evaluation-type document's json_response is selected and normalized."""
+    full_eval = {
+        "startup_evaluation": {
+            "company_snapshot": {"company_name": "FinBoost"},
+            "product_and_solution": {"differentiation": "Real-time API scoring"},
+        }
+    }
+    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[
+            {"type": "Market Research", "json_response": {"foo": "bar"}},
+            {"type": "Founder Evaluation", "json_response": full_eval},
+        ]
+    )
+    result = fetch_startup_evaluation_from_db("startup-123")
+    assert result["startup_evaluation"]["product_and_solution"]["differentiation"] == "Real-time API scoring"
+
+
+@patch("app.core.supabase_client.supabase")
+def test_fetch_startup_evaluation_no_eval_doc_returns_none(mock_supabase):
+    """When no evaluation document exists, return None so caller falls back to raw_input."""
+    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"type": "Market Research", "json_response": {"foo": "bar"}}]
+    )
+    assert fetch_startup_evaluation_from_db("startup-123") is None
 
 
 # ==========================================

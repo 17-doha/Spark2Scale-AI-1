@@ -22,6 +22,7 @@ class RecommendationInput(BaseModel):
     raw_input: Dict[str, Any]  # The original startup data
     evaluation_output: Dict[str, Any]  # The output from the evaluation agent
     request_id: Optional[str] = None
+    startup_id: Optional[str] = None  # Supabase startup id; enables DB-sourced insights
 
 
 def _run_recommendation_sync(input_data: RecommendationInput, api_key: str) -> dict:
@@ -32,6 +33,7 @@ def _run_recommendation_sync(input_data: RecommendationInput, api_key: str) -> d
         api_key=api_key,
         save_output=True,
         request_id=input_data.request_id,
+        startup_id=input_data.startup_id,
     )
 
 
