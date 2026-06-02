@@ -5,7 +5,7 @@ import tempfile
 import shutil
 from typing import List, Optional
 import uuid
-from fastapi import APIRouter, HTTPException, status, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from app.graph.ppt_generation_agent import app_graph
 from app.graph.ppt_generation_agent.state import PPTGenerationState
@@ -13,7 +13,10 @@ from app.graph.ppt_generation_agent.tools.ppt_tools import generate_pptx_file
 from app.graph.ppt_generation_agent.tools.pptx_parser import extract_text_from_pptx
 from app.graph.ppt_generation_agent.tools.input_loader import load_input_directory
 from app.core.logger import get_logger
+from app.core.auth import get_current_user
 from app.core.supabase_client import supabase
+
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 # from app.core.metrics import ppt_generations, langgraph_duration
 import time
 
@@ -125,11 +128,11 @@ async def run_ppt_generation(state: PPTGenerationState, startup_id: str) -> "PPT
             json_response=final_draft.model_dump()
         )
     except Exception as e:
-        logger.error(f"Error in PPT generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in PPT generation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="PPT generation failed. Please try again.")
 
 @router.post("/generate", response_model=PPTGenerationResponse)
-async def generate_ppt(input_data: PPTInput): 
+async def generate_ppt(input_data: PPTInput, current_user=Depends(get_current_user)):
     """Generate from JSON body."""
     initial_state: PPTGenerationState = {
         "research_data": input_data.research_data,
@@ -149,26 +152,33 @@ async def generate_ppt_from_files(
     startup_info_file: UploadFile = File(..., description="Startup info JSON file"),
     market_research_file: UploadFile = File(..., description="Market research JSON file"),
     logo: Optional[UploadFile] = File(None),
-    use_default_colors: bool = Form(True)
+    use_default_colors: bool = Form(True),
+    current_user=Depends(get_current_user),
 ):
     """Generate by uploading JSON files and an optional logo."""
     temp_dir = tempfile.mkdtemp()
     try:
-        # Load and merge JSON content
-        si_content = json.loads(await startup_info_file.read())
-        mr_content = json.loads(await market_research_file.read())
+        si_raw = await startup_info_file.read()
+        mr_raw = await market_research_file.read()
+        if len(si_raw) > _MAX_UPLOAD_BYTES or len(mr_raw) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file too large. Maximum allowed size is 50 MB.")
+        si_content = json.loads(si_raw)
+        mr_content = json.loads(mr_raw)
         
         research_data = {
             "startup_info": si_content,
             "market_research": mr_content
         }
 
-        # Handle logo if provided
         logo_path = None
         if logo:
-            logo_path = os.path.join(temp_dir, logo.filename)
+            logo_bytes = await logo.read()
+            if len(logo_bytes) > _MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Logo file too large.")
+            safe_logo_name = f"{uuid.uuid4().hex}.logo"
+            logo_path = os.path.join(temp_dir, safe_logo_name)
             with open(logo_path, "wb") as f:
-                f.write(await logo.read())
+                f.write(logo_bytes)
 
         initial_state: PPTGenerationState = {
             "research_data": research_data,
@@ -223,15 +233,19 @@ async def edit_ppt(
     logo: Optional[UploadFile] = File(None),
     use_default_colors: bool = Form(True),
     user_instructions: Optional[str] = Form(None, description="Instructions from the user on what to edit"),
-    chat_summary: Optional[str] = Form(None, description="JSON string from the chat summarizer containing document_changes")
+    chat_summary: Optional[str] = Form(None, description="JSON string from the chat summarizer containing document_changes"),
+    current_user=Depends(get_current_user),
 ):
     """Refine an existing PPTX file to match pitch standards."""
     temp_dir = tempfile.mkdtemp()
     try:
-        # Save uploaded PPTX
-        pptx_path = os.path.join(temp_dir, ppt_file.filename)
+        pptx_bytes = await ppt_file.read()
+        if len(pptx_bytes) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file too large. Maximum allowed size is 50 MB.")
+        safe_pptx_name = f"{uuid.uuid4().hex}.pptx"
+        pptx_path = os.path.join(temp_dir, safe_pptx_name)
         with open(pptx_path, "wb") as f:
-            f.write(await ppt_file.read())
+            f.write(pptx_bytes)
         
         # Extract structured text
         extracted_text = extract_text_from_pptx(pptx_path)
@@ -240,9 +254,13 @@ async def edit_ppt(
 
         logo_path = None
         if logo:
-            logo_path = os.path.join(temp_dir, logo.filename)
+            logo_bytes = await logo.read()
+            if len(logo_bytes) > _MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Logo file too large.")
+            safe_logo_name = f"{uuid.uuid4().hex}.logo"
+            logo_path = os.path.join(temp_dir, safe_logo_name)
             with open(logo_path, "wb") as f:
-                f.write(await logo.read())
+                f.write(logo_bytes)
 
         final_instructions = user_instructions or ""
         
