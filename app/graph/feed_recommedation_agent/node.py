@@ -264,9 +264,7 @@ async def sibling_fallback_node(state: FilteredSearchState) -> dict:
             "errors": ["Sibling fallback skipped: no investor vector."],
         }
 
-    needed = 3
-    logger.info("[FallbackNode] %s", current_candidates)
-    logger.info("[FallbackNode] %s", len(current_candidates))
+    needed = TOP_K - len(current_candidates)
     if needed <= 0:
         return {"fallback_triggered": False, "sibling_tags": []}
 

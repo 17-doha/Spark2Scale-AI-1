@@ -36,8 +36,18 @@ async def test_document_qa(request: DocumentQARequest):
         # --- PRE-PROCESSING: Handle URLs and JSON Strings ---
         if actual_file_path.startswith(("http://", "https://")):
             try:
+                import ipaddress, socket
+                from urllib.parse import urlparse as _urlparse
+                _parsed = _urlparse(actual_file_path)
+                _host = _parsed.hostname or ""
+                try:
+                    _ip = ipaddress.ip_address(socket.gethostbyname(_host))
+                    if _ip.is_private or _ip.is_loopback or _ip.is_link_local or str(_ip) == "169.254.169.254":
+                        raise ValueError("Requests to internal addresses are not allowed.")
+                except ValueError as _ve:
+                    raise HTTPException(status_code=400, detail=str(_ve))
                 logger.info(f"Downloading file from URL: {actual_file_path}")
-                response = requests.get(actual_file_path, timeout=15)
+                response = requests.get(actual_file_path, timeout=15, allow_redirects=False)
                 response.raise_for_status()
                 
                 # Save to a temporary file
@@ -49,7 +59,7 @@ async def test_document_qa(request: DocumentQARequest):
                 is_temp_file = True
             except Exception as e:
                 logger.error(f"Failed to download URL: {e}")
-                raise HTTPException(status_code=400, detail=f"Could not download file from URL: {e}")
+                raise HTTPException(status_code=400, detail="Could not download file from the provided URL.")
 
         elif actual_file_path.strip().startswith(("{", "[")) and is_valid_json(actual_file_path):
             try:
@@ -62,7 +72,7 @@ async def test_document_qa(request: DocumentQARequest):
                 is_temp_file = True
             except Exception as e:
                 logger.error(f"Failed to parse JSON string: {e}")
-                raise HTTPException(status_code=400, detail=f"Failed to process JSON payload: {e}")
+                raise HTTPException(status_code=400, detail="Failed to process JSON payload.")
 
         # --- Guardrail: file must exist on disk ---
         if not os.path.exists(actual_file_path):
@@ -108,14 +118,11 @@ async def test_document_qa(request: DocumentQARequest):
     except HTTPException:
         raise  
     except ValueError as e:
-        logger.error(f"Parsing error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Parsing error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Invalid input format.")
     except Exception as e:
-        logger.error(f"Inference error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred during inference: {e}",
-        )
+        logger.error(f"Inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred during inference.")
     finally:
         # --- CLEANUP ---
         if is_temp_file and actual_file_path and os.path.exists(actual_file_path):

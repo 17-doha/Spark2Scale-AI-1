@@ -1,9 +1,10 @@
 import json
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from app.graph.document_generator.workflow import document_generator_app
 from app.api.schemas import CompetitorAnalysisRequest, CompetitorAnalysisResponse
 from app.core.logger import get_logger
+from app.core.auth import get_current_user
 
 router = APIRouter()
 logger = get_logger("CompetitorMatrixAPI")
@@ -22,7 +23,7 @@ def _dump_debug(payload: dict):
 
 
 @router.post("/generate", response_model=CompetitorAnalysisResponse)
-async def generate_competitor_matrix(request: CompetitorAnalysisRequest):
+async def generate_competitor_matrix(request: CompetitorAnalysisRequest, current_user=Depends(get_current_user)):
     """
     Triggers the Document Generator Agent to generate a Competitor Analysis Matrix.
     """
@@ -111,5 +112,5 @@ async def generate_competitor_matrix(request: CompetitorAnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"[ERROR] Competitor Matrix Generation Failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[ERROR] Competitor Matrix Generation Failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Competitor matrix generation failed. Please try again.")
