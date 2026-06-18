@@ -310,7 +310,6 @@ async def start_agent_worker(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Agent worker crashed at startup (exit {exit_code}).")
 
     _logging.info("[AGENT START] Worker is alive — pid=%s", worker_process.pid)
-    active_pitch_sessions.inc()
     return {"status": "started", "pid": worker_process.pid}
 
 
@@ -368,7 +367,6 @@ async def stop_agent_worker(current_user=Depends(get_current_user)):
         worker_process = None
         _worker_log.clear()
 
-    active_pitch_sessions.dec()
     return {"status": "stopped", "pid": pid}
 
 
