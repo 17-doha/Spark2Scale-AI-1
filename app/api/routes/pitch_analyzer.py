@@ -302,12 +302,26 @@ async def start_agent_worker(current_user=Depends(get_current_user)):
     t = threading.Thread(target=_stream_output, args=(worker_process,), daemon=True)
     t.start()
 
-    # Give it 3 seconds to detect a crash-on-startup (missing keys, import error, etc.)
-    await _asyncio.sleep(3)
+    # Wait up to 20 seconds for the worker to fully register with LiveKit
+    is_ready = False
+    for _ in range(40):
+        await _asyncio.sleep(0.5)
+        if worker_process.poll() is not None:
+            break
+        
+        # Check if the worker has finished starting
+        log_snapshot = list(_worker_log)
+        if any("HTTP server listening" in line or "registered worker" in line or "starting worker" in line for line in log_snapshot):
+            is_ready = True
+            break
+            
     exit_code = worker_process.poll()
     if exit_code is not None:
         _logging.error("[AGENT START] Worker crashed at startup (exit %s)", exit_code)
         raise HTTPException(status_code=500, detail=f"Agent worker crashed at startup (exit {exit_code}).")
+
+    if not is_ready:
+        _logging.warning("[AGENT START] Worker took too long to start, returning anyway.")
 
     _logging.info("[AGENT START] Worker is alive — pid=%s", worker_process.pid)
     # active_pitch_sessions.inc()
